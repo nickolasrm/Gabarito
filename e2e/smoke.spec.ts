@@ -262,3 +262,77 @@ test("cancels an operation with Escape", async ({ page }) => {
 
   expect(count(await snapshot(page), "edge")).toBe(0);
 });
+
+// Regression tests for the six reported bugs.
+
+test("closes a face when three lines form a triangle", async ({ page }) => {
+  await page.getByRole("button", { name: /^Line/ }).click();
+  await clickWorld(page, { x: -1000, y: -1000, z: 0 });
+  await clickWorld(page, { x: 1000, y: -1000, z: 0 });
+  await clickWorld(page, { x: 0, y: 1000, z: 0 });
+  await clickWorld(page, { x: -1000, y: -1000, z: 0 });
+
+  const state = await snapshot(page);
+  expect(count(state, "face")).toBe(1);
+  expect(count(state, "edge")).toBe(3);
+  expect(count(state, "point")).toBe(3);
+});
+
+test("shows a crosshair for drawing tools and an arrow for select", async ({ page }) => {
+  const cursor = () => page.evaluate(() => document.querySelector("canvas")?.style.cursor ?? "");
+  await page.getByRole("button", { name: /^Select/ }).click();
+  expect(await cursor()).toBe("default");
+  await page.getByRole("button", { name: /^Line/ }).click();
+  expect(await cursor()).toBe("crosshair");
+  await page.getByRole("button", { name: /Push\/Pull/ }).click();
+  expect(await cursor()).toBe("ns-resize");
+});
+
+test("a pinned Z axis makes a vertical rectangle", async ({ page }) => {
+  await page.getByRole("button", { name: /^Rectangle/ }).click();
+  await clickWorld(page, { x: 0, y: 0, z: 0 });
+  await page.keyboard.press("ArrowUp");
+  await expect(page.locator(".chip.axis")).toContainText("Z (blue)");
+
+  // Drag diagonally in screen space, the way a user draws in a vertical plane.
+  const start = await screenOf(page, { x: 0, y: 0, z: 0 });
+  await page.mouse.move(start.x + 60, start.y - 60);
+  await page.mouse.move(start.x + 160, start.y - 200);
+  expect(await page.locator(".readout").textContent()).not.toContain("0 × 0");
+  await page.mouse.click(start.x + 160, start.y - 200);
+
+  const state = await snapshot(page);
+  expect(count(state, "face")).toBe(1);
+  const zs = positions(state).map((point) => point.z);
+  expect(Math.max(...zs) - Math.min(...zs)).toBeGreaterThan(1);
+});
+
+test("draws a vertical edge when Z is pinned", async ({ page }) => {
+  await page.getByRole("button", { name: /^Line/ }).click();
+  await clickWorld(page, { x: 0, y: 0, z: 0 });
+  await page.keyboard.press("ArrowUp");
+  const start = await screenOf(page, { x: 0, y: 0, z: 0 });
+  await page.mouse.move(start.x, start.y - 150);
+  await page.mouse.click(start.x, start.y - 150);
+
+  const state = await snapshot(page);
+  expect(count(state, "edge")).toBe(1);
+  const zs = positions(state).map((point) => point.z);
+  expect(Math.max(...zs) - Math.min(...zs)).toBeGreaterThan(1);
+});
+
+test("pushes a face into a solid by dragging it", async ({ page }) => {
+  await drawRectangle(page);
+
+  await page.getByRole("button", { name: /Push\/Pull/ }).click();
+  const centre = await screenOf(page, { x: 0, y: 0, z: 0 });
+  await page.mouse.click(centre.x, centre.y);
+  await page.mouse.move(centre.x, centre.y - 40);
+  await page.mouse.move(centre.x, centre.y - 180);
+  expect(await page.locator(".readout").textContent()).not.toContain("0 mm");
+  await page.mouse.click(centre.x, centre.y - 180);
+
+  const state = await snapshot(page);
+  expect(count(state, "face")).toBe(6);
+  expect(count(state, "point")).toBe(8);
+});

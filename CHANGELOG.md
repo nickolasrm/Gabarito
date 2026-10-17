@@ -48,6 +48,19 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   0016](./docs/decisions/0016-name-other-tools-as-inspiration.md),
   [0017](./docs/decisions/0017-pull-requests-only.md)
 
+### Fixed
+
+- Six tool interaction bugs reported from real use. — [spec 0012](./docs/specs/0012-tool-interaction-fixes.md)
+  - The canvas now shows a cursor per tool: a crosshair for drawing, a move cursor, `ns-resize` for
+    push/pull.
+  - Three lines forming a triangle now close a face. The loop search rejected cycles of three points.
+  - Axis pinning works on all three axes. The drawing plane is now lock-aware, so a `Z` lock reaches
+    the third dimension instead of collapsing to a flat line or an empty rectangle.
+  - Move previews a filled ghost of the geometry that follows the cursor, and `Esc` puts it back.
+  - Push/pull extrudes by dragging. The distance was measured on the face plane, where it is always
+    zero; it is now measured on a plane that contains the pull direction.
+  - [Decision 0018](./docs/decisions/0018-axis-lock-semantics.md) records what a lock means per tool.
+
 ### Changed
 
 - Module boundaries: `core` may now import `geometry`. `geometry` and `plugin-api` remain leaves.

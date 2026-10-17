@@ -93,6 +93,8 @@ export interface ToolContext {
   planeAt(screenX: number, screenY: number): DrawingPlane;
   /** A plane through a point, facing the camera: used for screen-space overlays. */
   viewPlaneAt(point: Vec3): Plane;
+  /** Direction from the camera into the scene. Tools that must build their own plane need it. */
+  viewDirection(): Vec3;
   worldOnPlane(screenX: number, screenY: number, plane: Plane): Vec3 | null;
   pixelsPerWorldUnit(at: Vec3): number;
 }
@@ -108,6 +110,15 @@ export interface Tool {
   readonly shortcut: string;
   /** One line shown in the status bar while the tool is active. */
   readonly hint: string;
+  /** CSS cursor while this tool is active. Drawing tools get a crosshair. */
+  readonly cursor: string;
+  /**
+   * What an axis lock means to this tool:
+   * `axis`  — the interaction point is pinned onto the locked axis (line, move, measure).
+   * `plane` — the point stays free inside a plane that contains the locked axis
+   *           (rectangle, circle, push/pull, rotate), which is what a 2D shape needs.
+   */
+  readonly lockMode?: "axis" | "plane";
   /** Example of the typed values the tool accepts, if any. */
   readonly numbers?: {
     kind: "length" | "angle";

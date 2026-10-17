@@ -6,12 +6,19 @@ import type { DrawingPlane, Tool, ToolContext } from "../types";
 
 const CLEAR = { segments: [], polygons: [], points: [] };
 
+/** Identifies the active axis lock, so the drawing plane can follow it when it changes. */
+function lockKey(ctx: ToolContext): string | null {
+  if (!ctx.axisLock) return null;
+  const { axisKey, direction } = ctx.axisLock;
+  return `${axisKey}${direction.x + direction.y + direction.z < 0 ? "-" : "+"}`;
+}
+
 /**
  * Circle: click the centre, then a point on the circumference. Tessellated at creation
  * time into straight edges (decision 0013); the segment count is a setting.
  */
 export function createCircleTool(): Tool {
-  let anchor: { centre: Vec3; plane: DrawingPlane } | null = null;
+  let anchor: { centre: Vec3; plane: DrawingPlane; lock: string | null } | null = null;
   let radius = 0;
 
   const positions = (plane: DrawingPlane, centre: Vec3, r: number, segments: number): Vec3[] => {
@@ -41,12 +48,18 @@ export function createCircleTool(): Tool {
     id: "circle",
     label: "Circle",
     shortcut: "C",
-    hint: "Click the centre, then a point on the circle. Type a radius and press Enter.",
+    cursor: "crosshair",
+    lockMode: "plane",
+    hint: "Click the centre, then a point on the circle. Type a radius and press Enter. Arrow keys set the plane.",
     numbers: { kind: "length", max: 1, example: "10", labels: ["radius"] },
 
     pointerDown(event, ctx) {
       if (!anchor) {
-        anchor = { centre: event.world, plane: ctx.planeAt(event.screenX, event.screenY) };
+        anchor = {
+          centre: event.world,
+          plane: ctx.planeAt(event.screenX, event.screenY),
+          lock: lockKey(ctx),
+        };
         return;
       }
       commit(radius, ctx);
@@ -54,6 +67,11 @@ export function createCircleTool(): Tool {
 
     pointerMove(event, ctx) {
       if (!anchor) return;
+      const key = lockKey(ctx);
+      if (key !== anchor.lock) {
+        anchor = { ...anchor, plane: ctx.planeAt(event.screenX, event.screenY), lock: key };
+      }
+
       radius = vec3.dist(anchor.centre, event.world);
       const segments = Math.max(3, Math.round(ctx.settings.circleSegments));
       const points = positions(anchor.plane, anchor.centre, radius, segments);

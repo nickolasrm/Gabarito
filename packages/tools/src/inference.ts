@@ -41,6 +41,8 @@ export interface ResolveInput {
   /** Reference point for axis inference and axis locks. */
   anchor: Vec3 | null;
   lock: AxisLockState | null;
+  /** `plane` keeps the point free in the lock plane instead of pinning it to the axis. */
+  lockMode?: "axis" | "plane";
   snapping: boolean;
 }
 
@@ -86,8 +88,9 @@ function edgeSegments(doc: DocumentState): Segment[] {
  */
 export function resolveSnap(input: ResolveInput): SnapResult {
   const { doc, free, tolerance, anchor, lock, snapping } = input;
+  const lockMode = input.lockMode ?? "axis";
 
-  if (lock) {
+  if (lock && lockMode === "axis") {
     const projected = projectOntoAxis(free, lock);
     const vertex = nearestVertex(doc, projected, tolerance);
     return {
@@ -187,7 +190,8 @@ export function resolveSnap(input: ResolveInput): SnapResult {
     }
 
     const delta = vec3.sub(free, anchor);
-    if (!vec3.isZero(delta, EPS.MERGE)) {
+    // A pinned axis is the user's instruction; do not let inference fight it.
+    if (!lock && !vec3.isZero(delta, EPS.MERGE)) {
       const keys: Array<"x" | "y" | "z"> = ["x", "y", "z"];
       for (const axisKey of keys) {
         const direction = AXIS_DIRECTIONS[axisKey];

@@ -151,6 +151,18 @@ describe("faces and solids", () => {
     expect(pointsOf(store.getState())).toHaveLength(4);
   });
 
+  it("closes a face when the third line completes a triangle", () => {
+    const store = createStore();
+    const corners: Vec3[] = [ORIGIN, U, V];
+    for (let index = 0; index < 3; index += 1) {
+      const built = buildEdge(store.getState(), corners[index], corners[(index + 1) % 3]);
+      store.dispatch({ type: "addEntities", entities: built.entities });
+    }
+    expect(facesOf(store.getState())).toHaveLength(1);
+    expect(edgesOf(store.getState())).toHaveLength(3);
+    expect(pointsOf(store.getState())).toHaveLength(3);
+  });
+
   it("welds repeated endpoints instead of duplicating points", () => {
     const store = createStore();
     const first = buildEdge(store.getState(), ORIGIN, U);

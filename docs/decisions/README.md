@@ -35,6 +35,7 @@ stays searchable forever.
 | [0015](./0015-core-depends-on-geometry.md) | core may depend on geometry | accepted | structure, boundaries | 0004 |
 | [0016](./0016-name-other-tools-as-inspiration.md) | Name other tools as inspiration, never as a target | accepted | docs, positioning, legal | — |
 | [0017](./0017-pull-requests-only.md) | Every change lands through a pull request | accepted | process, git, review | — |
+| [0018](./0018-axis-lock-semantics.md) | What an axis lock means, and the plane it needs | accepted | tools, input, geometry | — |
 
 Statuses: `proposed` → `accepted` → (`superseded` | `deprecated` | `rejected`).
 

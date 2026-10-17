@@ -2,14 +2,19 @@ import { poly as polyOps, vec3 } from "@gabarito/geometry";
 import type { Vec3 } from "@gabarito/geometry";
 import { buildExtrusion, facePositions, formatLength, unitSuffix } from "@gabarito/core";
 import type { EntityId } from "@gabarito/core";
+import { axisPlaneNormal } from "../planes";
 import { PREVIEW } from "../style";
-import type { Tool, ToolContext } from "../types";
+import type { Tool, ToolContext, ToolPointerEvent } from "../types";
 
 const CLEAR = { segments: [], polygons: [], points: [] };
 
 /**
- * Push/Pull: click a face, then click again after moving — or type a distance.
- * Extrusion only; no boolean operations yet (decision 0011, interim).
+ * Push/Pull: click a face, then drag along its normal — or type a distance.
+ * Extrusion only; no boolean operations yet (decision 0011).
+ *
+ * The drag distance cannot come from the point on the face plane: any point on that
+ * plane gives a zero distance along the normal, which is why this tool raycasts the
+ * pointer onto its own plane, one that contains the pull direction and faces the camera.
  */
 export function createPushPullTool(): Tool {
   let faceId: EntityId | null = null;
@@ -27,12 +32,13 @@ export function createPushPullTool(): Tool {
     ctx.preview(CLEAR);
   };
 
-  const distanceTo = (world: Vec3, ctx: ToolContext): number => {
-    if (!origin) return 0;
-    const sign = inverted ? -1 : 1;
-    if (ctx.axisLock) return sign * vec3.dot(vec3.sub(world, origin), ctx.axisLock.direction);
-    if (!normal) return 0;
-    return sign * vec3.dot(vec3.sub(world, origin), normal);
+  const pullAxis = (ctx: ToolContext): Vec3 =>
+    ctx.axisLock ? ctx.axisLock.direction : (normal ?? { x: 0, y: 0, z: 1 });
+
+  /** The pointer position on a camera-facing plane that contains the pull direction. */
+  const pullPoint = (event: ToolPointerEvent, ctx: ToolContext, anchor: Vec3, axis: Vec3): Vec3 => {
+    const normal = axisPlaneNormal(axis, ctx.viewDirection());
+    return ctx.worldOnPlane(event.screenX, event.screenY, { origin: anchor, normal }) ?? event.raw;
   };
 
   const commit = (value: number, ctx: ToolContext): void => {
@@ -40,7 +46,7 @@ export function createPushPullTool(): Tool {
       clear(ctx);
       return;
     }
-    const built = buildExtrusion(ctx.doc, faceId, value);
+    const built = buildExtrusion(ctx.doc, faceId, value, pullAxis(ctx));
     if (built.entities.length > 0) ctx.dispatch({ type: "addEntities", entities: built.entities });
     clear(ctx);
   };
@@ -49,7 +55,9 @@ export function createPushPullTool(): Tool {
     id: "pushpull",
     label: "Push/Pull",
     shortcut: "P",
-    hint: "Click a face, move along its normal, click again. Type a distance and press Enter. `↓` inverts.",
+    cursor: "ns-resize",
+    lockMode: "plane",
+    hint: "Click a face, drag along its normal, click again. Type a distance and press Enter. `↓` inverts.",
     numbers: { kind: "length", max: 1, example: "50", labels: ["distance"] },
 
     pointerDown(event, ctx) {
@@ -72,7 +80,10 @@ export function createPushPullTool(): Tool {
 
     pointerMove(event, ctx) {
       if (!faceId || !normal || !origin) return;
-      distance = distanceTo(event.world, ctx);
+      const axis = pullAxis(ctx);
+      const world = pullPoint(event, ctx, origin, axis);
+      distance = (inverted ? -1 : 1) * vec3.dot(vec3.sub(world, origin), axis);
+
       const face = ctx.doc.entities[faceId];
       if (!face || face.kind !== "face") return;
       const positions = facePositions(ctx.doc, face);

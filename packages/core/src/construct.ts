@@ -122,6 +122,7 @@ export function buildExtrusion(
   doc: DocumentState,
   faceId: EntityId,
   distance: number,
+  direction?: Vec3,
 ): BuildResult {
   const entity = doc.entities[faceId];
   if (!entity || entity.kind !== "face") return EMPTY;
@@ -130,8 +131,11 @@ export function buildExtrusion(
   if (bottom.length < 3) return EMPTY;
   if (Math.abs(distance) < EPS.LENGTH) return EMPTY;
 
-  const normal = polyOps.normal(bottom);
-  if (!normal) return EMPTY;
+  const faceNormal = polyOps.normal(bottom);
+  if (!faceNormal) return EMPTY;
+  // A pinned axis can pull along a direction other than the face normal.
+  const normal = direction ? vec3.normalize(direction) : faceNormal;
+  if (vec3.isZero(normal)) return EMPTY;
 
   const delta = vec3.scale(normal, distance);
   const top = bottom.map((position) => buildPoint(doc, vec3.add(position, delta)));
