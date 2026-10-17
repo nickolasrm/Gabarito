@@ -50,6 +50,9 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A rule that the owner verifies the running app and approves before a merge, with the dev server kept
   up on <http://127.0.0.1:5173> for the session. — [spec
   0013](./docs/specs/0013-owner-verifies-before-merge.md)
+- The agent style skills now run at their strongest settings: `ultracave` (caveman at maximum
+  compression, 2.5 kB instead of 4.7 kB) and ponytail at `ultra`. — [spec
+  0014](./docs/specs/0014-stronger-agent-modes.md)
 
 ### Fixed
 
