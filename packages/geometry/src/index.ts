@@ -23,3 +23,4 @@ export type { MeshData } from "./extrude";
 export { extrude } from "./extrude";
 
 export { transform } from "./transform";
+export * from "./rect";

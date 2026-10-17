@@ -94,10 +94,12 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     a width/depth rectangle floating at that height. The plane now follows the geometry under the
     pointer while no axis is pinned.
 
-- Decision [0019](./docs/decisions/0019-mesh-csg-kernel.md): solid cuts use `@jscad/modeling` behind an
-  interface owned by `packages/geometry`, superseding decision 0011. Chosen on measured cost after a
-  spike: 58 KB gzipped against 223 KB for `manifold-3d`, both exact on a recess, a door opening and a
-  coplanar flush notch, and the `three`-based libraries ruled out by the module boundaries. Plan in
+- Decision [0021](./docs/decisions/0021-straight-cuts-by-face-surgery.md): straight cuts are **face
+  surgery on axis-aligned rectangles**, with no CSG library and no runtime dependency, superseding
+  decision 0019. The adopted library produced T-junctions on the first real cut — 16 edges used once,
+  which the closedness check rejects — and the recorded fallback, `manifold-3d`, then failed on its input
+  mesh rather than on the maths. The operation push/pull needs is one axis-aligned box minus another, so
+  a kernel was four hundred kilobytes and a WASM bridge for rectangle arithmetic. Plan in
   [spec 0016](./docs/specs/0016-cut-holes-with-push-pull.md), left `proposed`.
 
 ### Changed

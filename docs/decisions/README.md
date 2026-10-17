@@ -36,8 +36,9 @@ stays searchable forever.
 | [0016](./0016-name-other-tools-as-inspiration.md) | Name other tools as inspiration, never as a target | accepted | docs, positioning, legal | — |
 | [0017](./0017-pull-requests-only.md) | Every change lands through a pull request | accepted | process, git, review | — |
 | [0018](./0018-axis-lock-semantics.md) | What an axis lock means, and the plane it needs | accepted | tools, input, geometry | — |
-| [0019](./0019-mesh-csg-kernel.md) | Adopt a mesh CSG library for solid cuts | accepted | geometry, csg, kernel | 0011 |
+| [0019](./0019-mesh-csg-kernel.md) | Adopt a mesh CSG library for solid cuts | **superseded** by 0021 | geometry, csg, kernel | 0011 |
 | [0020](./0020-drawing-plane-inference.md) | The drawing plane is chosen by what the pointer aims at | accepted | tools, geometry, ux | — |
+| [0021](./0021-straight-cuts-by-face-surgery.md) | Straight cuts are face surgery, not a CSG kernel | accepted | geometry, csg, scope | 0019 |
 
 Statuses: `proposed` → `accepted` → (`superseded` | `deprecated` | `rejected`).
 

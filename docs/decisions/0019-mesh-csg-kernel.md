@@ -1,16 +1,21 @@
 ---
 id: 0019
 title: Adopt a mesh CSG library for solid cuts
-status: accepted
+status: superseded
 date: 2026-10-17
 tags: [geometry, csg, kernel, dependency]
 supersedes: [0011]
-superseded_by: null
+superseded_by: 0021
 specs: [0016]
 ---
 
 # 0019 — Adopt a mesh CSG library for solid cuts
 
+> **Superseded by [0021](./0021-straight-cuts-by-face-surgery.md) on 2026-10-17.** The adopted library
+> produced T-junctions on the first real cut, and the requirement turned out to be straight rectangular
+> cuts, which need no kernel at all. The measurements below still stand, and are the starting point if
+> the narrow approach hits its ceiling.
+>
 > **Supersedes [0011](./0011-geometry-kernel-strategy.md)**, which deferred this and is now `rejected`.
 > A cut is needed: pushing a face into a solid must remove material, not stack a second face on top of
 > it ([spec 0016](../specs/0016-cut-holes-with-push-pull.md)).
