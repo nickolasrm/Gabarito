@@ -26,6 +26,7 @@ interface DebugState {
 interface DebugHandle {
   store: { getState(): DebugState };
   viewport: { worldToScreen(point: WorldPoint): { x: number; y: number } };
+  controller: { getStatus(): { active: boolean } };
   activeTool: () => string;
 }
 
@@ -335,4 +336,83 @@ test("pushes a face into a solid by dragging it", async ({ page }) => {
   const state = await snapshot(page);
   expect(count(state, "face")).toBe(6);
   expect(count(state, "point")).toBe(8);
+});
+
+// Second round of reported bugs.
+
+test("selects the innermost face when rectangles are nested", async ({ page }) => {
+  await page.getByRole("button", { name: /^Rectangle/ }).click();
+  await clickWorld(page, { x: -2000, y: -2000, z: 0 });
+  await page.keyboard.type("4000");
+  await page.keyboard.press("Enter");
+  await clickWorld(page, { x: -700, y: -700, z: 0 });
+  await page.keyboard.type("1400");
+  await page.keyboard.press("Enter");
+
+  const areas = await page.evaluate(() => {
+    const s = window.__gabarito!.store.getState();
+    return Object.entries(s.entities)
+      .filter(([, entity]) => entity.kind === "face")
+      .map(([id, entity]) => {
+        const pts = (entity.points ?? []).map((pointId) => s.entities[pointId].position!);
+        let sum = 0;
+        for (let i = 0; i < pts.length; i += 1) {
+          const a = pts[i];
+          const b = pts[(i + 1) % pts.length];
+          sum += a.x * b.y - b.x * a.y;
+        }
+        return { id, area: Math.round(Math.abs(sum / 2)) };
+      });
+  });
+  expect(areas).toHaveLength(2);
+
+  await page.getByRole("button", { name: /^Select/ }).click();
+  await clickWorld(page, { x: 0, y: 0, z: 0 }); // centre of the inner rectangle
+
+  const selected = await page.evaluate(() => {
+    const s = window.__gabarito!.store.getState();
+    const face = s.entities[s.selection[0]];
+    const pts = (face?.points ?? []).map((id) => s.entities[id].position!);
+    let sum = 0;
+    for (let i = 0; i < pts.length; i += 1) {
+      const a = pts[i];
+      const b = pts[(i + 1) % pts.length];
+      sum += a.x * b.y - b.x * a.y;
+    }
+    return Math.round(Math.abs(sum / 2));
+  });
+  expect(selected).toBe(1_960_000); // 1400 x 1400, the inner one
+});
+
+test("draws a vertical edge with no arrow key held", async ({ page }) => {
+  await page.getByRole("button", { name: /^Line/ }).click();
+  await clickWorld(page, { x: 0, y: 0, z: 0 });
+  const start = await screenOf(page, { x: 0, y: 0, z: 0 });
+  await page.mouse.move(start.x, start.y - 60);
+  await page.mouse.move(start.x, start.y - 150);
+  await expect(page.locator(".chip.snap")).toContainText("Z axis");
+  await page.mouse.click(start.x, start.y - 150);
+
+  const state = await snapshot(page);
+  expect(count(state, "edge")).toBe(1);
+  const zs = positions(state).map((point) => point.z);
+  expect(Math.max(...zs) - Math.min(...zs)).toBeGreaterThan(1);
+});
+
+test("stops drawing once an edge closes a face", async ({ page }) => {
+  await page.getByRole("button", { name: /^Line/ }).click();
+  await clickWorld(page, { x: -1200, y: -800, z: 0 });
+  await clickWorld(page, { x: 0, y: -800, z: 0 });
+  await clickWorld(page, { x: -600, y: 200, z: 0 });
+  await expect(page.locator(".statusbar .status-tool")).toHaveText("Line");
+
+  // Before the closing click the operation is live; after it, the tool is idle again.
+  const liveBefore = await page.evaluate(() => window.__gabarito!.controller.getStatus().active);
+  expect(liveBefore).toBe(true);
+  await clickWorld(page, { x: -1200, y: -800, z: 0 });
+
+  const state = await snapshot(page);
+  expect(count(state, "face")).toBe(1);
+  const liveAfter = await page.evaluate(() => window.__gabarito!.controller.getStatus().active);
+  expect(liveAfter).toBe(false);
 });

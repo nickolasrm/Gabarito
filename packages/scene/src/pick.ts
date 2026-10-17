@@ -12,6 +12,8 @@ export interface PickHit {
 
 interface Candidate extends PickHit {
   t: number;
+  /** Faces only: used to prefer the innermost of several stacked coplanar faces. */
+  area: number;
 }
 
 function faceCandidate(ray: Ray, entityId: EntityId, positions: Vec3[]): Candidate | null {
@@ -22,7 +24,7 @@ function faceCandidate(ray: Ray, entityId: EntityId, positions: Vec3[]): Candida
   if (!hit) return null;
   if (!polyOps.containsPoint(positions, hit, 1e-6)) return null;
   const t = vec3.dist(hit, ray.origin);
-  return { entityId, kind: "face", point: hit, distance: t, t };
+  return { entityId, kind: "face", point: hit, distance: t, t, area: polyOps.area(positions) };
 }
 
 function segmentCandidate(
@@ -42,6 +44,7 @@ function segmentCandidate(
     point: closest.onSegment,
     distance: closest.tRay,
     t: closest.tRay,
+    area: 0,
   };
 }
 
@@ -56,7 +59,7 @@ function pointCandidate(
   if (t <= 0) return null;
   const closest = vec3.add(ray.origin, vec3.scale(ray.direction, t));
   if (vec3.dist(closest, position) > tolerance) return null;
-  return { entityId, kind, point: position, distance: t, t };
+  return { entityId, kind, point: position, distance: t, t, area: 0 };
 }
 
 /**
@@ -121,6 +124,9 @@ export function pick(ray: Ray, doc: DocumentState, tolerance: number): PickHit |
     const gap = a.t - b.t;
     const relative = Math.abs(gap) / Math.max(a.t, b.t, 1);
     if (relative > 0.02) return gap;
+    // Nested faces are coplanar, so they tie on distance. The user aimed at the
+    // smallest one: a face drawn inside another is the precise target, not the parent.
+    if (a.kind === "face" && b.kind === "face" && a.area !== b.area) return a.area - b.area;
     return priority[a.kind] - priority[b.kind];
   });
 

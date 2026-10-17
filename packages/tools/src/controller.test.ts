@@ -27,6 +27,9 @@ function fakeViewport(store: Store): ViewportAdapter {
       }
       return null;
     },
+    rayAt(x, y) {
+      return { origin: { x, y, z: 0 }, direction: VIEW_DIRECTION };
+    },
     raycastPlane(x, y, plane: Plane) {
       const origin = { x, y, z: 0 };
       const denominator = vec3.dot(VIEW_DIRECTION, plane.normal);
@@ -34,8 +37,9 @@ function fakeViewport(store: Store): ViewportAdapter {
       const t = vec3.dot(vec3.sub(plane.origin, origin), plane.normal) / denominator;
       return vec3.add(origin, vec3.scale(VIEW_DIRECTION, t));
     },
+    // Inverse of the ray mapping above: the screen point whose ray passes through P.
     worldToScreen(point) {
-      return { x: point.x, y: point.y, visible: true };
+      return { x: point.x, y: point.y - point.z, visible: true };
     },
     pixelsPerWorldUnit() {
       return 1;
@@ -343,6 +347,54 @@ describe("tool controller", () => {
     const preview = controller.getPreview();
     expect(preview.polygons).toHaveLength(1);
     expect(preview.segments).toHaveLength(4);
+  });
+
+  it("stops chaining once an edge closes a face", () => {
+    const { controller, down } = harness();
+    controller.setTool("line");
+    down(0, 0);
+    down(1000, 0);
+    down(0, 800);
+    expect(controller.getStatus().active).toBe(true);
+    down(0, 0); // closes the triangle
+    expect(controller.getStatus().active).toBe(false);
+  });
+
+  it("follows the height axis without pinning it", () => {
+    const { store, controller, move, down } = harness();
+    controller.setTool("line");
+    down(0, 0);
+    // Straight up the screen from the anchor: the blue axis is inferred, no arrow key.
+    move(0, 300);
+    expect(controller.getStatus().snapLabel).toContain("Z axis");
+    expect(controller.getStatus().axisKey).toBeNull();
+    down(0, 300);
+
+    const edge = edgesOf(store.getState())[0];
+    const a = getPoint(store.getState(), edge.points[0]);
+    const b = getPoint(store.getState(), edge.points[1]);
+    expect(Math.abs((b?.z ?? 0) - (a?.z ?? 0))).toBeGreaterThan(1);
+  });
+
+  it("does not bind to an axis the pointer is nowhere near", () => {
+    const { store, controller, move, down } = harness();
+    controller.setTool("line");
+    down(0, 0);
+    move(600, 400);
+    expect(controller.getStatus().snapLabel).not.toContain("axis");
+    down(600, 400);
+    expect(edgesOf(store.getState())).toHaveLength(1);
+  });
+
+  it("closes the loop when the last click is a few pixels short of the vertex", () => {
+    const { store, controller, down } = harness();
+    controller.setTool("line");
+    down(0, 0);
+    down(1000, 0);
+    down(500, 900);
+    down(9, 11); // near the first vertex, not on it
+    expect(facesOf(store.getState())).toHaveLength(1);
+    expect(pointsOf(store.getState())).toHaveLength(3);
   });
 
   it("puts the geometry back when a move is cancelled", () => {

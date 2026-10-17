@@ -16,7 +16,8 @@ export function createLineTool(): Tool {
     const built = buildEdge(ctx.doc, start, end);
     if (built.entities.length === 0) return;
     ctx.dispatch({ type: "addEntities", entities: built.entities });
-    start = end;
+    // The loop is finished when a face closes, so stop chaining from the last point.
+    start = built.entities.some((entity) => entity.kind === "face") ? null : end;
   };
 
   const lengthText = (ctx: ToolContext): string | null => {

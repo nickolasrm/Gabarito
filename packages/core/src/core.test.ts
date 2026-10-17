@@ -163,6 +163,47 @@ describe("faces and solids", () => {
     expect(pointsOf(store.getState())).toHaveLength(3);
   });
 
+  it("closes a face on a hand-drawn polygon of 24 sides", () => {
+    const store = createStore();
+    const ring = Array.from({ length: 24 }, (_, index) => {
+      const angle = (index / 24) * Math.PI * 2;
+      return { x: Math.cos(angle) * 1400, y: Math.sin(angle) * 1400, z: 0 };
+    });
+    for (let index = 0; index < ring.length; index += 1) {
+      const built = buildEdge(store.getState(), ring[index], ring[(index + 1) % ring.length]);
+      if (built.entities.length > 0) {
+        store.dispatch({ type: "addEntities", entities: built.entities });
+      }
+    }
+    expect(facesOf(store.getState())).toHaveLength(1);
+    expect(pointsOf(store.getState())).toHaveLength(24);
+  });
+
+  it("closes a face that reuses a dangling edge's vertex", () => {
+    const store = createStore();
+    const add = (a: Vec3, b: Vec3) => {
+      const built = buildEdge(store.getState(), a, b);
+      if (built.entities.length > 0) store.dispatch({ type: "addEntities", entities: built.entities });
+    };
+    const shared = { x: 0, y: 0, z: 0 };
+    add(shared, { x: 1000, y: 0, z: 0 });
+    add({ x: 1000, y: 0, z: 0 }, { x: 1000, y: 1000, z: 0 });
+    add({ x: 1000, y: 1000, z: 0 }, shared);
+
+    // A line drawn from a vertex that already exists does not close a loop on its own.
+    add({ x: 1000, y: 1000, z: 0 }, { x: 4000, y: 3000, z: 0 });
+    const before = facesOf(store.getState()).length;
+
+    // Now a second triangle off that dangling tip, sharing its vertex.
+    const tip = { x: 4000, y: 3000, z: 0 };
+    add(tip, { x: 5000, y: 3000, z: 0 });
+    add({ x: 5000, y: 3000, z: 0 }, { x: 4500, y: 4000, z: 0 });
+    add({ x: 4500, y: 4000, z: 0 }, tip);
+
+    expect(before).toBe(1);
+    expect(facesOf(store.getState())).toHaveLength(2);
+  });
+
   it("welds repeated endpoints instead of duplicating points", () => {
     const store = createStore();
     const first = buildEdge(store.getState(), ORIGIN, U);

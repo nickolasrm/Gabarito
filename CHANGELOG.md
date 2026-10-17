@@ -67,8 +67,21 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     zero; it is now measured on a plane that contains the pull direction.
   - [Decision 0018](./docs/decisions/0018-axis-lock-semantics.md) records what a lock means per tool.
 
+- Five more tool bugs reported from real use. — [spec 0015](./docs/specs/0015-tool-bug-round-two.md)
+  - A closed polygon is now detected reliably. The loop search is breadth-first, so unrelated
+    geometry cannot starve it and long polygons are no longer rejected, and clicks are far less
+    likely to be pulled onto an inferred axis and break the loop.
+  - The line tool follows the height axis by inference, without holding an arrow key.
+  - Drawing stops once an edge closes a face, instead of chaining on from the closing point.
+  - Picking a rectangle drawn inside another now selects the **inner** face. Coplanar faces tie on
+    distance, so the smaller area decides, and every tool inherits it.
+  - The selection marquee draws over the model, and a selected face shows its own outline instead of
+    a black base edge drawn on top of it.
+
 ### Changed
 
+- Axis inference is gated by screen distance rather than the 3D distance between the pointer ray and
+  the axis line, which used to bind clicks the user aimed elsewhere. — [spec 0015](./docs/specs/0015-tool-bug-round-two.md)
 - Module boundaries: `core` may now import `geometry`. `geometry` and `plugin-api` remain leaves.
   — [decision 0015](./docs/decisions/0015-core-depends-on-geometry.md)
 - The repository is public, and the project describes itself as **inspired by** its main reference

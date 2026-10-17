@@ -1,5 +1,5 @@
-import { EPS, segment as segmentOps, vec3 } from "@gabarito/geometry";
-import type { Segment, Vec3 } from "@gabarito/geometry";
+import { EPS, ray as rayOps, segment as segmentOps, vec3 } from "@gabarito/geometry";
+import type { Ray, Segment, Vec3 } from "@gabarito/geometry";
 import { documentBounds, edgesOf, getPoint, guidesOf, pointsOf } from "@gabarito/core";
 import type { DocumentState } from "@gabarito/core";
 import { AXIS_DIRECTIONS, projectOntoAxis } from "./axis-lock";
@@ -19,6 +19,8 @@ const PRIORITY: Record<SnapKind, number> = {
 };
 
 const MAX_INTERSECTION_PAIRS = 600;
+/** How close the pointer must look to an axis before inference binds to it, in pixels. */
+const AXIS_SCREEN_TOLERANCE = 10;
 
 /** Snaps to real geometry. These beat inferred axes and the bare drawing plane. */
 const GEOMETRY_SNAPS: SnapKind[] = ["endpoint", "intersection", "midpoint", "edge", "extension", "guide"];
@@ -43,6 +45,15 @@ export interface ResolveInput {
   lock: AxisLockState | null;
   /** `plane` keeps the point free in the lock plane instead of pinning it to the axis. */
   lockMode?: "axis" | "plane";
+  /**
+   * The pointer ray. Axis inference uses it instead of the point on the drawing plane,
+   * which is the only way the third dimension is reachable: a point on the ground plane
+   * can never be near the vertical line through the anchor.
+   */
+  ray?: Ray;
+  /** Pointer position in screen pixels, and a projector, for the screen-space axis gate. */
+  screen?: { x: number; y: number };
+  project?: (point: Vec3) => { x: number; y: number; visible: boolean };
   snapping: boolean;
 }
 
@@ -87,7 +98,7 @@ function edgeSegments(doc: DocumentState): Segment[] {
  * crossings of guides with edges and with each other count as vertices (spec 0006).
  */
 export function resolveSnap(input: ResolveInput): SnapResult {
-  const { doc, free, tolerance, anchor, lock, snapping } = input;
+  const { doc, free, tolerance, anchor, lock, ray, screen, project, snapping } = input;
   const lockMode = input.lockMode ?? "axis";
 
   if (lock && lockMode === "axis") {
@@ -111,9 +122,13 @@ export function resolveSnap(input: ResolveInput): SnapResult {
     candidates.push({ ...candidate, axis: null, axisKey: null });
   };
 
+  // Endpoints reach further than other snaps on purpose. A loop only closes if the
+  // closing click lands on the existing vertex, and a few pixels short used to create a
+  // duplicate point, leaving the polygon open with no face.
+  const vertexTolerance = tolerance * 1.4;
   for (const vertex of pointsOf(doc)) {
     const radius = vec3.dist(vertex.position, free);
-    if (radius <= tolerance) {
+    if (radius <= vertexTolerance) {
       push({ point: vertex.position, kind: "endpoint", label: "Endpoint", radius });
     }
   }
@@ -195,6 +210,35 @@ export function resolveSnap(input: ResolveInput): SnapResult {
       const keys: Array<"x" | "y" | "z"> = ["x", "y", "z"];
       for (const axisKey of keys) {
         const direction = AXIS_DIRECTIONS[axisKey];
+        if (ray) {
+          const half = 1e6;
+          const line = {
+            a: vec3.sub(anchor, vec3.scale(direction, half)),
+            b: vec3.add(anchor, vec3.scale(direction, half)),
+          };
+          const closest = rayOps.closestPointsToSegment(ray, line);
+          if (closest.tRay <= 0) continue;
+          // Gate on screen distance, not the 3D distance between the ray and the line. A
+          // line nearly parallel to the view can be far from the axis on screen while the
+          // ray-to-line distance stays small, which snaps clicks the user aimed elsewhere.
+          const onScreen = project?.(closest.onSegment);
+          if (screen && onScreen) {
+            if (!onScreen.visible) continue;
+            const pixels = Math.hypot(onScreen.x - screen.x, onScreen.y - screen.y);
+            if (pixels > AXIS_SCREEN_TOLERANCE) continue;
+          } else if (closest.dist > tolerance * 1.5) {
+            continue;
+          }
+          candidates.push({
+            point: closest.onSegment,
+            kind: "axis",
+            label: `On ${axisKey.toUpperCase()} axis`,
+            radius: closest.dist,
+            axis: { origin: anchor, direction },
+            axisKey,
+          });
+          continue;
+        }
         const along = vec3.dot(delta, direction);
         const projected = vec3.add(anchor, vec3.scale(direction, along));
         const radius = vec3.dist(projected, free);

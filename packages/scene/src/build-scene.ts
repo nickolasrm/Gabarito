@@ -80,10 +80,17 @@ function faceGeometry(doc: DocumentState, ids: Set<EntityId> | null): THREE.Buff
   return geometry;
 }
 
-function edgeGeometry(doc: DocumentState, ids: Set<EntityId> | null): THREE.BufferGeometry {
+function edgeGeometry(
+  doc: DocumentState,
+  ids: Set<EntityId> | null,
+  exclude?: Set<EntityId>,
+): THREE.BufferGeometry {
   const positions: number[] = [];
   for (const edge of edgesOf(doc)) {
     if (ids && !ids.has(edge.id)) continue;
+    // A selected edge is drawn in the selection colour. Leaving the black base line in
+    // place draws it over the selection, which reads as the selection being underneath.
+    if (exclude?.has(edge.id)) continue;
     const a = getPoint(doc, edge.points[0]);
     const b = getPoint(doc, edge.points[1]);
     if (!a || !b) continue;
@@ -169,7 +176,7 @@ export function rebuildScene(graph: SceneGraph, doc: DocumentState): void {
   disposeGroup(graph.edges);
   graph.edges.add(
     new THREE.LineSegments(
-      edgeGeometry(doc, null),
+      edgeGeometry(doc, null, new Set(doc.selection)),
       new THREE.LineBasicMaterial({ color: COLORS.edge }),
     ),
   );

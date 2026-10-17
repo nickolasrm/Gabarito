@@ -32,6 +32,7 @@ and by decision records, so a rejected spec keeps its number forever.
 | [0012](./0012-tool-interaction-fixes.md) | Fix six tool interaction bugs | implemented | tools, scene, core, app | 0018 |
 | [0013](./0013-owner-verifies-before-merge.md) | The owner verifies the running app before a merge | implemented | docs | — |
 | [0014](./0014-stronger-agent-modes.md) | Raise the agent modes to ultracave and ponytail ultra | implemented | docs | — |
+| [0015](./0015-tool-bug-round-two.md) | Fix the tool bugs reported from real use, second round | implemented | core, scene, tools | — |
 
 Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 

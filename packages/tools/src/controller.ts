@@ -1,5 +1,5 @@
 import { poly as polyOps, vec3 } from "@gabarito/geometry";
-import type { Plane, Vec3 } from "@gabarito/geometry";
+import type { Plane, Ray, Vec3 } from "@gabarito/geometry";
 import {
   facePositions,
   parseAngle,
@@ -31,6 +31,8 @@ import type {
  */
 export interface ViewportAdapter {
   raycast(screenX: number, screenY: number): PickResult | null;
+  /** The pointer ray in world space. */
+  rayAt(screenX: number, screenY: number): Ray;
   raycastPlane(screenX: number, screenY: number, plane: Plane): Vec3 | null;
   worldToScreen(point: Vec3): { x: number; y: number; visible: boolean };
   pixelsPerWorldUnit(at: Vec3): number;
@@ -253,6 +255,9 @@ export class ToolController {
       anchor: this.currentAnchor(),
       lock: this.currentLock(),
       lockMode: this.getActiveTool().lockMode,
+      ray: this.viewport.rayAt(state.screenX, state.screenY),
+      screen: { x: state.screenX, y: state.screenY },
+      project: (point) => this.viewport.worldToScreen(point),
       snapping: this.store.getState().settings.snapping,
     });
     this.snap = snap;
