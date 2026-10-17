@@ -15,9 +15,23 @@ as a plan in `docs/specs/` and is recorded there when it is done.
 1. `git switch -c <type>/<slug>` — type is one of `feat`, `fix`, `docs`, `chore`, `refactor`, `test`,
    then a short slug, for example `docs/public-repo-rules`.
 2. Push the branch and open the PR: `gh pr create --fill`, then edit the body so it links the spec.
-3. Merge once the checks pass: `gh pr merge --squash --delete-branch`.
+3. Merge **only after the owner says so**, and only once the checks pass:
+   `gh pr merge --squash --delete-branch`.
 
 Rewriting published history is a one-off owner decision, asked for explicitly, never routine.
+
+## Verify before merging
+
+The owner verifies the running app before a merge. That is the review gate for user-visible work.
+
+1. Keep the app **running for the whole session**: `npm run dev -- --port 5173 --strictPort`, served at
+   <http://127.0.0.1:5173>. Leave it up; do not start it only when asked, and do not tear it down.
+2. Say what to click and what should happen, so the check takes a minute rather than an investigation.
+3. **Ask, then wait for an answer.** "All tests pass" is not permission, and a green pipeline is not a
+   review. Do not merge, and do not move on as if merged, until the owner replies.
+
+Port `5199` belongs to the Playwright suite, which refuses to start if the port is taken. Keep the dev
+server on `5173`.
 
 ## Talking about other products
 

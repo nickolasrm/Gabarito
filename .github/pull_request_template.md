@@ -30,6 +30,7 @@
 - [ ] Build output is static and needs no server
 - [ ] No text claims this project replaces, clones, or competes with another product
 - [ ] Opened as a pull request — never a direct commit to `main`
+- [ ] The owner verified the change on <http://127.0.0.1:5173> and said it can merge
 
 ## How to verify
 
