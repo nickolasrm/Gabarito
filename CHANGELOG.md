@@ -41,11 +41,21 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Two vendored agent style skills, forced on for every request: **caveman** (terse voice) and
   **ponytail** (smallest complete change), with a precedence file that keeps `AGENTS.md` and the
   spec process above both. — [spec 0010](./docs/specs/0010-force-style-skills-on.md)
+- Published the app: <https://nickolasrm.github.io/Gabarito/>, rebuilt and redeployed on every push to
+  `main`. — [spec 0011](./docs/specs/0011-repository-goes-public.md)
+- Two rules for a public repository: name other tools as inspiration rather than as a replacement, and
+  land every change through a pull request. — [decisions
+  0016](./docs/decisions/0016-name-other-tools-as-inspiration.md),
+  [0017](./docs/decisions/0017-pull-requests-only.md)
 
 ### Changed
 
 - Module boundaries: `core` may now import `geometry`. `geometry` and `plugin-api` remain leaves.
   — [decision 0015](./docs/decisions/0015-core-depends-on-geometry.md)
+- The repository is public, and the project describes itself as **inspired by** its main reference
+  rather than a copy of it. — [spec 0011](./docs/specs/0011-repository-goes-public.md)
+- `deploy-pages.yml` publishes on push to `main` instead of only on demand, now that Pages can be
+  enabled. — [spec 0011](./docs/specs/0011-repository-goes-public.md)
 
 ### Removed
 

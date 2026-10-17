@@ -10,6 +10,10 @@ domain features plug into rather than patch.
 - Modular by construction: the core knows nothing about woodworking, lighting, or houses.
 - Programmed by agents, documented by default. See [`AGENTS.md`](./AGENTS.md).
 
+Gabarito is inspired by the interaction model of SketchUp and other face-based modelers, and by what
+their users complain about. It is an independent project: not affiliated with, endorsed by, or a
+continuation of anything it draws on, and not a replacement for any of it.
+
 ## Status
 
 **Early modeler.** A working SketchUp-like base is in place: draw lines, rectangles and circles, pull

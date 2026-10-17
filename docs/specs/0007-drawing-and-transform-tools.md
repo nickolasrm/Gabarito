@@ -18,7 +18,7 @@ during the operation.
 
 ## Why now
 
-This is the sketch of the SketchUp clone the product is founded on
+This is the modeler the product is founded on, inspired by SketchUp's interaction model
 ([`docs/features/sketchup-core.md`](../features/sketchup-core.md)). It also proves the command model
 and the inference engine under real interaction.
 

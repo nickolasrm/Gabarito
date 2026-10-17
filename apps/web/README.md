@@ -25,11 +25,14 @@ npm run preview  # serve the built output
 ## Deploy
 
 `.github/workflows/ci.yml` typechecks, runs the unit and end-to-end suites, builds, and uploads the
-static bundle as an artifact on every push.
+static bundle as an artifact on every push and pull request.
 
-`.github/workflows/deploy-pages.yml` publishes to GitHub Pages, but **only on manual dispatch**.
-GitHub Pages for a private repository requires a paid plan; on the free plan the repository must be
-public. Until that is settled, the deploy workflow stays manual so CI does not fail on every push.
+`.github/workflows/deploy-pages.yml` publishes to GitHub Pages on every push to `main`, and on demand.
+The live app is <https://nickolasrm.github.io/Gabarito/>.
+
+Pages must be enabled once per repository (Settings → Pages → Source: GitHub Actions). Pages on a
+private repository needs a paid plan, which is why the repository is public
+([decision 0001](../../docs/decisions/0001-static-hosting-github-pages.md)).
 
 There is no server, no environment variable and no secret anywhere in either pipeline.
 

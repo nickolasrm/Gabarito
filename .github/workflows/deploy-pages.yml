@@ -1,15 +1,15 @@
 name: Deploy to GitHub Pages
 
-# Manual, and deliberately not triggered on push.
+# Runs on every push to `main`, and on demand.
 #
-# GitHub Pages for a *private* repository requires a paid plan. On the free plan the
-# repository has to be public, or the hosting constraint in decision 0001 has to change.
-# Until one of those is true, this workflow would fail on every push and CI would always
-# look broken, so it runs only when asked.
+# GitHub Pages on a *private* repository needs a paid plan, which is why this workflow used to be
+# manual-only. The repository is public now, so publishing is automatic (spec 0011).
 #
-# Before running: Settings -> Pages -> Source: GitHub Actions.
+# Pages must be enabled: Settings -> Pages -> Source: GitHub Actions.
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
