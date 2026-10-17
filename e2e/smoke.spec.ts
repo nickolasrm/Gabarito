@@ -416,3 +416,42 @@ test("stops drawing once an edge closes a face", async ({ page }) => {
   const liveAfter = await page.evaluate(() => window.__gabarito!.controller.getStatus().active);
   expect(liveAfter).toBe(false);
 });
+
+test("a rectangle across the corner of an L of lines turns to face the corner", async ({ page }) => {
+  // An L: bottom-left, a vertex above it, and a vertex to its right, all at y = 0.
+  const bottomLeft = { x: 0, y: 0, z: 0 };
+  const top = { x: 0, y: 0, z: 1200 };
+  const right = { x: 1200, y: 0, z: 0 };
+
+  await page.getByRole("button", { name: /^Line/ }).click();
+  await clickWorld(page, bottomLeft);
+  await clickWorld(page, top);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /^Line/ }).click();
+  await clickWorld(page, bottomLeft);
+  await clickWorld(page, right);
+  await page.keyboard.press("Escape");
+
+  // Start at the top vertex and drag towards the right one.
+  await page.getByRole("button", { name: /^Rectangle/ }).click();
+  await clickWorld(page, top);
+  const across = await screenOf(page, { x: 600, y: 0, z: 0 });
+  await page.mouse.move(across.x, across.y);
+  await expect(page.locator(".chip.plane")).toContainText("Edges");
+  await page.mouse.click(across.x, across.y);
+
+  const face = await page.evaluate(() => {
+    const s = window.__gabarito!.store.getState();
+    const faces = Object.values(s.entities).filter((entity) => entity.kind === "face");
+    const last = faces[faces.length - 1];
+    const pts = (last?.points ?? []).map((id) => s.entities[id].position!);
+    const span = (key: "x" | "y" | "z") =>
+      Math.round(Math.max(...pts.map((p) => p[key])) - Math.min(...pts.map((p) => p[key])));
+    return { x: span("x"), y: span("y"), z: span("z") };
+  });
+
+  // A plane through both edges: no depth, real height and width.
+  expect(face.y).toBe(0);
+  expect(face.z).toBeGreaterThan(1);
+  expect(face.x).toBeGreaterThan(1);
+});

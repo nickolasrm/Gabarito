@@ -99,6 +99,8 @@ at the same depth, with the black winning. The base pass now skips them.
 - [x] A selected vertex draws a highlight (screenshot)
 - [x] The line tool snaps to a vertex 2000 above the drawing plane (browser: `Endpoint`, edge z = 2000)
 - [x] A diagonal in a square creates both triangles (browser: 7 faces to 9)
+- [x] A rectangle across the corner of an L of lines lies in the plane through both (browser: y span 0,
+  z span 1200, plane reported as `Edges`)
 
 ## Addendum: what the owner's verification found
 
@@ -130,6 +132,15 @@ across heights: an edge can now run from the ground to a corner of a solid.
 a square closes a triangle on each side of it; the search returned the first and stopped. `detectFace`
 became `detectFaces` and creates a face for every valid loop the new edge completes. A square plus a
 diagonal now yields three faces instead of two.
+
+**A rectangle drawn between two bare edges stayed in the ground plane.** With no *face* under the
+pointer there was nothing to take a plane from, so the code fell back to the ground while keeping the
+anchor's height — a width/depth rectangle floating at the anchor's z. The owner's case was an L of two
+lines: a vertical edge and a horizontal one meeting at a corner. Two non-parallel edges define a plane,
+so the plane can come from the geometry being drawn between. While no axis is pinned, the drawing plane
+now follows the geometry under the pointer, which is also what "it does not change the plane depending
+on the mouse position" was asking for: a rectangle started at the corner of an L turns to face it, and
+the resulting face spans height and width with no depth.
 
 **Pulling a small face to make a hole is not a bug.** It is a boolean subtract, and it is exactly what
 [decision 0011](../decisions/0011-geometry-kernel-strategy.md) deferred: extrusion only, no kernel.

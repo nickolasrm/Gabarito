@@ -1,8 +1,11 @@
 import { poly as polyOps, vec3 } from "@gabarito/geometry";
 import type { Plane, Ray, Vec3 } from "@gabarito/geometry";
 import {
+  edgesOf,
   facePositions,
   facesOf,
+  findPointNear,
+  getPoint,
   parseAngle,
   parseLength,
   unitSuffix,
@@ -246,6 +249,60 @@ export class ToolController {
     return null;
   }
 
+  /** Direction of an edge attached to a point or an edge, in world space. */
+  private incidentEdgeDirection(entityId: EntityId): Vec3 | null {
+    const doc = this.store.getState();
+    const entity = doc.entities[entityId];
+    if (!entity) return null;
+    const ids =
+      entity.kind === "edge"
+        ? [entity.id]
+        : entity.kind === "point"
+          ? edgesOf(doc).filter((edge) => edge.points.includes(entity.id)).map((edge) => edge.id)
+          : [];
+    for (const id of ids) {
+      const edge = doc.entities[id];
+      if (!edge || edge.kind !== "edge") continue;
+      const a = getPoint(doc, edge.points[0]);
+      const b = getPoint(doc, edge.points[1]);
+      if (a && b) return vec3.normalize(vec3.sub(b, a));
+    }
+    return null;
+  }
+
+  /**
+   * The plane implied by the geometry the user is drawing between, when no face is under
+   * the pointer. Two non-parallel edges define a plane, which is how a rectangle is drawn
+   * across the corner of an existing L of lines: without this, the plane fell back to the
+   * ground while the anchor kept its height, so the preview was a width/depth rectangle
+   * floating at the anchor's height.
+   */
+  private edgePlane(screenX: number, screenY: number): DrawingPlane | null {
+    const hit = this.viewport.raycast(screenX, screenY);
+    const anchor = this.currentAnchor() ?? hit?.point ?? null;
+    if (!anchor) return null;
+    const doc = this.store.getState();
+    const anchorPoint = findPointNear(doc, anchor);
+    if (!anchorPoint) return null;
+    const first = this.incidentEdgeDirection(anchorPoint.id);
+    if (!first) return null;
+
+    const second = hit ? this.incidentEdgeDirection(hit.entityId) : null;
+
+    if (second) {
+      const normal = vec3.cross(first, second);
+      // Parallel edges define nothing; the plane through both is then ambiguous.
+      if (!vec3.isZero(normal, 0.05)) {
+        return { ...axisPlaneBasis(first, vec3.normalize(normal), anchor), label: "Edges" };
+      }
+    }
+
+    // One edge only: keep the plane if it is not the ground plane, where the camera-facing
+    // choice is what a user expects. A ground-level edge stays on the ground.
+    if (Math.abs(first.z) < 0.9) return null;
+    return planeContainingAxis(first, anchor, this.viewport.viewDirection(), "Edge");
+  }
+
   private planeAt(screenX: number, screenY: number): DrawingPlane {
     const lock = this.currentLock();
     if (lock) {
@@ -277,6 +334,9 @@ export class ToolController {
         }
       }
     }
+    const fromEdges = this.edgePlane(screenX, screenY);
+    if (fromEdges) return fromEdges;
+
     const { u, v } = basisFor(GROUND_PLANE.normal);
     return { plane: GROUND_PLANE, normal: GROUND_PLANE.normal, u, v, label: "Ground" };
   }

@@ -66,7 +66,9 @@ export function createRectangleTool(): Tool {
       if (!anchor) return;
       // Pinning an axis after the first click changes which plane the shape lives on.
       const key = lockKey(ctx);
-      if (key !== anchor.lock) {
+      // Unlocked: follow the geometry under the pointer, so the plane can turn as the
+      // user drags across a corner. Locked: the pinned plane stays put.
+      if (key !== anchor.lock || !key) {
         anchor = { ...anchor, plane: ctx.planeAt(event.screenX, event.screenY), lock: key };
       }
 
