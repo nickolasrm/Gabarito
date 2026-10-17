@@ -1,16 +1,20 @@
 ---
 id: 0011
 title: Geometry kernel deferred: extrusion only for now
-status: rejected
+status: superseded
 date: 2026-10-17
 tags: [geometry, csg, kernel, deferred]
 supersedes: []
-superseded_by: null
+superseded_by: 0019
 specs: []
 ---
 
 # 0011 — Geometry kernel deferred: extrusion only for now
 
+> **Superseded by [0019](./0019-mesh-csg-kernel.md) on 2026-10-17**: a cut is needed, and a mesh CSG
+> library is now adopted behind an interface in `geometry`. The analysis below is kept because the
+> options did not go away.
+>
 > **Rejected on 2026-10-17.** The first modeler slice needs no boolean operations at all: push/pull
 > is a plain extrusion. No spike was run, and the spike spec that used to be the prerequisite here
 > was pruned as speculative. Revisit this record the first time a feature genuinely needs boolean

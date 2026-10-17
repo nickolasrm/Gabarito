@@ -94,6 +94,12 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     a width/depth rectangle floating at that height. The plane now follows the geometry under the
     pointer while no axis is pinned.
 
+- Decision [0019](./docs/decisions/0019-mesh-csg-kernel.md): solid cuts use `@jscad/modeling` behind an
+  interface owned by `packages/geometry`, superseding decision 0011. Chosen on measured cost after a
+  spike: 58 KB gzipped against 223 KB for `manifold-3d`, both exact on a recess, a door opening and a
+  coplanar flush notch, and the `three`-based libraries ruled out by the module boundaries. Plan in
+  [spec 0016](./docs/specs/0016-cut-holes-with-push-pull.md), left `proposed`.
+
 ### Changed
 
 - Axis inference is gated by screen distance rather than the 3D distance between the pointer ray and
