@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Caveman and ponytail are always loaded in this project (spec 0010).
+  //
+  // A skill is on-demand by design: OpenCode advertises it and the agent decides
+  // whether to load it, so a skill alone cannot be guaranteed on every request. The
+  // `instructions` array is the only channel that is in context for every request, so
+  // the two skill bodies are listed there as well as being registered as skills.
+  "instructions": [
+    ".opencode/instructions/00-precedence.md",
+    ".opencode/skills/caveman/SKILL.md",
+    ".opencode/skills/ponytail/SKILL.md"
+  ]
+}

@@ -38,6 +38,9 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - End-to-end tests in a real browser (Playwright): boot without console errors, draw by click, type
   a size and apply it, push/pull, axis-locked move, rotate, guides, measure, undo, and Escape.
   — [decision 0010](./docs/decisions/0010-testing-strategy.md)
+- Two vendored agent style skills, forced on for every request: **caveman** (terse voice) and
+  **ponytail** (smallest complete change), with a precedence file that keeps `AGENTS.md` and the
+  spec process above both. — [spec 0010](./docs/specs/0010-force-style-skills-on.md)
 
 ### Changed
 

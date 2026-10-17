@@ -27,6 +27,7 @@ and by decision records, so a rejected spec keeps its number forever.
 | [0006](./0006-snapping-inference-axis-locks.md) | Snapping, inference, and axis locks | implemented | tools, scene | 0012 |
 | [0007](./0007-drawing-and-transform-tools.md) | Drawing and transform tools with typed input | implemented | tools, scene, ui, app | 0006, 0012, 0014 |
 | [0008](./0008-camera-navigation.md) | Camera navigation | implemented | scene | 0003, 0008 |
+| [0010](./0010-force-style-skills-on.md) | Force the caveman and ponytail style skills on | implemented | docs | — |
 
 Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 
