@@ -97,6 +97,9 @@ function faceGeometry(doc: DocumentState, ids: Set<EntityId> | null): THREE.Buff
     } catch {
       continue; // A face the renderer cannot triangulate is skipped rather than taken down.
     }
+    if (triangles.length === 0) continue;
+    // Same order the triangulator indexed: contour first, then each hole in order.
+    for (const point of [points, ...holes].flat()) positions.push(point.x, point.y, point.z);
     const combined = [points, ...holes].flat();
     // Match the document's winding: the 2D triangulation may come out against the face normal.
     const [i0, i1, i2] = triangles[0];

@@ -98,5 +98,10 @@ wound against the face's normal, so `scene` compares the triangulation's normal 
 flips the triangle order once per face — the winding stays the document's, not the tessellator's.
 
 The ring face comes out of the cut with its loops exactly as the kernel mesh wound them; `conformRects`
-and `rect.subtract` are deleted with their tests. Verified: 107 unit tests, 23 e2e, typecheck clean,
+and `rect.subtract` are deleted with their tests. Verified: 108 unit tests, 23 e2e, typecheck clean,
 static build unchanged in shape (WASM as a hashed asset).
+
+Found during the owner's browser check and fixed within this spec: the renderer's hole branch
+triangulated the ring but never pushed the ring's vertices into the buffer, so its triangles landed
+on other faces' vertices and the solid rendered torn. The regression test asserts every vertex the
+faces group holds is referenced by a triangle — with the bug, the ring's eight vertices sit orphaned.
