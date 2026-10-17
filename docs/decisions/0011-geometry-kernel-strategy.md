@@ -14,6 +14,10 @@ specs: [0003]
 > **Status: proposed.** This record is deliberately unsettled. It states the intended direction and
 > the spike that must pass before it is accepted. Its purpose is to stop agents from each reaching
 > their own conclusion about how solids work.
+>
+> **Interim (2026-10-17).** The first slice shipped without any kernel: push/pull is pure extrusion,
+> which needs no CSG. Nothing is adopted yet, and
+> [spec 0003](../specs/0003-geometry-kernel-spike.md) remains the gate before booleans are needed.
 
 ## Context
 
@@ -66,10 +70,6 @@ curved surfaces are tessellated and exact circles are lossy; a half-edge structu
 real code to write and test, and getting it wrong is expensive; adopting a library brings a licence
 and maintenance dependency that must be checked before it becomes load-bearing; if the interface
 leaks library types, the promised swap is fiction.
-
-**Neutral:** the choice between a JS library and a WASM kernel will likely be revisited once
-lighting and house-building need thin walls and precise openings — the decision record is written so
-that revisit is a supersede, not a rewrite.
 
 ## Alternatives considered
 

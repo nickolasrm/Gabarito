@@ -1,16 +1,31 @@
 # apps/web
 
-**Status:** empty — no code yet ([spec 0002](../../docs/specs/0002-monorepo-tooling-bootstrap.md))
+**Status:** implemented — static shell, deploys to GitHub Pages
 
 ## Responsibility
 
 The deployable artifact. This is the only place that knows Gabarito is hosted on GitHub Pages.
 
-- The Vite entry point and `index.html` shell.
-- Base-path handling for a project Pages URL (`/Gabarito/`).
-- The deep-link fallback mechanism (hash routing, or a generated `404.html`).
-- `.nojekyll` propagation into the build output.
-- The composition call into `@gabarito/app`.
+- `index.html`, the single HTML entry, with `#root`.
+- `src/main.ts`, which calls `boot({ root })`.
+- The Vite root of the project (`vite.config.ts` points here), emitting a static `dist/`.
+
+## Build
+
+```bash
+npm run dev      # development server
+npm run build    # static bundle in dist/
+npm run preview  # serve the built output
+```
+
+`base: "./"` keeps asset paths relative, so the same output works from a project Pages URL
+(`/Gabarito/`), a user Pages URL, or a plain static file server
+([decision 0001](../../docs/decisions/0001-static-hosting-github-pages.md)).
+
+## Deploy
+
+`.github/workflows/deploy.yml` typechecks, tests, builds, adds `.nojekyll`, and publishes `dist`.
+There is no server, no environment variable and no secret anywhere in the pipeline.
 
 ## Owns
 
@@ -19,17 +34,4 @@ Deployment concerns only: build config, HTML shell, asset base, hosting workarou
 ## Must not
 
 - Contain domain logic, UI components, or geometry.
-- Be imported by anything. This package sits at the top of the dependency graph.
-
-## Depends on
-
-`@gabarito/app`.
-
-## Deploy
-
-Static output only. No server, no environment variables, no secrets
-([decision 0001](../../docs/decisions/0001-static-hosting-github-pages.md)).
-
-## Read next
-
-[`docs/decisions/0001-static-hosting-github-pages.md`](../../docs/decisions/0001-static-hosting-github-pages.md)
+- Be imported by anything; it sits at the top of the dependency graph.

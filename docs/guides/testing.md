@@ -49,10 +49,27 @@ If a command has no inverse, it must not be a command.
 
 ```
 packages/<name>/src/**/*.test.ts     unit, integration, contract — colocated with the code
-e2e/**                               Playwright, against the built static bundle
+e2e/**/*.spec.ts                     Playwright, against the dev server in a real browser
 ```
 
-A package's `README.md` states its own test command. From the root, everything runs together.
+A package's `README.md` states its own test command. From the root:
+
+```bash
+npm test        # unit and integration, milliseconds
+npm run test:e2e  # real browser, seconds
+```
+
+### The dev debug handle
+
+`packages/app` attaches `window.__gabarito` (store, viewport, active tool) **in dev builds only**,
+so end-to-end tests can assert real document state instead of guessing from pixels. The bundler
+removes it from production output, and no other code may depend on it.
+
+### Clicking in world coordinates
+
+E2E tests must click via `screenOf(page, worldPoint)` rather than raw pixels. A raw pixel click can
+land on an inferred axis or vertex, which is correct behaviour for the app and a silent,
+hard-to-diagnose failure in the test. `screenOf` also refuses points that project outside the canvas.
 
 ## Boundary tests
 

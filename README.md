@@ -12,8 +12,20 @@ domain features plug into rather than patch.
 
 ## Status
 
-**Pre-implementation.** This repository currently contains documentation and module boundaries
-only. There is no runnable application, no build tooling, and no dependency manifest yet.
+**Early modeler.** A working SketchUp-like base is in place: draw lines, rectangles and circles, pull
+faces into solids, move and rotate, measure, and lay down guides — with snapping, axis locking, typed
+dimensions in seven units, and undo.
+
+No persistence yet: nothing is saved between sessions. No plugin host, and no woodworking, lighting or
+house features. The geometry kernel is still
+[proposed](./docs/decisions/0011-geometry-kernel-strategy.md); push/pull is straight extrusion.
+
+```bash
+npm install
+npm run dev      # http://localhost:5173
+npm test
+npm run build
+```
 
 ## Start here
 

@@ -29,6 +29,10 @@ stays searchable forever.
 | [0009](./0009-documentation-workflow.md) | Specs and ADRs as the documentation workflow | accepted | process, docs, agents | — |
 | [0010](./0010-testing-strategy.md) | Testing strategy for a static, headless-core app | accepted | testing, quality, ci | — |
 | [0011](./0011-geometry-kernel-strategy.md) | Geometry kernel: adopt first, build later | **proposed** | geometry, csg, kernel | — |
+| [0012](./0012-tool-input-model.md) | Typed values and axis locking belong to the input layer | accepted | tools, input, ux | — |
+| [0013](./0013-curves-are-tessellated.md) | Curves are tessellated into straight edges | accepted | geometry, curves | — |
+| [0014](./0014-guides-and-dimensions-as-entities.md) | Guides and dimensions are first-class, non-geometric entities | accepted | core, annotations | — |
+| [0015](./0015-core-depends-on-geometry.md) | core may depend on geometry | accepted | structure, boundaries | 0004 |
 
 Statuses: `proposed` → `accepted` → (`superseded` | `deprecated` | `rejected`).
 

@@ -14,15 +14,20 @@ apps/web ──► packages/app ──► packages/{ui,tools,scene,persistence,p
                                   │        │      └──────────► core, geometry
                                   │        └─────────────────► core, geometry
                                   └──────────────────────────► core, plugin-api
-packages/{core,geometry,plugin-api} ──► (nothing in this repo)
+packages/core ──► packages/geometry
+packages/{geometry,plugin-api} ──► (nothing in this repo)
 packages/features/* ──► packages/plugin-api
 ```
+
+Layers: **leaves** (`geometry`, `plugin-api`) import nothing. **Foundations** (`core`) import only
+leaves. Everything else imports its own layer and below.
 
 ## Rules
 
 | Rule | Rationale |
 |---|---|
-| `core` and `geometry` import **no** other package. | They are the headless, testable foundation. |
+| `geometry` imports **no** other package. | It owns the numerical guarantees and must be testable in isolation, with no state. |
+| `core` imports only `geometry`. | Recorded in [decision 0015](../decisions/0015-core-depends-on-geometry.md); the earlier "imports nothing" rule was wrong. |
 | `plugin-api` imports no other package. | It is the contract; contracts cannot depend on implementations. |
 | Nothing outside `apps/web` knows the app is on GitHub Pages. | Base paths and hosting quirks stay at the edge. |
 | `ui` never imports `scene` or Three.js. | React chrome and WebGL viewport are separate worlds; they meet through `core` state and events. |

@@ -11,19 +11,23 @@ A clone is done when a user can build a small building without fighting the tool
 
 ## Capabilities we are aiming at
 
-| Capability | Notes |
-|---|---|
-| Draw on faces and planes | Line, rectangle, circle, arc, polygon. Faces are created implicitly from closed loops, the way SketchUp does it. |
-| Push/pull | The defining operation: extrude faces into solids and cut them back. |
-| Move / rotate / scale | With copy, array, and axis locking. |
-| Inference and snapping | Endpoints, midpoints, intersections, on-face, on-edge, axis and parallel/perpendicular locks, plus measurement entry while dragging. |
-| Groups and components | Reusable instances with their own coordinate systems — the basis of any real workflow. |
-| Materials and styles | Painting faces, simple texturing, edge/face display styles. |
-| Outliner and entity info | Navigate and inspect the model. |
-| Sections and shadows | Viewing aids that also preview the lighting domain later. |
-| Undo/redo everywhere | Non-negotiable, and the reason for the command model ([decision 0006](../decisions/0006-document-model-and-commands.md)). |
-| Save/load a portable file | The `.gabarito` container ([decision 0007](../decisions/0007-local-first-persistence.md)). |
-| Import/export | glTF and OBJ first; STL for 3D printing later. |
+| Capability | Status | Notes |
+|---|---|---|
+| Draw on faces and planes | ✅ | Line, rectangle and circle. Faces are created implicitly from closed loops. |
+| Push/pull | ✅ | Extrusion only, no booleans yet ([decision 0011](../decisions/0011-geometry-kernel-strategy.md)). |
+| Move / rotate | ✅ | Axis-lockable, with typed distances and angles. |
+| Inference and snapping | ✅ | Endpoints, midpoints, edges, guides, virtual intersections, extensions, axes, plus measurement entry while dragging. |
+| Guides and measurement | ✅ | The ruler creates construction lines; measure leaves dimensions. |
+| Units | ✅ | mm, cm, m, km, in, ft, yd, driving input and readout. |
+| Undo/redo everywhere | ✅ | Every tool operation is a command with an inverse ([decision 0006](../decisions/0006-document-model-and-commands.md)). |
+| Arc, polygon, erase, offset, follow-me | — | Not started. |
+| Scale / move copy / array | — | Not started. |
+| Groups and components | — | The basis of any real workflow; not started. |
+| Materials and styles | — | Not started. |
+| Outliner and entity info | — | Not started. |
+| Sections and shadows | — | Not started. |
+| Save/load a portable file | — | Nothing is saved yet ([decision 0007](../decisions/0007-local-first-persistence.md)). |
+| Import/export | — | Not started. |
 
 ## Explicitly not aiming at
 
@@ -40,10 +44,18 @@ be plugins. The moment a tool starts knowing about board thickness, it belongs i
 
 ## Where it is built
 
-No spec covers the modeler yet. Tooling comes first
-([spec 0002](../specs/0002-monorepo-tooling-bootstrap.md)) and the geometry kernel decision second
-([spec 0003](../specs/0003-geometry-kernel-spike.md)). The modeler is then built in slices — document
-+ geometry, then viewport, then tools, then persistence — each with its own spec.
+The first slices are done: tooling and the static build
+([spec 0002](../specs/0002-monorepo-tooling-bootstrap.md)), document/geometry/viewport
+([spec 0004](../specs/0004-core-document-geometry-viewport.md)), units
+([spec 0005](../specs/0005-units-and-measurement.md)), snapping and axis locks
+([spec 0006](../specs/0006-snapping-inference-axis-locks.md)), the first nine tools
+([spec 0007](../specs/0007-drawing-and-transform-tools.md)) and camera navigation
+([spec 0008](../specs/0008-camera-navigation.md)).
+
+The geometry kernel decision is still open ([spec 0003](../specs/0003-geometry-kernel-spike.md),
+[decision 0011](../decisions/0011-geometry-kernel-strategy.md)), and persistence is not started.
+Next slices, in the order that unblocks the most: **save and load**, then **groups and components**,
+then **erase, offset and follow-me**.
 
 Related: [module boundaries](../architecture/module-boundaries.md),
 [glossary](../glossary.md).

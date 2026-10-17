@@ -1,34 +1,57 @@
 # @gabarito/app
 
-**Status:** empty — no code yet
+**Status:** implemented — composition root and global keymap
 
 ## Responsibility
 
-The composition root: the one package allowed to know about everything and wire it together.
+The one package allowed to know about everything and wire it together.
 
-- `boot()`: create the document store, the viewport, and the UI, and connect them.
-- Build the plugin manifest and hand it to `plugin-host`.
-- Register the built-in tools from `@gabarito/tools`.
-- Default keymap and command bindings.
-- Application-level settings and profile (theme, display units, autosave interval).
-- Error boundaries and the "something went wrong, here is your document" recovery path — important
-  when there is no server to blame.
+- `boot({ root })`: create the store, the viewport, the tool controller and the UI, then connect them.
+- Implement `UiApi` by adapting the store, the tool controller and the viewport into the UI's own
+  view-model types.
+- Install the global keymap.
+- Frame the document on start.
 
-## Owns
+## Boot order
 
-Wiring, boot order, and the built-in composition. Nothing else.
+1. `createStore()` — the document exists before anything renders.
+2. `new Viewport(host, store)` into a detached element, so the canvas can be moved into the layout
+   once React has rendered its placeholder.
+3. `new ToolController(store, viewport, onChange)` — the viewport is passed as the controller's
+   `ViewportAdapter`; the two packages never import each other.
+4. `mountUi(root, api)`, then the viewport is appended into the UI's container.
+5. `installKeymap`, then `frameDocument()`.
+
+## Keymap
+
+| Key | Action |
+|---|---|
+| `Space`, `L`, `R`, `C`, `P`, `M`, `Q`, `T`, `Shift+T` | Select, line, rectangle, circle, push/pull, move, rotate, ruler, measure |
+| `→` `←` `↑` | Pin X, Y, Z |
+| `Shift` + arrow | Pin the opposite direction |
+| `↓` | Clear the lock; invert a push/pull |
+| `Enter` | Commit the typed value |
+| `Esc` | Cancel the operation |
+| `Delete` | Delete the selection |
+| `Home` | Frame the document |
+| `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z` | Undo, redo |
+
+Modal input is offered to the controller before tool shortcuts, so a digit never switches tools.
 
 ## Must not
 
 - Contain domain logic, geometry, rendering code, or React components.
-- Be imported by any other package. It is the top of the dependency graph, under `apps/web`.
-- Reimplement anything a library package already provides. If composition needs a capability, the
-  owning package should expose it.
+- Be imported by another package.
+
+## Dev-only debug handle
+
+In dev builds only, `boot` attaches `window.__gabarito` (store, viewport, active tool) so end-to-end
+tests can assert document state rather than pixels. The bundler strips it from production output.
+See [`docs/guides/testing.md`](../../docs/guides/testing.md).
 
 ## Depends on
 
-`@gabarito/core`, `@gabarito/geometry`, `@gabarito/scene`, `@gabarito/tools`, `@gabarito/ui`,
-`@gabarito/persistence`, `@gabarito/plugin-api`, `@gabarito/plugin-host`.
+Everything except `plugin-host` (not built yet).
 
 ## Read next
 

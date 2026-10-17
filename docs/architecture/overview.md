@@ -33,29 +33,31 @@ package import it; it imports nothing from them.
 
 ## Runtime model
 
-1. `app` boots, builds the plugin manifest, and creates the document store from `core`.
-2. `scene` subscribes to the document and keeps the Three.js scene graph in sync.
+1. `boot` creates the document store, the viewport, and the tool controller, then mounts the UI.
+2. `scene` subscribes to the document and keeps a derived Three.js scene in sync.
 3. `tools` converts pointer and keyboard input into **commands**.
 4. `core` applies the command, pushes an undo entry, and notifies subscribers.
 5. `ui` renders React chrome from the same store; the viewport is a canvas React never renders into.
-6. `persistence` snapshots the document to local storage or to a `.gabarito` project file.
+6. `persistence` snapshots the document to local storage or to a `.gabarito` project file. *(Not built
+   yet.)*
 
-React never owns geometry. The viewport never owns state. Tools never touch Three.js objects.
+React never owns geometry. The viewport never owns state. Tools never touch Three.js objects — the
+viewport reaches them as a structurally matched `ViewportAdapter` interface.
 
 ## Modules
 
-| Package | Owns | Depends on |
-|---|---|---|
-| `core` | document, entities, selection, commands, undo, units, events | — |
-| `geometry` | vectors, planes, curves, meshes, solid ops, inference math | — |
-| `scene` | WebGL renderer, camera, grid, picking, materials, highlighting | core, geometry |
-| `tools` | interaction state machines: select, line, rectangle, push/pull, move, rotate… | core, geometry |
-| `ui` | React shell: menus, panels, inspectors, dialogs, command palette | core, plugin-api |
-| `persistence` | IndexedDB/OPFS storage, project file I/O, import/export | core, geometry |
-| `plugin-api` | the versioned contracts plugins implement | — |
-| `plugin-host` | manifest, registration, activation lifecycle, capability checks | plugin-api |
-| `app` | composition root, wiring, keymaps, boot | all of the above |
-| `features/*` | domain plugins | plugin-api only |
+| Package | Owns | Depends on | Status |
+|---|---|---|---|
+| `core` | document, entities, selection, commands, undo, units, events | geometry | built |
+| `geometry` | vectors, planes, curves, meshes, solid ops, inference math | — | built |
+| `scene` | WebGL renderer, camera, grid, picking, materials, highlighting | core, geometry | built |
+| `tools` | interaction state machines: select, line, rectangle, push/pull, move, rotate… | core, geometry | built |
+| `ui` | React shell: menus, panels, inspectors, dialogs, command palette | core, plugin-api | built |
+| `persistence` | IndexedDB/OPFS storage, project file I/O, import/export | core, geometry | planned |
+| `plugin-api` | the versioned contracts plugins implement | — | planned |
+| `plugin-host` | manifest, registration, activation lifecycle, capability checks | plugin-api | planned |
+| `app` | composition root, wiring, keymaps, boot | all of the above | built |
+| `features/*` | domain plugins | plugin-api only | planned |
 
 ## Why this shape
 

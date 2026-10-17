@@ -1,7 +1,7 @@
 ---
 id: 0002
 title: Bring up monorepo tooling and the static build
-status: proposed
+status: implemented
 date: 2026-10-17
 packages: [web, app, core]
 decisions: [0001, 0002, 0004]
@@ -93,4 +93,16 @@ in a routing spec because it is a hosting property, not an application property;
 
 ## Result
 
-> Filled in when the spec is closed.
+- **Status:** implemented on 2026-10-17
+- **What shipped:** npm scripts (`dev`, `build`, `typecheck`, `test`), a strict root `tsconfig.json`
+  with `@gabarito/*` path mappings, `vite.config.ts` (root `apps/web`, `base: "./"`, static `dist`),
+  `vitest.config.ts`, the `apps/web` HTML shell, the real composition root in `packages/app` (rather
+  than the version-logging placeholder the plan described), and `.github/workflows/deploy.yml`, which
+  typechecks, tests, builds and publishes `dist` with `.nojekyll`.
+- **Deviations from the plan:**
+  - **eslint/prettier were in scope and were not added.** The quality gate today is `typecheck` plus
+    `test`; linting is deferred to a follow-up spec.
+  - No per-package `tsconfig.json`. One root config with path mappings is used instead, because
+    packages are consumed as TypeScript source through Vite aliases rather than built separately.
+- **Follow-up specs:** a linting and formatting spec; a code-splitting spec (the initial bundle is
+  ~815 kB, dominated by three.js).
