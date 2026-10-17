@@ -108,78 +108,21 @@ at the same depth, with the black winning. The base pass now skips them.
 
 ## Addendum: what the owner's verification found
 
-Three things came back from clicking through the change. Two were real gaps in this work; one is not a
-bug at all.
+Four further rounds of clicking, each of which found a different failure in the *same* inference: the
+plane a 2D tool draws on. In order: the plane did not follow the pointer's height; a face under the
+cursor beat the edge being aimed at; fixing that made faces never consulted at all; and the plane frozen
+at the anchor collapsed a rectangle to a line, which the first attempt at a fix reproduced from the
+other direction by choosing the edge perpendicular to the drag.
 
-**The drawing plane followed the pick order, not the geometry.** Hovering over the top face of a solid
-reported the plane as `Ground` whenever the pointer was near one of that face's vertices or edges,
-because the general pick prefers a point or an edge and the plane code only accepted a face hit. So the
-shape landed on the ground even with a face right under the pointer — which is what "the line and
-rectangle tools cannot draw on a different plane" actually was. Fixed with a faces-only raycast plus an
-incident-face lookup, so clicking a vertex or an edge of a face draws on that face. The status bar now
-names the plane (`Ground`, `Face`, `Axis Z`) so this is visible instead of mysterious, which is what
-made the behaviour look like a mystery in the first place.
+All four are fixed, and the rule they add up to is recorded in
+[decision 0020](../decisions/0020-drawing-plane-inference.md) rather than left here: the plane comes from
+what the pointer aims at, and it must contain the anchor-to-pointer line. Two smaller gaps from the same
+round are fixed alongside it — a selected vertex now draws a highlight, and one edge that closes several
+loops now creates a face for each.
 
-**A selected vertex had no highlight.** Picking one worked — the document held the point, and the status
-bar said `1 point selected` — but the selection layer drew only faces and edges, so the click looked
-like it had gone nowhere. Selected points now draw as a larger dot.
-
-**Snapping measured from the drawing plane, so a vertex off it could never snap.** The line tool
-could not be pointed at an existing vertex unless that vertex happened to lie on the plane under the
-pointer. The vertex candidate was measured from the point *on the drawing plane*, which is the same
-structural mistake as the axis bug at the top of this spec: a vertex at `z = 2000` is far from the
-ground point under the pointer, so no tolerance helps. Vertex snapping is now measured against the
-pointer ray and gated by screen distance, like the axes. That is also what makes the line tool usable
-across heights: an edge can now run from the ground to a corner of a solid.
-
-**One edge often closes more than one loop, and only one face was created.** Dropping a diagonal into
-a square closes a triangle on each side of it; the search returned the first and stopped. `detectFace`
-became `detectFaces` and creates a face for every valid loop the new edge completes. A square plus a
-diagonal now yields three faces instead of two.
-
-**A rectangle drawn between two bare edges stayed in the ground plane.** With no *face* under the
-pointer there was nothing to take a plane from, so the code fell back to the ground while keeping the
-anchor's height — a width/depth rectangle floating at the anchor's z. The owner's case was an L of two
-lines: a vertical edge and a horizontal one meeting at a corner. Two non-parallel edges define a plane,
-so the plane can come from the geometry being drawn between. While no axis is pinned, the drawing plane
-now follows the geometry under the pointer, which is also what "it does not change the plane depending
-on the mouse position" was asking for: a rectangle started at the corner of an L turns to face it, and
-the resulting face spans height and width with no depth.
-
-**The plane came from a face even when the user pointed at an edge.** The owner's next repro made
-this exact: with a ground face present and an upright edge standing on it, starting a rectangle on
-that edge kept the width/depth plane. The cause was the face-first query added earlier in this spec —
-as soon as any face existed under the cursor, the edge or vertex the user was pointing at was never
-consulted, and the pick ranks faces above coplanar edges anyway.
-
-The plane now comes from **what the pointer is aiming at**, resolved with the same tolerances the
-snapper uses: a vertex first, then an edge, then a face. Aiming at an edge or a vertex overrides the
-face underneath it, and aiming at the face itself still uses the face. The edge plane combines the
-directions attached to the anchor with those attached to the target, because each half of an L supplies
-one of them, and a lone ground-level edge deliberately decides nothing so the common case cannot tilt.
-
-**The plane was frozen at the anchor, so a rectangle could not reach the pointer.** The owner's
-screenshot showed the real failure: a rectangle preview collapsed to a single line down an edge. The
-plane was chosen at the first click and then held, so a second click on a vertex outside that plane
-projected one extent to zero, the preview degenerated, and the commit was refused. Nothing was created
-and the tool looked broken.
-
-The plane now has to contain the line from the anchor to the pointer. That line is the rectangle's own
-diagonal, so containing it is what lets the shape reach the pointer, and no target can project outside
-the plane.
-
-Getting the second axis right took a wrong turn worth recording. The first attempt picked the edge
-direction **most perpendicular** to the span. That is exactly backwards: perpendicular to the diagonal
-zeroes one extent, and the browser readout said `0 × 2828.43 mm` while the rectangle silently refused to
-exist. A rectangle's axes are the *plane's* axes and the span is its diagonal, so the healthy direction
-is the one at about **45 degrees** to it, where both extents come out real. That is what ships, and it
-also happens to make the choice independent of which edge the document lists first, which was the
-earlier failure in the notch case.
-
-**Pulling a small face to make a hole is not a bug.** It is a boolean subtract, and it is exactly what
-[decision 0011](../decisions/0011-geometry-kernel-strategy.md) deferred: extrusion only, no kernel.
-It needs its own spec and its own decision, not a ride-along on a bug fix. Recorded as the next
-follow-up rather than quietly skipped.
+Pulling a small face to make a hole is **not** a bug: it is a boolean subtract, which
+[decision 0019](../decisions/0019-mesh-csg-kernel.md) has now adopted a kernel for, with the plan in
+[spec 0016](./0016-cut-holes-with-push-pull.md).
 
 ## Result
 
