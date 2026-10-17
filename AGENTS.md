@@ -8,6 +8,26 @@ Read this file first. Everything else in `docs/` is loaded on demand, in layers.
 **No change lands without a spec.** Code, docs, config, a dependency bump — every change starts
 as a plan in `docs/specs/` and is recorded there when it is done.
 
+## Pull requests only
+
+`main` is protected. Never commit to it, never push to it, never force-push it. Every change:
+
+1. `git switch -c <type>/<slug>` — type is one of `feat`, `fix`, `docs`, `chore`, `refactor`, `test`,
+   then a short slug, for example `docs/public-repo-rules`.
+2. Push the branch and open the PR: `gh pr create --fill`, then edit the body so it links the spec.
+3. Merge once the checks pass: `gh pr merge --squash --delete-branch`.
+
+Rewriting published history is a one-off owner decision, asked for explicitly, never routine.
+
+## Talking about other products
+
+Name other tools as **inspiration** or for honest comparison. Never position this project against
+them: no "free alternative to X", no "replaces X", no "X without the licence fee", no claim to be a
+copy, clone or fork of another product. Say what we learned from a tool, not what we take from it.
+
+This project is independent. It is not affiliated with, endorsed by, or a continuation of anything it
+draws on, and it is not a replacement for any of it.
+
 ## Reading order (progressive disclosure)
 
 Do not read the whole `docs/` tree. Read a layer only when the task needs it.
@@ -37,7 +57,7 @@ reading everything.
 6. **Record decisions** you made that future agents must honour as an ADR in `docs/decisions/`.
    Never edit an accepted ADR — supersede it with a new one.
 7. **Document the change**: append to `CHANGELOG.md` and update every index table you touched.
-8. **Commit** using the format below.
+8. **Open a pull request** — never commit to `main` (see [Pull requests only](#pull-requests-only)).
 
 ## Commit format
 
@@ -59,6 +79,8 @@ Spec: docs/specs/0007-viewport-picking.md
 - [ ] New public interface documented in the owning package's `README.md`
 - [ ] Tests written per `docs/guides/testing.md`
 - [ ] Build still produces a **static** bundle that needs no server
+- [ ] No text claims this project replaces, clones, or competes with another product
+- [ ] The change landed through a pull request, not a direct commit to `main`
 
 ## Settled constraints — do not re-litigate
 

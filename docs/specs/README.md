@@ -28,6 +28,7 @@ and by decision records, so a rejected spec keeps its number forever.
 | [0007](./0007-drawing-and-transform-tools.md) | Drawing and transform tools with typed input | implemented | tools, scene, ui, app | 0006, 0012, 0014 |
 | [0008](./0008-camera-navigation.md) | Camera navigation | implemented | scene | 0003, 0008 |
 | [0010](./0010-force-style-skills-on.md) | Force the caveman and ponytail style skills on | implemented | docs | — |
+| [0011](./0011-repository-goes-public.md) | Repository goes public, with two new rules | implemented | docs, web | 0016, 0017 |
 
 Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 

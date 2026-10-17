@@ -7,7 +7,8 @@
 
 SketchUp's virtue is not its feature list, it is its interaction model: draw faces, pull them into
 solids, everything snaps and infers, and grouping keeps a model from ending up as one welded mesh.
-A clone is done when a user can build a small building without fighting the tool.
+That interaction model is the inspiration, not the code: this project is independent and unaffiliated.
+The core is done when a user can build a small building without fighting the tool.
 
 ## Capabilities we are aiming at
 

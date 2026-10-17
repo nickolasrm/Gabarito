@@ -28,6 +28,8 @@
 - [ ] New public interface documented in the owning package's `README.md`
 - [ ] Tests added or updated per `docs/guides/testing.md`
 - [ ] Build output is static and needs no server
+- [ ] No text claims this project replaces, clones, or competes with another product
+- [ ] Opened as a pull request — never a direct commit to `main`
 
 ## How to verify
 

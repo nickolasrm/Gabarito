@@ -33,6 +33,8 @@ stays searchable forever.
 | [0013](./0013-curves-are-tessellated.md) | Curves are tessellated into straight edges | accepted | geometry, curves | — |
 | [0014](./0014-guides-and-dimensions-as-entities.md) | Guides and dimensions are first-class, non-geometric entities | accepted | core, annotations | — |
 | [0015](./0015-core-depends-on-geometry.md) | core may depend on geometry | accepted | structure, boundaries | 0004 |
+| [0016](./0016-name-other-tools-as-inspiration.md) | Name other tools as inspiration, never as a target | accepted | docs, positioning, legal | — |
+| [0017](./0017-pull-requests-only.md) | Every change lands through a pull request | accepted | process, git, review | — |
 
 Statuses: `proposed` → `accepted` → (`superseded` | `deprecated` | `rejected`).
 
