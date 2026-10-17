@@ -4,7 +4,8 @@ import type { Plane, Vec3 } from "@gabarito/geometry";
 import { documentBounds, type Store } from "@gabarito/core";
 import { CameraController, type ScreenPoint } from "./camera";
 import { COLORS, createSceneGraph, disposeScene, extentFor, rebuildScene, type SceneGraph } from "./build-scene";
-import { pick, type PickHit } from "./pick";
+import type { Ray } from "./camera";
+import { pick, pickFace, type PickHit } from "./pick";
 
 export interface PointerInfo {
   /** Position in CSS pixels relative to the canvas. */
@@ -110,6 +111,9 @@ export class Viewport {
 
     this.previewGroup = new THREE.Group();
     this.snapGroup = new THREE.Group();
+    // Overlays are interface, not geometry: they must never be occluded by the model.
+    this.previewGroup.renderOrder = 10;
+    this.snapGroup.renderOrder = 11;
     this.scene.add(this.previewGroup, this.snapGroup);
 
     this.grid = new THREE.GridHelper(40_000, 400, 0xc8c8c4, 0xe2e2de);
@@ -309,6 +313,7 @@ export class Viewport {
             transparent: true,
             opacity: polygon.opacity ?? 0.35,
             side: THREE.DoubleSide,
+            depthTest: false,
             depthWrite: false,
           }),
         ),
@@ -328,7 +333,10 @@ export class Viewport {
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
       geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
       this.previewGroup.add(
-        new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true })),
+        new THREE.LineSegments(
+          geometry,
+          new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, depthWrite: false }),
+        ),
       );
     }
 
@@ -340,7 +348,13 @@ export class Viewport {
       this.previewGroup.add(
         new THREE.Points(
           geometry,
-          new THREE.PointsMaterial({ color: COLORS.preview, size: 7, sizeAttenuation: false }),
+          new THREE.PointsMaterial({
+            color: COLORS.preview,
+            size: 7,
+            sizeAttenuation: false,
+            depthTest: false,
+            depthWrite: false,
+          }),
         ),
       );
     }
@@ -359,7 +373,13 @@ export class Viewport {
       this.snapGroup.add(
         new THREE.Points(
           geometry,
-          new THREE.PointsMaterial({ color: COLORS.snap, size: 13, sizeAttenuation: false }),
+          new THREE.PointsMaterial({
+            color: COLORS.snap,
+            size: 13,
+            sizeAttenuation: false,
+            depthTest: false,
+            depthWrite: false,
+          }),
         ),
       );
 
@@ -399,6 +419,17 @@ export class Viewport {
   /** Snap tolerance in world units for a point: a constant distance in screen pixels. */
   toleranceAt(at: Vec3, pixels = 12): number {
     return this.pixelsPerWorldUnit(at) * pixels;
+  }
+
+  /** The pointer ray in world space, for inference that has to leave the drawing plane. */
+  rayAt(screenX: number, screenY: number): Ray {
+    return this.cameraController.screenToRay(screenX, screenY, this.width(), this.height());
+  }
+
+  /** The face under the pointer, ignoring nearer points and edges. Used to pick a drawing plane. */
+  raycastFace(screenX: number, screenY: number): PickHit | null {
+    const ray = this.cameraController.screenToRay(screenX, screenY, this.width(), this.height());
+    return pickFace(ray, this.store.getState());
   }
 
   raycast(screenX: number, screenY: number): PickHit | null {

@@ -78,6 +78,8 @@ export interface DrawingPlane {
   /** In-plane basis used to build rectangles and circles. */
   u: Vec3;
   v: Vec3;
+  /** Where this plane came from, shown in the status bar: "Ground", "Face", "Axis Z". */
+  label: string;
 }
 
 export interface ToolContext {

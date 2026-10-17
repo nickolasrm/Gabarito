@@ -10,6 +10,7 @@ export interface ToolButton {
 
 export interface UiStatus {
   toolLabel: string;
+  planeLabel: string;
   hint: string;
   numberHint: string | null;
   typed: string;
