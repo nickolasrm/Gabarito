@@ -1,0 +1,66 @@
+# Architecture overview
+
+One page. Read [`invariants.md`](./invariants.md) next, and
+[`module-boundaries.md`](./module-boundaries.md) before writing any import.
+
+## Shape
+
+Gabarito is a **static single-page application**. The browser is the entire runtime: no server,
+no API, no background compute. Everything ships as files from GitHub Pages.
+
+```
+   apps/web                    deployment shell: Vite entry, routing, Pages hosting
+       │ composes
+   ┌───┴─────────────────────────────────────────────────────────┐
+   │  packages/app     composition root, plugin registry, boot   │
+   └──┬──────────────┬──────────────────┬────────────────────────┘
+      │              │                  │
+  packages/ui   packages/tools   packages/plugin-host
+      │              │                  │
+      └──────┬───────┴──────────────────┘
+             │
+      packages/scene ──────► Three.js (WebGL)
+             │
+      packages/geometry     pure math: no DOM, no WebGL, no browser
+             │
+      packages/core         document, entities, commands, undo, units
+             │
+      packages/persistence  IndexedDB, File System Access API, project files
+```
+
+`packages/plugin-api` holds the versioned contracts a plugin implements. `app` and every feature
+package import it; it imports nothing from them.
+
+## Runtime model
+
+1. `app` boots, builds the plugin manifest, and creates the document store from `core`.
+2. `scene` subscribes to the document and keeps the Three.js scene graph in sync.
+3. `tools` converts pointer and keyboard input into **commands**.
+4. `core` applies the command, pushes an undo entry, and notifies subscribers.
+5. `ui` renders React chrome from the same store; the viewport is a canvas React never renders into.
+6. `persistence` snapshots the document to local storage or to a `.gabarito` project file.
+
+React never owns geometry. The viewport never owns state. Tools never touch Three.js objects.
+
+## Modules
+
+| Package | Owns | Depends on |
+|---|---|---|
+| `core` | document, entities, selection, commands, undo, units, events | — |
+| `geometry` | vectors, planes, curves, meshes, solid ops, inference math | — |
+| `scene` | WebGL renderer, camera, grid, picking, materials, highlighting | core, geometry |
+| `tools` | interaction state machines: select, line, rectangle, push/pull, move, rotate… | core, geometry |
+| `ui` | React shell: menus, panels, inspectors, dialogs, command palette | core, plugin-api |
+| `persistence` | IndexedDB/OPFS storage, project file I/O, import/export | core, geometry |
+| `plugin-api` | the versioned contracts plugins implement | — |
+| `plugin-host` | manifest, registration, activation lifecycle, capability checks | plugin-api |
+| `app` | composition root, wiring, keymaps, boot | all of the above |
+| `features/*` | domain plugins | plugin-api only |
+
+## Why this shape
+
+The domain features are unknown today, so the core is deliberately a *modeler* and not a
+*woodworking tool*. Anything that knows about board feet, IES light profiles, or wall assemblies
+lives behind the plugin contract — see
+[decision 0005](../decisions/0005-plugin-architecture.md) and the feature specs in
+[`../features/`](../features/README.md).

@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Tooling caches
+.vite/
+.turbo/
+coverage/
+.playwright/
+test-results/
+
+# Environment and secrets — never commit these
+.env
+.env.*
+!.env.example
+
+# Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local scratch — agents may use /tmp instead
+scratch/
