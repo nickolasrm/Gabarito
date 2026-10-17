@@ -1,89 +1,77 @@
 ---
 id: 0011
-title: Geometry kernel — adopt first, build later
-status: proposed
+title: Geometry kernel deferred: extrusion only for now
+status: rejected
 date: 2026-10-17
-tags: [geometry, csg, kernel, performance]
+tags: [geometry, csg, kernel, deferred]
 supersedes: []
 superseded_by: null
-specs: [0003]
+specs: []
 ---
 
-# 0011 — Geometry kernel: adopt first, build later
+# 0011 — Geometry kernel deferred: extrusion only for now
 
-> **Status: proposed.** This record is deliberately unsettled. It states the intended direction and
-> the spike that must pass before it is accepted. Its purpose is to stop agents from each reaching
-> their own conclusion about how solids work.
+> **Rejected on 2026-10-17.** The first modeler slice needs no boolean operations at all: push/pull
+> is a plain extrusion. No spike was run, and the spike spec that used to be the prerequisite here
+> was pruned as speculative. Revisit this record the first time a feature genuinely needs boolean
+> cuts (a wall opening, a joinery dado).
 >
-> **Interim (2026-10-17).** The first slice shipped without any kernel: push/pull is pure extrusion,
-> which needs no CSG. Nothing is adopted yet, and
-> [spec 0003](../specs/0003-geometry-kernel-spike.md) remains the gate before booleans are needed.
+> The analysis below is kept because the options did not go away — they are just not needed yet.
 
 ## Context
 
-A SketchUp-like modeler needs more than triangle rendering: faces bounded by edges, extrude along a
-normal, push/pull, offset, intersection between solids, and a notion of inside/outside. Walkthrough
+A SketchUp-like modeler can need more than triangle rendering: faces bounded by edges, extrude along
+a normal, push/pull, offset, intersection between solids, and a notion of inside/outside. Walkthrough
 models tolerate triangle soup; a woodworking cut list and a lighting study do not.
 
 Three.js is a renderer, not a CAD kernel ([0003](./0003-rendering-engine-threejs.md)). It has no
 solid model, no robust boolean operations, and no topology guarantees.
 
 The options are broadly: adopt an existing mesh-based boolean library, adopt a WASM geometry kernel,
-or build our own. The last option is a multi-year project on its own, and this repository should not
-spend its first year on a kernel.
+or build our own. The last option is a multi-year project on its own.
 
-## Decision (proposed)
+## Decision
 
-Start with a **mesh-based approach over our own lightweight topology**, not a full B-rep kernel:
+**Nothing is adopted and nothing is built yet.** Solid operations are limited to extrusion, which
+`packages/geometry` already provides:
 
-1. **`packages/geometry` owns a minimal half-edge-ish topology**: vertices, edges, faces, with
-   face loops and adjacency. Enough to answer "which faces share this edge?" and "is this solid
-   closed?", which push/pull and inference need.
-2. **Adopt a mature mesh boolean library** for union/difference/intersection rather than writing CSG,
-   chosen by the spike below. Candidate space: `three-bvh-csg`-style libraries, `manifold` (WASM),
-   or `csg.js` descendants.
-3. **Keep the kernel behind an interface.** `geometry` exposes operations (`extrude`, `pushPull`,
-   `boolean`, `offset`, `slice`) over its own types. No consumer imports the boolean library directly,
-   so replacing it is contained.
-4. **Explicit tolerance policy** per operation, as required by
-   [0008](./0008-units-coordinates-precision.md). Mesh booleans are not exact; the interface must say
-   what accuracy it promises.
-5. **Migration path reserved for WASM.** A WASM kernel (for example `manifold` compiled to WASM, or
-   OpenCascade) is the likely end state for robustness. The static-build requirement
-   ([0001](./0001-static-hosting-github-pages.md)) is compatible with WASM, so choosing it later is a
-   swap behind the same interface, not a rewrite — provided the interface is genuinely opaque.
+- Push/pull extrudes a face along its normal into a closed solid: side walls, connecting edges, and a
+  cap. No CSG, no library, no WASM.
+- Operations that genuinely need booleans — cutting an opening through a wall, subtracting a dado
+  from a board — are out of scope until a spec asks for one.
+- When a boolean is needed, `packages/geometry` is the place to add it, behind its own interface, so
+  the library choice stays contained. This record is the analysis to start from.
 
-**Prerequisite:** the spike in [`../specs/0003-geometry-kernel-spike.md`](../specs/0003-geometry-kernel-spike.md)
-must run before this record is accepted. It compares at least two candidates on: bundle size,
-robustness on coplanar and near-degenerate cases, permission/licensing, WASM availability, and
-maintenance activity — measured against a push/pull-on-a-box and a wall-with-a-door-opening case.
+## Consequences
 
-## Consequences (expected, to be confirmed by the spike)
+**Good:** no third-party geometry dependency, no licence questions, no WASM toolchain, and no bundle
+weight; extrusion is trivial to test, and it covers the whole feature set shipped so far; the
+interface boundary is a decision that can wait until there is a real caller to shape it.
 
-**Good:** solid operations arrive in weeks instead of years; the interface keeps the kernel
-swappable; mesh booleans are fast enough for building-scale models; no heavy build toolchain for a
-WASM kernel at the start.
+**Bad:** anything that needs a genuine boolean is simply unavailable — no openings, no joinery cuts,
+no real solid intersection. A user who expects SketchUp's "cut the wall" behaviour will find it
+missing, and the workaround (draw it in pieces) is exactly the tedium the product exists to remove.
+The cost of adopting a kernel later is also higher than it would have been, because the document
+format and the face representation will already be in use.
 
-**Bad:** mesh-based booleans are not robust — coplanar faces and near-degenerate geometry will
-produce visible artefacts and need tolerance and cleanup work; "solid" is an approximation, so
-curved surfaces are tessellated and exact circles are lossy; a half-edge structure of our own is
-real code to write and test, and getting it wrong is expensive; adopting a library brings a licence
-and maintenance dependency that must be checked before it becomes load-bearing; if the interface
-leaks library types, the promised swap is fiction.
+**Neutral:** mesh booleans are not robust anyway — coplanar faces and near-degenerate geometry
+produce artefacts and need tolerance and cleanup work — so deferring this avoids paying that cost
+before there is a reason to. Curved surfaces are already tessellated
+([0013](./0013-curves-are-tessellated.md)) and are not affected either way.
 
 ## Alternatives considered
 
 | Alternative | Why not |
 |---|---|
-| Build a B-rep kernel from scratch | Years of work, and not the product's differentiator. |
-| Use Three.js `BufferGeometry` as the model | Triangle soup with no topology; push/pull and cut lists become guesswork. |
-| Adopt OpenCascade.js immediately | Powerful and exact, but a large WASM payload and a steep API; premature before the product has users. |
-| Use `manifold` (WASM) from the start | Strong candidate, plausibly the end state; the spike exists to decide whether to skip the intermediate step. |
-| Keep everything as 2D plans plus extrusion | Might satisfy the house-building domain, but not woodworking joinery or free modeling. |
+| Adopt a mesh boolean library now | No caller exists yet; the choice is better made against a real case, and the licence and robustness questions are real. |
+| Adopt a WASM kernel (manifold, OpenCascade) | Plausibly the end state, but a large upfront payload and a steep API, for a capability nothing needs yet. |
+| Build a B-rep kernel | Years of work, and not the product's differentiator. |
+| Use Three.js `BufferGeometry` as the model | Triangle soup with no topology; push/pull and cut lists become guesswork. Three.js stays a renderer ([0003](./0003-rendering-engine-threejs.md)). |
 | Delegate booleans to the renderer | Renderers do not do robust CSG. |
 
 ## Links
 
-- Spike: [`../specs/0003-geometry-kernel-spike.md`](../specs/0003-geometry-kernel-spike.md)
 - Related: [0003](./0003-rendering-engine-threejs.md), [0008](./0008-units-coordinates-precision.md),
-  [0010](./0010-testing-strategy.md), [0006](./0006-document-model-and-commands.md)
+  [0010](./0010-testing-strategy.md), [0013](./0013-curves-are-tessellated.md)
+- Spec: `docs/specs/0004-core-document-geometry-viewport.md`
+

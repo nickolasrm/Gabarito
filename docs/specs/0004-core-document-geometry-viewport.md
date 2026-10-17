@@ -102,11 +102,11 @@ no full document snapshots are kept ([decision 0006](../decisions/0006-document-
   leaf and `core` imports only `geometry`.
 - **Deviations from the plan:**
   - **No boolean or kernel library was adopted at all.** Push/pull is pure extrusion, which needs no
-    CSG. This matches the interim note added to [decision 0011](../decisions/0011-geometry-kernel-strategy.md)
-    and leaves [spec 0003](./0003-geometry-kernel-spike.md) unstarted.
+    CSG. [Decision 0011](../decisions/0011-geometry-kernel-strategy.md) was closed as rejected: the
+    feature set built here needs no kernel, so no spike was run.
   - The scene does **not** convert coordinates. Rather than rotating a root group, the viewport sets
     `camera.up = +Z` and runs Three.js in document space, so picking and projection need no
     conversion. This is simpler than the design note proposed and is what the code does.
   - Solids are built per face from the entity graph, not through `geometry.extrude.prism`, so faces
     stay flat-shaded.
-- **Follow-up specs:** the geometry kernel spike; a persistence spec (nothing is saved yet).
+- **Follow-up specs:** a persistence spec (nothing is saved yet).

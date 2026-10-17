@@ -40,7 +40,8 @@ to do both — and it means the first line of real code will already have a boun
 - Any implementation code.
 - Any dependency manifest, bundler config, TypeScript config, or CI workflow. Those are
   [spec 0002](./0002-monorepo-tooling-bootstrap.md).
-- The geometry kernel choice, which stays `proposed` in [decision 0011](../decisions/0011-geometry-kernel-strategy.md).
+- No geometry kernel and no boolean operations. Push/pull is pure extrusion
+  ([decision 0011](../decisions/0011-geometry-kernel-strategy.md)).
 - Any feature work on woodworking, lighting, or house building.
 
 ## Plan
@@ -72,7 +73,7 @@ implementation spec has an obvious home and an obvious set of import rules — s
 |---|---|
 | Documentation set up now drifts from reality as code lands | The definition of done requires updating docs in the same commit as the change. |
 | Too much structure before any code discourages the first contributor | Structure is small files with a router; the first spec only needs to read two of them. |
-| Decision records written before implementation turn out wrong | They are supersedable by design; [0011](../decisions/0011-geometry-kernel-strategy.md) is deliberately `proposed` rather than `accepted`. |
+| Decision records written before implementation turn out wrong | They are supersedable by design; [0011](../decisions/0011-geometry-kernel-strategy.md) is deliberately not `accepted`. |
 | Empty package folders look like abandoned scaffolding | Each carries a `README.md` stating its status and the spec that will fill it. |
 
 ## Verification
@@ -98,5 +99,5 @@ implementation spec has an obvious home and an obvious set of import rules — s
   under `apps/` and `packages/`. Repository created as a private GitHub repository.
 - **Deviations from the plan:** none of substance. A `docs/guides/README.md` router was added for
   consistency with the other directories.
-- **Follow-up specs:** [0002](./0002-monorepo-tooling-bootstrap.md) (tooling and static build),
-  [0003](./0003-geometry-kernel-spike.md) (kernel choice), and the first core implementation spec.
+- **Follow-up specs:** [0002](./0002-monorepo-tooling-bootstrap.md) (tooling and static build) and
+  the first core implementation spec ([0004](./0004-core-document-geometry-viewport.md)).

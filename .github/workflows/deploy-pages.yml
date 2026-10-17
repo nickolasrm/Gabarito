@@ -1,8 +1,15 @@
 name: Deploy to GitHub Pages
 
+# Manual, and deliberately not triggered on push.
+#
+# GitHub Pages for a *private* repository requires a paid plan. On the free plan the
+# repository has to be public, or the hosting constraint in decision 0001 has to change.
+# Until one of those is true, this workflow would fail on every push and CI would always
+# look broken, so it runs only when asked.
+#
+# Before running: Settings -> Pages -> Source: GitHub Actions.
+
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -12,11 +19,14 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -24,25 +34,11 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
       - run: npm run build
-      # Pages runs Jekyll unless this file is present, and Jekyll would drop
-      # underscore-prefixed asset directories (decision 0001).
       - run: touch dist/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
       - id: deployment
         uses: actions/deploy-pages@v4

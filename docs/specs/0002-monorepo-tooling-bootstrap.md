@@ -97,12 +97,17 @@ in a routing spec because it is a hosting property, not an application property;
 - **What shipped:** npm scripts (`dev`, `build`, `typecheck`, `test`), a strict root `tsconfig.json`
   with `@gabarito/*` path mappings, `vite.config.ts` (root `apps/web`, `base: "./"`, static `dist`),
   `vitest.config.ts`, the `apps/web` HTML shell, the real composition root in `packages/app` (rather
-  than the version-logging placeholder the plan described), and `.github/workflows/deploy.yml`, which
-  typechecks, tests, builds and publishes `dist` with `.nojekyll`.
+  than the version-logging placeholder the plan described), `vite.config.ts` (root `apps/web`,
+  `base: "./"`, static `dist`), and two workflows: `ci.yml` (typecheck, unit tests, end-to-end tests,
+  build, artifact upload) and `deploy-pages.yml` (manual Pages publish, because Pages on a private
+  repository needs a paid plan).
 - **Deviations from the plan:**
   - **eslint/prettier were in scope and were not added.** The quality gate today is `typecheck` plus
     `test`; linting is deferred to a follow-up spec.
   - No per-package `tsconfig.json`. One root config with path mappings is used instead, because
     packages are consumed as TypeScript source through Vite aliases rather than built separately.
+  - The Pages deploy is **manual** rather than on push: the plan assumed a public repository where
+    Pages is free. On the free plan a private repository cannot publish Pages at all, so an
+    on-push deploy would have failed CI on every commit.
 - **Follow-up specs:** a linting and formatting spec; a code-splitting spec (the initial bundle is
   ~815 kB, dominated by three.js).

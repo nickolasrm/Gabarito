@@ -6,7 +6,7 @@ date: 2026-10-17
 tags: [structure, boundaries, core, geometry]
 supersedes: []
 superseded_by: null
-specs: [0009]
+specs: []
 ---
 
 # 0015 — core may depend on geometry
@@ -69,6 +69,5 @@ answered here and will be settled when the file format is specified.
 
 ## Links
 
-- Boundary change: [spec 0009](../specs/0009-boundary-core-depends-on-geometry.md)
 - Related: [0004](./0004-repository-layout.md), [0006](./0006-document-model-and-commands.md)
 - Normative detail: [`../architecture/module-boundaries.md`](../architecture/module-boundaries.md)

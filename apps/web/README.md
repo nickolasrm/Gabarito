@@ -24,8 +24,14 @@ npm run preview  # serve the built output
 
 ## Deploy
 
-`.github/workflows/deploy.yml` typechecks, tests, builds, adds `.nojekyll`, and publishes `dist`.
-There is no server, no environment variable and no secret anywhere in the pipeline.
+`.github/workflows/ci.yml` typechecks, runs the unit and end-to-end suites, builds, and uploads the
+static bundle as an artifact on every push.
+
+`.github/workflows/deploy-pages.yml` publishes to GitHub Pages, but **only on manual dispatch**.
+GitHub Pages for a private repository requires a paid plan; on the free plan the repository must be
+public. Until that is settled, the deploy workflow stays manual so CI does not fail on every push.
+
+There is no server, no environment variable and no secret anywhere in either pipeline.
 
 ## Owns
 

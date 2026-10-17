@@ -68,4 +68,4 @@ never hold Three.js objects; that facade is the seam where a different renderer 
 
 - Related: [0002](./0002-language-and-build-toolchain.md), [0008](./0008-units-coordinates-precision.md),
   [0011](./0011-geometry-kernel-strategy.md), [0006](./0006-document-model-and-commands.md)
-- Specs: `docs/specs/0003-geometry-kernel-spike.md` (informs the geometry/render split)
+- Spec: `docs/specs/0004-core-document-geometry-viewport.md`

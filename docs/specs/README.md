@@ -22,13 +22,13 @@ and by decision records, so a rejected spec keeps its number forever.
 |---|---|---|---|---|
 | [0001](./0001-bootstrap-repository-structure.md) | Bootstrap the repository structure | implemented | docs, all | 0001–0010 |
 | [0002](./0002-monorepo-tooling-bootstrap.md) | Bring up monorepo tooling and the static build | implemented | web, all | 0001, 0002, 0004 |
-| [0003](./0003-geometry-kernel-spike.md) | Spike the geometry kernel candidates | proposed | geometry | 0011 |
-| [0004](./0004-core-document-geometry-viewport.md) | Core document, geometry, and viewport slice | implemented | core, geometry, scene, app, web | 0003, 0006, 0008, 0011 |
+| [0004](./0004-core-document-geometry-viewport.md) | Core document, geometry, and viewport slice | implemented | core, geometry, scene, app, web | 0003, 0006, 0008, 0011, 0013 |
 | [0005](./0005-units-and-measurement.md) | Units and measurement | implemented | core, tools, ui | 0008, 0012 |
 | [0006](./0006-snapping-inference-axis-locks.md) | Snapping, inference, and axis locks | implemented | tools, scene | 0012 |
 | [0007](./0007-drawing-and-transform-tools.md) | Drawing and transform tools with typed input | implemented | tools, scene, ui, app | 0006, 0012, 0014 |
 | [0008](./0008-camera-navigation.md) | Camera navigation | implemented | scene | 0003, 0008 |
-| [0009](./0009-boundary-core-depends-on-geometry.md) | Let core depend on geometry | implemented | core, geometry | 0004, 0015 |
+
+Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 
 ## Writing one
 

@@ -42,7 +42,17 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - Module boundaries: `core` may now import `geometry`. `geometry` and `plugin-api` remain leaves.
-  — [spec 0009](./docs/specs/0009-boundary-core-depends-on-geometry.md)
+  — [decision 0015](./docs/decisions/0015-core-depends-on-geometry.md)
+
+### Removed
+
+- **Pruned two speculative specs** written before any implementation was requested and never
+  executed: `docs/specs/0003-geometry-kernel-spike.md` (a kernel comparison the shipped feature set
+  does not need — see [decision 0011](./docs/decisions/0011-geometry-kernel-strategy.md), now
+  `rejected`) and `docs/specs/0009-boundary-core-depends-on-geometry.md` (a one-line internal rule
+  change whose content lives in [decision 0015](./docs/decisions/0015-core-depends-on-geometry.md)
+  and [`docs/architecture/module-boundaries.md`](./docs/architecture/module-boundaries.md)).
+  Spec numbers are not reused, so the gaps stay gaps. References in other documents were repaired.
 
 
 <!--

@@ -20,12 +20,12 @@ must not learn them from you.
 |---|---|
 | 0 | Repository, docs, decisions — done ([spec 0001](../specs/0001-bootstrap-repository-structure.md)) |
 | 1 | Tooling and the static build ([spec 0002](../specs/0002-monorepo-tooling-bootstrap.md)) |
-| 2 | Geometry kernel decision ([spec 0003](../specs/0003-geometry-kernel-spike.md)) |
-| 3 | Core modeler: document, geometry, viewport, basic tools, save/load — the SketchUp clone |
+| 2 | Core modeler: document, geometry, viewport, units, snapping, tools, camera — done ([specs 0004–0008](../specs/README.md)) |
+| 3 | Persistence: save and load |
 | 4 | Plugin host and the first domain feature |
 | 5 | The remaining domains, in whatever order has a real user |
 
-Everything after phase 3 is a plugin. If a domain needs something the core cannot express, the answer
+Everything after phase 2 is a plugin. If a domain needs something the core cannot express, the answer
 is a contract change with a spec — never a domain concept inside `core`.
 
 ## What is not a feature

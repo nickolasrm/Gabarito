@@ -52,8 +52,8 @@ The first slices are done: tooling and the static build
 ([spec 0007](../specs/0007-drawing-and-transform-tools.md)) and camera navigation
 ([spec 0008](../specs/0008-camera-navigation.md)).
 
-The geometry kernel decision is still open ([spec 0003](../specs/0003-geometry-kernel-spike.md),
-[decision 0011](../decisions/0011-geometry-kernel-strategy.md)), and persistence is not started.
+The geometry kernel question is settled: none is adopted, and push/pull is straight extrusion
+([decision 0011](../decisions/0011-geometry-kernel-strategy.md)). Persistence is not started.
 Next slices, in the order that unblocks the most: **save and load**, then **groups and components**,
 then **erase, offset and follow-me**.
 
