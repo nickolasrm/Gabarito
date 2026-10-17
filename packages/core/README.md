@@ -41,8 +41,11 @@ derived data (`edgesOf`, `facesOf`, `facePoints`, `pointIdsForEntities`, `docume
 Solid operations live in `src/cut.ts`: `shellFaces` computes the closed set of faces bounding a solid
 (shared-edge **or** coplanar-overlap adjacency — a face drawn inside a face still finds its solid), and
 `planCut` returns one of three outcomes: `cut` (remove and add entity lists, one transaction),
-`extrude` (the drag points away from any solid), or `refuse` with a message. Straight cuts only:
-[decision 0021](../../docs/decisions/0021-straight-cuts-by-face-surgery.md).
+`extrude` (the drag points away from any solid), or `refuse` with a message. The cut itself is a
+kernel subtraction of two axis-aligned boxes, converted back to entities by grouping coplanar
+triangles and reading boundary loops ([decision 0022](../../docs/decisions/0022-cuts-run-on-manifold.md)).
+Anything not an axis-aligned box of rectangles is refused, and a cut before the kernel has loaded is
+refused with a "still loading" message.
 
 **Note on the dependency rule.** `core` imports `@gabarito/geometry` and nothing else
 ([decision 0015](../../docs/decisions/0015-core-depends-on-geometry.md)). It re-exports the geometry

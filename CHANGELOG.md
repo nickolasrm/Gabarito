@@ -55,11 +55,13 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   0014](./docs/specs/0014-stronger-agent-modes.md)
 
 - Push/pull now **cuts**: pushing a face into a solid removes the material, and pulling out adds it.
-  Shells are computed from face connectivity rather than stored, a face minus a rectangle becomes at
-  most four rectangles so no face ever needs a hole, and the cut is refused with a message when the
-  solid is not an axis-aligned box. Extrusion still works everywhere it did, including the fix that its
-  source face no longer winds into the new solid. — [spec 0016](./docs/specs/0016-cut-holes-with-push-pull.md),
-  [decision 0021](./docs/decisions/0021-straight-cuts-by-face-surgery.md)
+  Shells are computed from face connectivity rather than stored; the cut is a `manifold-3d`
+  subtraction of two axis-aligned boxes, converted back to entities with topology and winding taken
+  from the kernel mesh, and a ring face is split back into rectangles because a document face is a
+  single loop. The cut is refused with a message when the solid is not an axis-aligned box of
+  rectangles, or before the WASM kernel has loaded. Extrusion still works everywhere it did.
+  — [spec 0016](./docs/specs/0016-cut-holes-with-push-pull.md),
+  [decision 0022](./docs/decisions/0022-cuts-run-on-manifold.md)
 
 ### Fixed
 

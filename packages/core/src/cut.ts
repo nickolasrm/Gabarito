@@ -1,23 +1,15 @@
-import { EPS, conformRects, rect, vec3 } from "@gabarito/geometry";
-import type { Axis, PlaneRect, Vec3 } from "@gabarito/geometry";
+import { EPS, conformRects, rect, solidReady, subtractSolid, vec3 } from "@gabarito/geometry";
+import type { Axis, Bounds, PlaneRect, SolidMesh, Vec3 } from "@gabarito/geometry";
 import { allocId, edgesOf, facePositions, facesOf, pointsOf } from "./document";
 import type { DocumentState, Entity, EntityId, FaceEntity } from "./types";
-
-/** Which way a rebuilt face must point, and relative to what. */
-interface PieceMeta {
-  reference: Vec3;
-  toward: boolean;
-}
 
 /** Entities to remove and add, applied as one transaction so undo is one step. */
 export type CutPlan =
   | { kind: "cut"; remove: EntityId[]; add: Entity[] }
   /** The drag points away from any solid, so material is added: the behaviour push/pull always had. */
   | { kind: "extrude" }
-  /** Straight cuts have limits, and a refusal beats a wrong solid (decision 0021). */
+  /** Straight cuts have limits, and a refusal beats a wrong solid (decision 0022). */
   | { kind: "refuse"; error: string };
-
-const AXES: Axis[] = ["x", "y", "z"];
 
 function loopPairKeys(face: FaceEntity): string[] {
   const keys: string[] = [];
@@ -72,26 +64,17 @@ export function shellFaces(doc: DocumentState, start: EntityId): FaceEntity[] {
   return [...seen].map((id) => byId.get(id)).filter((face): face is FaceEntity => face !== undefined);
 }
 
-interface Box {
-  faces: FaceEntity[];
-  rectangles: PlaneRect[];
-  min: Vec3;
-  max: Vec3;
-}
-
 /**
  * Read a shell as an axis-aligned box, or nothing.
  *
  * Anything else is refused rather than cut approximately: a wrong solid corrupts snapping and every
- * later cut (decision 0021).
+ * later cut (decision 0022). The kernel only ever subtracts boxes, so this check is also what keeps
+ * the input manifold by construction.
  */
-function asAxisAlignedBox(doc: DocumentState, faces: FaceEntity[]): Box | null {
+function asAxisAlignedBox(doc: DocumentState, faces: FaceEntity[]): (Bounds & { faces: FaceEntity[] }) | null {
   if (faces.length < 6) return null;
-  const rectangles: PlaneRect[] = [];
   for (const face of faces) {
-    const value = rect.fromPolygon(facePositions(doc, face));
-    if (!value) return null;
-    rectangles.push(value);
+    if (!rect.fromPolygon(facePositions(doc, face))) return null;
   }
 
   const points = faces.flatMap((face) => facePositions(doc, face));
@@ -106,47 +89,161 @@ function asAxisAlignedBox(doc: DocumentState, faces: FaceEntity[]): Box | null {
     Math.max(...points.map((p) => p.z)),
   );
 
-  // Every face must lie on one of the box's six sides and stay within the box otherwise: that is
-  // what makes face subtraction a valid way to cut it.
-  for (const face of rectangles) {
-    const value = face.value;
-    if (Math.abs(value - min[face.axis]) > EPS.MERGE && Math.abs(value - max[face.axis]) > EPS.MERGE) {
+  // Every face must lie on one of the box's six sides and stay within the box otherwise.
+  for (const face of faces) {
+    const rectangle = rect.fromPolygon(facePositions(doc, face)) as PlaneRect;
+    const value = rectangle.value;
+    if (Math.abs(value - min[rectangle.axis]) > EPS.MERGE && Math.abs(value - max[rectangle.axis]) > EPS.MERGE) {
       return null;
     }
-    const [u, v] = rect.inPlaneAxes(face.axis);
-    if (face.uMin < min[u] - EPS.MERGE || face.uMax > max[u] + EPS.MERGE) return null;
-    if (face.vMin < min[v] - EPS.MERGE || face.vMax > max[v] + EPS.MERGE) return null;
+    const [u, v] = rect.inPlaneAxes(rectangle.axis);
+    if (rectangle.uMin < min[u] - EPS.MERGE || rectangle.uMax > max[u] + EPS.MERGE) return null;
+    if (rectangle.vMin < min[v] - EPS.MERGE || rectangle.vMax > max[v] + EPS.MERGE) return null;
   }
-  return { faces, rectangles, min, max };
+  return { min, max, faces };
 }
 
-/** The tool's cross-section in a plane, when the tool reaches that plane at all. */
-function toolRectInPlane(
-  tool: Record<Axis, [number, number]>,
-  axis: Axis,
-  value: number,
-): PlaneRect | null {
-  const [low, high] = tool[axis];
-  if (value < low - EPS.MERGE || value > high + EPS.MERGE) return null;
+const keyOf = (point: Vec3): string =>
+  `${Math.round(point.x / 1e-3)},${Math.round(point.y / 1e-3)},${Math.round(point.z / 1e-3)}`;
+
+/** The welded vertex a kernel vertex maps to, merging coincident float32 coordinates. */
+function weld(mesh: SolidMesh): { verts: Vec3[]; ids: Map<number, number> } {
+  const keys = new Map<string, number>();
+  const verts: Vec3[] = [];
+  const ids = new Map<number, number>();
+  for (let index = 0; index < mesh.positions.length; index += 1) {
+    const key = keyOf(mesh.positions[index]);
+    let id = keys.get(key);
+    if (id === undefined) {
+      id = verts.push(mesh.positions[index]) - 1;
+      keys.set(key, id);
+    }
+    ids.set(index, id);
+  }
+  return { verts, ids };
+}
+
+/** The axis-aligned rectangle a boundary loop bounds: every point of it lies on the rectangle. */
+function asRect(loop: Vec3[], axis: Axis): PlaneRect | null {
   const [u, v] = rect.inPlaneAxes(axis);
-  return {
-    axis,
-    value,
-    uMin: tool[u][0],
-    uMax: tool[u][1],
-    vMin: tool[v][0],
-    vMax: tool[v][1],
-  };
+  const uMin = Math.min(...loop.map((p) => p[u]));
+  const uMax = Math.max(...loop.map((p) => p[u]));
+  const vMin = Math.min(...loop.map((p) => p[v]));
+  const vMax = Math.max(...loop.map((p) => p[v]));
+  for (const point of loop) {
+    if (Math.abs(point[u] - uMin) > EPS.MERGE && Math.abs(point[u] - uMax) > EPS.MERGE) return null;
+    if (Math.abs(point[v] - vMin) > EPS.MERGE && Math.abs(point[v] - vMax) > EPS.MERGE) return null;
+  }
+  return { axis, value: loop[0][axis], uMin, uMax, vMin, vMax };
 }
 
-/** Build fresh entities from rectangles, welding corners between them so the shell stays closed. */
-function rebuild(doc: DocumentState, pieces: Array<{ piece: PlaneRect; meta: PieceMeta }>): Entity[] {
+/**
+ * The kernel mesh as rectangle pieces the document can hold, each with the way it must face.
+ *
+ * Coplanar triangles group into a face; each group's once-used edges form its boundary loops, in the
+ * kernel's own winding. One loop is a rectangle face; two are a ring, which a single-loop document
+ * face cannot hold, so it is split back into rectangles (at most four, `rect.subtract`). Anything
+ * else is refused — the input is two boxes, so anything else means the conversion is wrong.
+ */
+function meshToPieces(mesh: SolidMesh): Array<{ piece: PlaneRect; meta: boolean }> {
+  const { verts, ids } = weld(mesh);
+  const tris: Array<[number, number, number]> = [];
+  for (let index = 0; index + 2 < mesh.triangles.length; index += 3) {
+    const a = ids.get(mesh.triangles[index]) as number;
+    const b = ids.get(mesh.triangles[index + 1]) as number;
+    const c = ids.get(mesh.triangles[index + 2]) as number;
+    if (a !== b && b !== c && a !== c) tris.push([a, b, c]);
+  }
+
+  const groups = new Map<string, Array<[number, number, number]>>();
+  for (const [a, b, c] of tris) {
+    const n = vec3.cross(vec3.sub(verts[b], verts[a]), vec3.sub(verts[c], verts[a]));
+    const axis: Axis =
+      Math.abs(n.x) >= Math.abs(n.y) && Math.abs(n.x) >= Math.abs(n.z) ? "x" : Math.abs(n.y) >= Math.abs(n.z) ? "y" : "z";
+    const value = verts[a][axis];
+    if (Math.abs(verts[b][axis] - value) > EPS.MERGE || Math.abs(verts[c][axis] - value) > EPS.MERGE) {
+      throw new Error("The cut kernel produced a face that is not axis-aligned");
+    }
+    const key = `${axis}:${Math.round(value / 1e-3)}`;
+    const group = groups.get(key) ?? [];
+    group.push([a, b, c]);
+    groups.set(key, group);
+  }
+
+  const pieces: Array<{ piece: PlaneRect; meta: boolean }> = [];
+  for (const [key, group] of groups) {
+    const axis = key.split(":")[0] as Axis;
+    // Directed edge uses within the group: an interior edge runs once each way, a boundary edge
+    // once. Kernel winding is consistent, so boundary direction carries the face's normal.
+    const use = new Map<string, number>();
+    for (const [a, b, c] of group) {
+      for (const [p, q] of [
+        [a, b],
+        [b, c],
+        [c, a],
+      ]) {
+        const edge = `${p}>${q}`;
+        use.set(edge, (use.get(edge) ?? 0) + 1);
+      }
+    }
+    const next = new Map<number, number>();
+    for (const [edge, forward] of use) {
+      const [p, q] = edge.split(">").map(Number);
+      if ((use.get(`${q}>${p}`) ?? 0) === 1) {
+        if (forward !== 1) throw new Error("The cut kernel produced a self-overlapping face");
+        continue;
+      }
+      if (forward !== 1) throw new Error("The cut kernel produced a self-overlapping face");
+      if (next.has(p)) throw new Error("The cut kernel produced a pinched face boundary");
+      next.set(p, q);
+    }
+
+    const raw: Vec3[][] = [];
+    while (next.size > 0) {
+      const start = next.keys().next().value as number;
+      const loop: number[] = [];
+      let current = start;
+      do {
+        loop.push(current);
+        const following = next.get(current);
+        if (following === undefined) throw new Error("The cut kernel produced an open face boundary");
+        next.delete(current);
+        current = following;
+      } while (current !== start);
+      raw.push(loop.map((id) => verts[id]));
+    }
+
+    // The group's outward normal direction, from any triangle of the kernel mesh.
+    const [ta, tb, tc] = group[0];
+    const n = vec3.cross(vec3.sub(verts[tb], verts[ta]), vec3.sub(verts[tc], verts[ta]));
+    const outward = n[axis] >= 0;
+
+    if (raw.length === 1) {
+      const face = asRect(raw[0], axis);
+      if (!face) throw new Error("The cut kernel produced a face the document cannot hold");
+      pieces.push({ piece: face, meta: outward });
+      continue;
+    }
+    if (raw.length === 2) {
+      const rects = raw.map((loop) => asRect(loop, axis));
+      if (rects.some((r) => !r)) throw new Error("The cut kernel produced a hole the document cannot hold");
+      const [a, b] = rects as PlaneRect[];
+      const [outer, hole] = rect.area(a) >= rect.area(b) ? [a, b] : [b, a];
+      for (const piece of rect.subtract(outer, hole)) {
+        pieces.push({ piece, meta: outward });
+      }
+      continue;
+    }
+    throw new Error("The cut kernel produced a face the document cannot hold");
+  }
+  return pieces;
+}
+
+/** Build fresh entities from rectangle pieces, welding corners between them so the shell stays closed. */
+function rebuild(doc: DocumentState, pieces: Array<{ piece: PlaneRect; meta: boolean }>): Entity[] {
   const entities: Entity[] = [];
   const pointIds = new Map<string, EntityId>();
   const edgeKeys = new Set<string>();
-
-  const keyOf = (point: Vec3): string =>
-    `${Math.round(point.x / 1e-3)},${Math.round(point.y / 1e-3)},${Math.round(point.z / 1e-3)}`;
 
   const pointAt = (point: Vec3): EntityId => {
     const key = keyOf(point);
@@ -159,9 +256,8 @@ function rebuild(doc: DocumentState, pieces: Array<{ piece: PlaneRect; meta: Pie
   };
 
   for (const { piece, meta } of pieces) {
-    const corners = meta.toward
-      ? rect.cornersOutward(piece, meta.reference).reverse()
-      : rect.cornersOutward(piece, meta.reference);
+    const ccw = rect.corners(piece);
+    const corners = meta ? ccw : [...ccw].reverse();
     const ids = corners.map(pointAt);
     for (let index = 0; index < ids.length; index += 1) {
       const a = ids[index];
@@ -181,8 +277,9 @@ function rebuild(doc: DocumentState, pieces: Array<{ piece: PlaneRect; meta: Pie
  * points away — the behaviour push/pull always had, and still the one that applies with no solid
  * to cut.
  *
- * Straight cuts only. A shell that is not an axis-aligned box of rectangles, or a face that is not
- * a rectangle, is refused with a message and the document is left alone (decision 0021).
+ * The cut itself is a kernel subtraction of two axis-aligned boxes (decision 0022). A shell that is
+ * not an axis-aligned box of rectangles, or a face that is not a rectangle, is refused with a
+ * message and the document is left alone.
  */
 export function planCut(doc: DocumentState, faceId: EntityId, distance: number): CutPlan {
   const entity = doc.entities[faceId];
@@ -200,67 +297,44 @@ export function planCut(doc: DocumentState, faceId: EntityId, distance: number):
   const axis = pushed.axis;
   const [u, v] = rect.inPlaneAxes(axis);
   const start = pushed.value;
+  // The drag enters the material only from the side the face lies on; from the other side it grows
+  // the solid instead of cutting it.
+  const atMin = Math.abs(start - box.min[axis]) <= EPS.MERGE;
+  const atMax = Math.abs(start - box.max[axis]) <= EPS.MERGE;
+  const inward = (atMin && distance > 0) || (atMax && distance < 0);
+  if (!inward) return { kind: "extrude" };
+
+  if (!solidReady()) {
+    return { kind: "refuse", error: "The geometry engine is still loading — try again in a moment" };
+  }
+
   const end = start + distance;
-  const low = Math.max(Math.min(start, end), box.min[axis]);
-  const high = Math.min(Math.max(start, end), box.max[axis]);
-  // The drag does not reach into the box, so it grows the solid instead of cutting it.
-  if (high - low <= EPS.MERGE) return { kind: "extrude" };
+  const low: Record<Axis, number> = { x: 0, y: 0, z: 0 };
+  const high: Record<Axis, number> = { x: 0, y: 0, z: 0 };
+  low[axis] = Math.min(start, end);
+  high[axis] = Math.max(start, end);
+  low[u] = pushed.uMin;
+  high[u] = pushed.uMax;
+  low[v] = pushed.vMin;
+  high[v] = pushed.vMax;
+  const tool: Bounds = { min: vec3.of(low.x, low.y, low.z), max: vec3.of(high.x, high.y, high.z) };
 
-  const tool: Record<Axis, [number, number]> = {
-    x: [0, 0],
-    y: [0, 0],
-    z: [0, 0],
-  };
-  tool[axis] = [low, high];
-  tool[u] = [pushed.uMin, pushed.uMax];
-  tool[v] = [pushed.vMin, pushed.vMax];
-
-  const boxCentre = vec3.scale(vec3.add(box.min, box.max), 0.5);
-  const toolCentre = vec3.of(
-    (tool.x[0] + tool.x[1]) / 2,
-    (tool.y[0] + tool.y[1]) / 2,
-    (tool.z[0] + tool.z[1]) / 2,
-  );
-
-  const pieces: Array<{ piece: PlaneRect; meta: PieceMeta }> = [];
-
-  // Take the tool out of every face of the shell. The pushed face is covered entirely and vanishes;
-  // a larger face it sat inside becomes the ring around the opening; untouched faces pass through.
-  for (const rectangle of box.rectangles) {
-    const cut = toolRectInPlane(tool, rectangle.axis, rectangle.value);
-    if (!cut) {
-      pieces.push({ piece: rectangle, meta: { reference: boxCentre, toward: false } });
-      continue;
-    }
-    for (const remainder of rect.subtract(rectangle, cut)) {
-      pieces.push({ piece: remainder, meta: { reference: boxCentre, toward: false } });
-    }
+  let mesh: SolidMesh;
+  try {
+    mesh = subtractSolid({ min: box.min, max: box.max }, tool);
+  } catch (error) {
+    return { kind: "refuse", error: error instanceof Error ? error.message : "The cut failed" };
   }
 
-  // Add the tool's own faces that end up strictly inside the shell: the walls of the opening, and
-  // its floor when the cut does not pass right through. A face on a shell side is skipped, or the
-  // result would carry two coincident faces.
-  for (const toolAxis of AXES) {
-    for (const side of [0, 1] as const) {
-      const value = tool[toolAxis][side];
-      if (value <= box.min[toolAxis] + EPS.MERGE || value >= box.max[toolAxis] - EPS.MERGE) continue;
-      const [tu, tv] = rect.inPlaneAxes(toolAxis);
-      pieces.push({
-        piece: {
-          axis: toolAxis,
-          value,
-          uMin: tool[tu][0],
-          uMax: tool[tu][1],
-          vMin: tool[tv][0],
-          vMax: tool[tv][1],
-        },
-        meta: { reference: toolCentre, toward: true },
-      });
-    }
+  let pieces: Array<{ piece: PlaneRect; meta: boolean }>;
+  try {
+    pieces = meshToPieces(mesh);
+  } catch (error) {
+    return { kind: "refuse", error: error instanceof Error ? error.message : "The cut failed" };
   }
 
-  // Subdividing the faces subdivides the edges they share with their neighbours; the neighbours
-  // must carry the same subdivision or the shell has T-junctions and no longer closes.
+  // Splitting a face splits the edges it shares with its neighbours; the neighbours must carry the
+  // same subdivision or the shell has T-junctions and no longer closes.
   const conformed = conformRects(pieces);
 
   if (conformed.length === 0) return { kind: "refuse", error: "Nothing left after the cut" };

@@ -1,6 +1,6 @@
 # @gabarito/geometry
 
-**Status:** implemented — pure maths, zero dependencies, zero imports
+**Status:** implemented — pure maths plus one dependency: the mesh CSG kernel behind `solid`
 
 ## Responsibility
 
@@ -11,6 +11,9 @@ Every numerical guarantee in the product. Testable in plain Node, with no browse
 - Triangulation by ear clipping, including concave loops.
 - Extrusion into closed solids and caps.
 - Rotation, translation and mirroring about an axis or plane.
+- Solid cuts through `manifold-3d`: two axis-aligned boxes in, welded triangles with consistent
+  outward winding out ([decision 0022](../../docs/decisions/0022-cuts-run-on-manifold.md)). The WASM
+  kernel initialises on first use; `ensureSolid` resolves when it is ready.
 
 ## Public interface
 
@@ -18,6 +21,8 @@ Every numerical guarantee in the product. Testable in plain Node, with no browse
 vec3          of, add, sub, scale, mul, dot, cross, len, normalize, lerp, dist, equals, isZero …
 rect          fromPolygon, intersect, subtract (a ring becomes at most four rectangles),
               corners, cornersOutward, conformRects (no T-junctions across shared edges)
+solid         ensureSolid (await the kernel), solidReady, subtractSolid (outer, inner) →
+              { positions, triangles } — throws on an open or inside-out result
 plane         fromPoints, fromPointNormal, fromAxis, distanceToPoint, projectPoint, contains, flip
 ray           of, at, intersectPlane, intersectSegment, closestPointsToSegment
 segment       length, direction, midpoint, closestPointToPoint, closestPoints

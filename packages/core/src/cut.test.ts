@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { vec3 } from "@gabarito/geometry";
+import { beforeAll, describe, expect, it } from "vitest";
+import { ensureSolid, vec3 } from "@gabarito/geometry";
 import type { Vec3 } from "@gabarito/geometry";
 import {
   buildEdge,
@@ -116,6 +116,11 @@ function areaInPlane(doc: DocumentState, axis: "x" | "y" | "z", value: number): 
 }
 
 describe("planCut", () => {
+  beforeAll(async () => {
+    // The cut runs on the kernel, which initialises asynchronously; a cut is refused until ready.
+    await ensureSolid();
+  });
+
   it("cuts a recess when the drag goes into the solid", () => {
     const { store, innerFaceId, doc } = boxWithInnerFaceOnTop();
     expect(facesOf(doc())).toHaveLength(7);

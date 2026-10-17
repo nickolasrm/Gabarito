@@ -2,7 +2,7 @@ import { EPS } from "./tol";
 import { vec3 } from "./vec3";
 import type { Vec3 } from "./vec3";
 
-/** One of the three world axes. The tool this exists for works axis-aligned (decision 0021). */
+/** One of the three world axes. The tool this exists for works axis-aligned (decision 0022). */
 export type Axis = "x" | "y" | "z";
 
 /**
@@ -112,7 +112,7 @@ export const rect = {
    * `outer` minus `inner`, in the same plane.
    *
    * At most four rectangles, and never a hole: a document face is a single loop, so a hole cannot be
-   * represented, and this is why the straight case is expressible at all (decision 0021).
+   * represented, and this is why the straight case is expressible at all (decision 0022).
    */
   subtract(outer: PlaneRect, inner: PlaneRect): PlaneRect[] {
     const overlap = this.intersect(outer, inner);

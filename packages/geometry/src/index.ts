@@ -24,3 +24,5 @@ export { extrude } from "./extrude";
 
 export { transform } from "./transform";
 export * from "./rect";
+export type { SolidMesh } from "./solid";
+export { ensureSolid, solidReady, subtractSolid } from "./solid";
