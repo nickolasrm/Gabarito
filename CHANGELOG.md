@@ -84,6 +84,8 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Vertex snapping is measured against the pointer ray, so the line tool can be pointed at a vertex
     that is not on the plane under the cursor.
   - An edge that closes several loops now creates a face for each of them, not only the first.
+  - The drawing plane follows what the pointer is aiming at: a vertex or an edge decides it even with
+    a face underneath, and the face decides only when the face itself is the target.
   - A rectangle drawn between two bare edges stays in the plane those edges define. With no face under
     the pointer the plane fell back to the ground while keeping the anchor's height, so the preview was
     a width/depth rectangle floating at that height. The plane now follows the geometry under the

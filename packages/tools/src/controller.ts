@@ -1,4 +1,4 @@
-import { poly as polyOps, vec3 } from "@gabarito/geometry";
+import { poly as polyOps, ray as rayOps, vec3 } from "@gabarito/geometry";
 import type { Plane, Ray, Vec3 } from "@gabarito/geometry";
 import {
   edgesOf,
@@ -6,6 +6,7 @@ import {
   facesOf,
   findPointNear,
   getPoint,
+  pointsOf,
   parseAngle,
   parseLength,
   unitSuffix,
@@ -249,58 +250,115 @@ export class ToolController {
     return null;
   }
 
-  /** Direction of an edge attached to a point or an edge, in world space. */
-  private incidentEdgeDirection(entityId: EntityId): Vec3 | null {
+  /**
+   * What the pointer is aiming at, by the same tolerances the snapper uses: a vertex first,
+   * then an edge, then a face.
+   *
+   * The plane has to come from this rather than from a face-first lookup. Querying faces
+   * first meant that as soon as any face existed under the cursor, the edge or vertex the
+   * user actually pointed at was never consulted and the plane stayed with the face.
+   */
+  private planeTarget(
+    screenX: number,
+    screenY: number,
+  ): { kind: "point" | "edge" | "face"; id: EntityId; point: Vec3 } | null {
     const doc = this.store.getState();
-    const entity = doc.entities[entityId];
-    if (!entity) return null;
-    const ids =
-      entity.kind === "edge"
-        ? [entity.id]
-        : entity.kind === "point"
-          ? edgesOf(doc).filter((edge) => edge.points.includes(entity.id)).map((edge) => edge.id)
-          : [];
-    for (const id of ids) {
-      const edge = doc.entities[id];
-      if (!edge || edge.kind !== "edge") continue;
+    const ray = this.viewport.rayAt(screenX, screenY);
+    const reference = this.viewport.raycastPlane(screenX, screenY, GROUND_PLANE) ?? this.cursor;
+    const tolerance = this.viewport.pixelsPerWorldUnit(reference) * 12;
+
+    let bestVertex: { id: EntityId; position: Vec3; distance: number } | null = null;
+    for (const point of pointsOf(doc)) {
+      const along = vec3.dot(vec3.sub(point.position, ray.origin), ray.direction);
+      if (along <= 0) continue;
+      const nearest = vec3.add(ray.origin, vec3.scale(ray.direction, Math.max(along, 0)));
+      const distance = vec3.dist(nearest, point.position);
+      if (distance <= tolerance * 1.4 && (!bestVertex || distance < bestVertex.distance)) {
+        bestVertex = { id: point.id, position: point.position, distance };
+      }
+    }
+    if (bestVertex) return { kind: "point", id: bestVertex.id, point: bestVertex.position };
+
+    let bestEdge: { id: EntityId; point: Vec3; distance: number } | null = null;
+    for (const edge of edgesOf(doc)) {
       const a = getPoint(doc, edge.points[0]);
       const b = getPoint(doc, edge.points[1]);
-      if (a && b) return vec3.normalize(vec3.sub(b, a));
+      if (!a || !b) continue;
+      const closest = rayOps.closestPointsToSegment(ray, { a, b });
+      if (closest.dist > tolerance) continue;
+      if (!bestEdge || closest.dist < bestEdge.distance) {
+        bestEdge = { id: edge.id, point: closest.onSegment, distance: closest.dist };
+      }
     }
+    if (bestEdge) return { kind: "edge", id: bestEdge.id, point: bestEdge.point };
+
+    const face = this.viewport.raycastFace(screenX, screenY);
+    if (face) return { kind: "face", id: face.entityId, point: face.point };
     return null;
   }
 
-  /**
-   * The plane implied by the geometry the user is drawing between, when no face is under
-   * the pointer. Two non-parallel edges define a plane, which is how a rectangle is drawn
-   * across the corner of an existing L of lines: without this, the plane fell back to the
-   * ground while the anchor kept its height, so the preview was a width/depth rectangle
-   * floating at the anchor's height.
-   */
-  private edgePlane(screenX: number, screenY: number): DrawingPlane | null {
-    const hit = this.viewport.raycast(screenX, screenY);
-    const anchor = this.currentAnchor() ?? hit?.point ?? null;
-    if (!anchor) return null;
+  /** Directions of the edges attached to a point or an edge, deduplicated and unit length. */
+  private attachedEdgeDirections(entityId: EntityId): Vec3[] {
     const doc = this.store.getState();
-    const anchorPoint = findPointNear(doc, anchor);
-    if (!anchorPoint) return null;
-    const first = this.incidentEdgeDirection(anchorPoint.id);
-    if (!first) return null;
+    const entity = doc.entities[entityId];
+    if (!entity) return [];
+    const vertices: EntityId[] =
+      entity.kind === "point" ? [entity.id] : entity.kind === "edge" ? [...entity.points] : [];
+    const directions: Vec3[] = [];
+    for (const edge of edgesOf(doc)) {
+      if (!vertices.some((id) => edge.points.includes(id))) continue;
+      const a = getPoint(doc, edge.points[0]);
+      const b = getPoint(doc, edge.points[1]);
+      if (!a || !b) continue;
+      const direction = vec3.normalize(vec3.sub(b, a));
+      if (directions.some((existing) => Math.abs(Math.abs(vec3.dot(existing, direction)) - 1) < 0.01)) {
+        continue;
+      }
+      directions.push(direction);
+    }
+    return directions;
+  }
 
-    const second = hit ? this.incidentEdgeDirection(hit.entityId) : null;
+  /**
+   * The plane implied by the targeted geometry, combined with the edges attached to the
+   * anchor.
+   *
+   * Two non-parallel edges define a plane, and both halves matter: starting at the top of an
+   * L the anchor supplies the upright edge while the pointer supplies the horizontal one, so
+   * the plane only exists once both are known.
+   */
+  private edgePlane(target: { id: EntityId; point: Vec3 }): DrawingPlane | null {
+    const doc = this.store.getState();
+    const anchor = this.currentAnchor();
+    const anchorPoint = anchor ? findPointNear(doc, anchor) : null;
+
+    const directions: Vec3[] = [];
+    for (const direction of [
+      ...(anchorPoint ? this.attachedEdgeDirections(anchorPoint.id) : []),
+      ...this.attachedEdgeDirections(target.id),
+    ]) {
+      if (directions.some((existing) => Math.abs(Math.abs(vec3.dot(existing, direction)) - 1) < 0.01)) {
+        continue;
+      }
+      directions.push(direction);
+    }
+    if (directions.length === 0) return null;
+
+    const first = directions[0];
+    const second = directions[1];
+    const origin = anchor ?? target.point;
 
     if (second) {
       const normal = vec3.cross(first, second);
-      // Parallel edges define nothing; the plane through both is then ambiguous.
       if (!vec3.isZero(normal, 0.05)) {
-        return { ...axisPlaneBasis(first, vec3.normalize(normal), anchor), label: "Edges" };
+        return { ...axisPlaneBasis(first, vec3.normalize(normal), origin), label: "Edges" };
       }
     }
 
-    // One edge only: keep the plane if it is not the ground plane, where the camera-facing
-    // choice is what a user expects. A ground-level edge stays on the ground.
+    // A lone ground-level edge decides nothing: the face under it, or the ground, is what
+    // the user means.
     if (Math.abs(first.z) < 0.9) return null;
-    return planeContainingAxis(first, anchor, this.viewport.viewDirection(), "Edge");
+    return planeContainingAxis(first, origin, this.viewport.viewDirection(), "Edge");
   }
 
   private planeAt(screenX: number, screenY: number): DrawingPlane {
@@ -319,9 +377,16 @@ export class ToolController {
       );
     }
 
-    const direct = this.viewport.raycastFace(screenX, screenY);
-    const hit = direct ?? this.viewport.raycast(screenX, screenY);
-    const faceId = hit?.kind === "face" ? hit.entityId : hit ? this.incidentFace(hit.entityId) : null;
+    const target = this.planeTarget(screenX, screenY);
+
+    // Aiming at a vertex or an edge decides the plane, even with a face underneath.
+    if (target && target.kind !== "face") {
+      const fromEdges = this.edgePlane(target);
+      if (fromEdges) return fromEdges;
+    }
+
+    const faceId = target?.kind === "face" ? target.id : target ? this.incidentFace(target.id) : null;
+    const hit = target;
     if (hit && faceId) {
       const face = this.store.getState().entities[faceId];
       if (face && face.kind === "face") {
@@ -334,9 +399,6 @@ export class ToolController {
         }
       }
     }
-    const fromEdges = this.edgePlane(screenX, screenY);
-    if (fromEdges) return fromEdges;
-
     const { u, v } = basisFor(GROUND_PLANE.normal);
     return { plane: GROUND_PLANE, normal: GROUND_PLANE.normal, u, v, label: "Ground" };
   }

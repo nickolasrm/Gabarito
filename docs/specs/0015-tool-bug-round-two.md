@@ -101,6 +101,8 @@ at the same depth, with the black winning. The base pass now skips them.
 - [x] A diagonal in a square creates both triangles (browser: 7 faces to 9)
 - [x] A rectangle across the corner of an L of lines lies in the plane through both (browser: y span 0,
   z span 1200, plane reported as `Edges`)
+- [x] Aiming at an upright edge over a ground face reports `Edges`, and aiming at the face reports
+  `Ground`, with a ground-level vertex still reporting `Ground`
 
 ## Addendum: what the owner's verification found
 
@@ -141,6 +143,18 @@ so the plane can come from the geometry being drawn between. While no axis is pi
 now follows the geometry under the pointer, which is also what "it does not change the plane depending
 on the mouse position" was asking for: a rectangle started at the corner of an L turns to face it, and
 the resulting face spans height and width with no depth.
+
+**The plane came from a face even when the user pointed at an edge.** The owner's next repro made
+this exact: with a ground face present and an upright edge standing on it, starting a rectangle on
+that edge kept the width/depth plane. The cause was the face-first query added earlier in this spec —
+as soon as any face existed under the cursor, the edge or vertex the user was pointing at was never
+consulted, and the pick ranks faces above coplanar edges anyway.
+
+The plane now comes from **what the pointer is aiming at**, resolved with the same tolerances the
+snapper uses: a vertex first, then an edge, then a face. Aiming at an edge or a vertex overrides the
+face underneath it, and aiming at the face itself still uses the face. The edge plane combines the
+directions attached to the anchor with those attached to the target, because each half of an L supplies
+one of them, and a lone ground-level edge deliberately decides nothing so the common case cannot tilt.
 
 **Pulling a small face to make a hole is not a bug.** It is a boolean subtract, and it is exactly what
 [decision 0011](../decisions/0011-geometry-kernel-strategy.md) deferred: extrusion only, no kernel.

@@ -455,3 +455,32 @@ test("a rectangle across the corner of an L of lines turns to face the corner", 
   expect(face.z).toBeGreaterThan(1);
   expect(face.x).toBeGreaterThan(1);
 });
+
+test("aiming at an edge beats the face underneath it", async ({ page }) => {
+  // A ground face, and an upright edge standing on it.
+  await page.getByRole("button", { name: /^Rectangle/ }).click();
+  await clickWorld(page, { x: -2000, y: -2000, z: 0 });
+  await page.keyboard.type("4000");
+  await page.keyboard.press("Enter");
+
+  await page.getByRole("button", { name: /^Line/ }).click();
+  await clickWorld(page, { x: -1000, y: -1000, z: 0 });
+  await clickWorld(page, { x: -1000, y: -1000, z: 1200 });
+  await page.keyboard.press("Escape");
+  // The L's other half, so the pair of edges defines a plane.
+  await page.getByRole("button", { name: /^Line/ }).click();
+  await clickWorld(page, { x: -1000, y: -1000, z: 0 });
+  await clickWorld(page, { x: -500, y: -1000, z: 0 });
+  await page.keyboard.press("Escape");
+
+  // Pointing at the upright edge must not hand the plane to the ground face.
+  await page.getByRole("button", { name: /^Rectangle/ }).click();
+  const onEdge = await screenOf(page, { x: -1000, y: -1000, z: 600 });
+  await page.mouse.move(onEdge.x, onEdge.y);
+  await expect(page.locator(".chip.plane")).toContainText("Edges");
+
+  // Pointing at the middle of the face still uses the face.
+  const onFace = await screenOf(page, { x: 1500, y: 1500, z: 0 });
+  await page.mouse.move(onFace.x, onFace.y);
+  await expect(page.locator(".chip.plane")).toContainText("Face");
+});
