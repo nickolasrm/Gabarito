@@ -30,6 +30,7 @@ and by decision records, so a rejected spec keeps its number forever.
 | [0010](./0010-force-style-skills-on.md) | Force the caveman and ponytail style skills on | implemented | docs | — |
 | [0011](./0011-repository-goes-public.md) | Repository goes public, with two new rules | implemented | docs, web | 0016, 0017 |
 | [0012](./0012-tool-interaction-fixes.md) | Fix six tool interaction bugs | implemented | tools, scene, core, app | 0018 |
+| [0013](./0013-owner-verifies-before-merge.md) | The owner verifies the running app before a merge | implemented | docs | — |
 
 Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 

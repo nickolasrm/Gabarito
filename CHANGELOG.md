@@ -47,6 +47,9 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   land every change through a pull request. — [decisions
   0016](./docs/decisions/0016-name-other-tools-as-inspiration.md),
   [0017](./docs/decisions/0017-pull-requests-only.md)
+- A rule that the owner verifies the running app and approves before a merge, with the dev server kept
+  up on <http://127.0.0.1:5173> for the session. — [spec
+  0013](./docs/specs/0013-owner-verifies-before-merge.md)
 
 ### Fixed
 
