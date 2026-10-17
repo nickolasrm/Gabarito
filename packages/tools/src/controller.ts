@@ -330,9 +330,10 @@ export class ToolController {
   private edgePlane(target: { id: EntityId; point: Vec3 }): DrawingPlane | null {
     const doc = this.store.getState();
     const anchor = this.currentAnchor();
-    const anchorPoint = anchor ? findPointNear(doc, anchor) : null;
+    const origin = anchor ?? target.point;
 
     const directions: Vec3[] = [];
+    const anchorPoint = anchor ? findPointNear(doc, anchor) : null;
     for (const direction of [
       ...(anchorPoint ? this.attachedEdgeDirections(anchorPoint.id) : []),
       ...this.attachedEdgeDirections(target.id),
@@ -344,19 +345,42 @@ export class ToolController {
     }
     if (directions.length === 0) return null;
 
+    // The plane must contain the line from the anchor to where the pointer is. That line is
+    // the rectangle's own diagonal, so containing it is what lets the shape reach the
+    // pointer. Choosing a plane that does not contain it projects one extent to zero, the
+    // preview collapses to a line, and nothing is created at all.
+    const span = vec3.sub(target.point, origin);
+    if (!vec3.isZero(span, 0.01)) {
+      const unit = vec3.normalize(span);
+      // A rectangle's axes are the plane's axes and the span is its diagonal, so the shape
+      // is healthy when the diagonal sits at about 45 degrees to each of them and both
+      // extents come out real. Perpendicular to the span zeroes one extent and parallel to
+      // it zeroes the other, so the best candidate is the one closest to 45 degrees.
+      let best: { direction: Vec3; score: number } | null = null;
+      for (const direction of directions) {
+        const alignment = Math.min(1, Math.abs(vec3.dot(direction, unit)));
+        const score = Math.min(alignment, Math.sqrt(Math.max(0, 1 - alignment * alignment)));
+        if (!best || score > best.score) best = { direction, score };
+      }
+      // Every candidate parallel or perpendicular to the drag: nothing sane to build on.
+      if (best && best.score > 0.05) {
+        const normal = vec3.cross(unit, best.direction);
+        if (!vec3.isZero(normal, 0.05)) {
+          return { ...axisPlaneBasis(best.direction, vec3.normalize(normal), origin), label: "Edges" };
+        }
+      }
+    }
+
+    // No drag yet, or every candidate is parallel to it: fall back to the edges at the point
+    // itself. A lone ground-level edge deliberately decides nothing.
     const first = directions[0];
     const second = directions[1];
-    const origin = anchor ?? target.point;
-
     if (second) {
       const normal = vec3.cross(first, second);
       if (!vec3.isZero(normal, 0.05)) {
         return { ...axisPlaneBasis(first, vec3.normalize(normal), origin), label: "Edges" };
       }
     }
-
-    // A lone ground-level edge decides nothing: the face under it, or the ground, is what
-    // the user means.
     if (Math.abs(first.z) < 0.9) return null;
     return planeContainingAxis(first, origin, this.viewport.viewDirection(), "Edge");
   }

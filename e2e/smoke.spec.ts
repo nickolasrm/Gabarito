@@ -484,3 +484,30 @@ test("aiming at an edge beats the face underneath it", async ({ page }) => {
   await page.mouse.move(onFace.x, onFace.y);
   await expect(page.locator(".chip.plane")).toContainText("Face");
 });
+
+test("a rectangle spans across an open notch between two vertices", async ({ page }) => {
+  // A box.
+  await page.getByRole("button", { name: /^Rectangle/ }).click();
+  await clickWorld(page, { x: -1000, y: -1000, z: 0 });
+  await page.keyboard.type("2000");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: /Push\/Pull/ }).click();
+  await clickWorld(page, { x: 0, y: 0, z: 0 });
+  await page.keyboard.type("2000");
+  await page.keyboard.press("Enter");
+  expect(count(await snapshot(page), "face")).toBe(6);
+
+  // Delete the top-front-right corner, which takes its three faces with it.
+  await page.getByRole("button", { name: /^Select/ }).click();
+  await clickWorld(page, { x: 1000, y: -1000, z: 2000 });
+  await page.keyboard.press("Delete");
+  expect(count(await snapshot(page), "face")).toBe(3);
+
+  // A rectangle between two vertices that no remaining face contains.
+  await page.getByRole("button", { name: /^Rectangle/ }).click();
+  await clickWorld(page, { x: -1000, y: -1000, z: 2000 });
+  await clickWorld(page, { x: 1000, y: -1000, z: 0 });
+
+  const state = await snapshot(page);
+  expect(count(state, "face")).toBe(4);
+});
