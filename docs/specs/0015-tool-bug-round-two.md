@@ -99,6 +99,12 @@ at the same depth, with the black winning. The base pass now skips them.
 - [x] A selected vertex draws a highlight (screenshot)
 - [x] The line tool snaps to a vertex 2000 above the drawing plane (browser: `Endpoint`, edge z = 2000)
 - [x] A diagonal in a square creates both triangles (browser: 7 faces to 9)
+- [x] A rectangle across the corner of an L of lines lies in the plane through both (browser: y span 0,
+  z span 1200, plane reported as `Edges`)
+- [x] Aiming at an upright edge over a ground face reports `Edges`, and aiming at the face reports
+  `Face`, with a ground-level vertex still reporting `Face`
+- [x] A rectangle drawn between two vertices that no remaining face contains creates a face (browser:
+  a cube with a corner deleted, 3 faces to 4)
 
 ## Addendum: what the owner's verification found
 
@@ -130,6 +136,45 @@ across heights: an edge can now run from the ground to a corner of a solid.
 a square closes a triangle on each side of it; the search returned the first and stopped. `detectFace`
 became `detectFaces` and creates a face for every valid loop the new edge completes. A square plus a
 diagonal now yields three faces instead of two.
+
+**A rectangle drawn between two bare edges stayed in the ground plane.** With no *face* under the
+pointer there was nothing to take a plane from, so the code fell back to the ground while keeping the
+anchor's height — a width/depth rectangle floating at the anchor's z. The owner's case was an L of two
+lines: a vertical edge and a horizontal one meeting at a corner. Two non-parallel edges define a plane,
+so the plane can come from the geometry being drawn between. While no axis is pinned, the drawing plane
+now follows the geometry under the pointer, which is also what "it does not change the plane depending
+on the mouse position" was asking for: a rectangle started at the corner of an L turns to face it, and
+the resulting face spans height and width with no depth.
+
+**The plane came from a face even when the user pointed at an edge.** The owner's next repro made
+this exact: with a ground face present and an upright edge standing on it, starting a rectangle on
+that edge kept the width/depth plane. The cause was the face-first query added earlier in this spec —
+as soon as any face existed under the cursor, the edge or vertex the user was pointing at was never
+consulted, and the pick ranks faces above coplanar edges anyway.
+
+The plane now comes from **what the pointer is aiming at**, resolved with the same tolerances the
+snapper uses: a vertex first, then an edge, then a face. Aiming at an edge or a vertex overrides the
+face underneath it, and aiming at the face itself still uses the face. The edge plane combines the
+directions attached to the anchor with those attached to the target, because each half of an L supplies
+one of them, and a lone ground-level edge deliberately decides nothing so the common case cannot tilt.
+
+**The plane was frozen at the anchor, so a rectangle could not reach the pointer.** The owner's
+screenshot showed the real failure: a rectangle preview collapsed to a single line down an edge. The
+plane was chosen at the first click and then held, so a second click on a vertex outside that plane
+projected one extent to zero, the preview degenerated, and the commit was refused. Nothing was created
+and the tool looked broken.
+
+The plane now has to contain the line from the anchor to the pointer. That line is the rectangle's own
+diagonal, so containing it is what lets the shape reach the pointer, and no target can project outside
+the plane.
+
+Getting the second axis right took a wrong turn worth recording. The first attempt picked the edge
+direction **most perpendicular** to the span. That is exactly backwards: perpendicular to the diagonal
+zeroes one extent, and the browser readout said `0 × 2828.43 mm` while the rectangle silently refused to
+exist. A rectangle's axes are the *plane's* axes and the span is its diagonal, so the healthy direction
+is the one at about **45 degrees** to it, where both extents come out real. That is what ships, and it
+also happens to make the choice independent of which edge the document lists first, which was the
+earlier failure in the notch case.
 
 **Pulling a small face to make a hole is not a bug.** It is a boolean subtract, and it is exactly what
 [decision 0011](../decisions/0011-geometry-kernel-strategy.md) deferred: extrusion only, no kernel.

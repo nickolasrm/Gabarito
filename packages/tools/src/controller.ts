@@ -1,8 +1,12 @@
-import { poly as polyOps, vec3 } from "@gabarito/geometry";
+import { poly as polyOps, ray as rayOps, vec3 } from "@gabarito/geometry";
 import type { Plane, Ray, Vec3 } from "@gabarito/geometry";
 import {
+  edgesOf,
   facePositions,
   facesOf,
+  findPointNear,
+  getPoint,
+  pointsOf,
   parseAngle,
   parseLength,
   unitSuffix,
@@ -246,6 +250,141 @@ export class ToolController {
     return null;
   }
 
+  /**
+   * What the pointer is aiming at, by the same tolerances the snapper uses: a vertex first,
+   * then an edge, then a face.
+   *
+   * The plane has to come from this rather than from a face-first lookup. Querying faces
+   * first meant that as soon as any face existed under the cursor, the edge or vertex the
+   * user actually pointed at was never consulted and the plane stayed with the face.
+   */
+  private planeTarget(
+    screenX: number,
+    screenY: number,
+  ): { kind: "point" | "edge" | "face"; id: EntityId; point: Vec3 } | null {
+    const doc = this.store.getState();
+    const ray = this.viewport.rayAt(screenX, screenY);
+    const reference = this.viewport.raycastPlane(screenX, screenY, GROUND_PLANE) ?? this.cursor;
+    const tolerance = this.viewport.pixelsPerWorldUnit(reference) * 12;
+
+    let bestVertex: { id: EntityId; position: Vec3; distance: number } | null = null;
+    for (const point of pointsOf(doc)) {
+      const along = vec3.dot(vec3.sub(point.position, ray.origin), ray.direction);
+      if (along <= 0) continue;
+      const nearest = vec3.add(ray.origin, vec3.scale(ray.direction, Math.max(along, 0)));
+      const distance = vec3.dist(nearest, point.position);
+      if (distance <= tolerance * 1.4 && (!bestVertex || distance < bestVertex.distance)) {
+        bestVertex = { id: point.id, position: point.position, distance };
+      }
+    }
+    if (bestVertex) return { kind: "point", id: bestVertex.id, point: bestVertex.position };
+
+    let bestEdge: { id: EntityId; point: Vec3; distance: number } | null = null;
+    for (const edge of edgesOf(doc)) {
+      const a = getPoint(doc, edge.points[0]);
+      const b = getPoint(doc, edge.points[1]);
+      if (!a || !b) continue;
+      const closest = rayOps.closestPointsToSegment(ray, { a, b });
+      if (closest.dist > tolerance) continue;
+      if (!bestEdge || closest.dist < bestEdge.distance) {
+        bestEdge = { id: edge.id, point: closest.onSegment, distance: closest.dist };
+      }
+    }
+    if (bestEdge) return { kind: "edge", id: bestEdge.id, point: bestEdge.point };
+
+    const face = this.viewport.raycastFace(screenX, screenY);
+    if (face) return { kind: "face", id: face.entityId, point: face.point };
+    return null;
+  }
+
+  /** Directions of the edges attached to a point or an edge, deduplicated and unit length. */
+  private attachedEdgeDirections(entityId: EntityId): Vec3[] {
+    const doc = this.store.getState();
+    const entity = doc.entities[entityId];
+    if (!entity) return [];
+    const vertices: EntityId[] =
+      entity.kind === "point" ? [entity.id] : entity.kind === "edge" ? [...entity.points] : [];
+    const directions: Vec3[] = [];
+    for (const edge of edgesOf(doc)) {
+      if (!vertices.some((id) => edge.points.includes(id))) continue;
+      const a = getPoint(doc, edge.points[0]);
+      const b = getPoint(doc, edge.points[1]);
+      if (!a || !b) continue;
+      const direction = vec3.normalize(vec3.sub(b, a));
+      if (directions.some((existing) => Math.abs(Math.abs(vec3.dot(existing, direction)) - 1) < 0.01)) {
+        continue;
+      }
+      directions.push(direction);
+    }
+    return directions;
+  }
+
+  /**
+   * The plane implied by the targeted geometry, combined with the edges attached to the
+   * anchor.
+   *
+   * Two non-parallel edges define a plane, and both halves matter: starting at the top of an
+   * L the anchor supplies the upright edge while the pointer supplies the horizontal one, so
+   * the plane only exists once both are known.
+   */
+  private edgePlane(target: { id: EntityId; point: Vec3 }): DrawingPlane | null {
+    const doc = this.store.getState();
+    const anchor = this.currentAnchor();
+    const origin = anchor ?? target.point;
+
+    const directions: Vec3[] = [];
+    const anchorPoint = anchor ? findPointNear(doc, anchor) : null;
+    for (const direction of [
+      ...(anchorPoint ? this.attachedEdgeDirections(anchorPoint.id) : []),
+      ...this.attachedEdgeDirections(target.id),
+    ]) {
+      if (directions.some((existing) => Math.abs(Math.abs(vec3.dot(existing, direction)) - 1) < 0.01)) {
+        continue;
+      }
+      directions.push(direction);
+    }
+    if (directions.length === 0) return null;
+
+    // The plane must contain the line from the anchor to where the pointer is. That line is
+    // the rectangle's own diagonal, so containing it is what lets the shape reach the
+    // pointer. Choosing a plane that does not contain it projects one extent to zero, the
+    // preview collapses to a line, and nothing is created at all.
+    const span = vec3.sub(target.point, origin);
+    if (!vec3.isZero(span, 0.01)) {
+      const unit = vec3.normalize(span);
+      // A rectangle's axes are the plane's axes and the span is its diagonal, so the shape
+      // is healthy when the diagonal sits at about 45 degrees to each of them and both
+      // extents come out real. Perpendicular to the span zeroes one extent and parallel to
+      // it zeroes the other, so the best candidate is the one closest to 45 degrees.
+      let best: { direction: Vec3; score: number } | null = null;
+      for (const direction of directions) {
+        const alignment = Math.min(1, Math.abs(vec3.dot(direction, unit)));
+        const score = Math.min(alignment, Math.sqrt(Math.max(0, 1 - alignment * alignment)));
+        if (!best || score > best.score) best = { direction, score };
+      }
+      // Every candidate parallel or perpendicular to the drag: nothing sane to build on.
+      if (best && best.score > 0.05) {
+        const normal = vec3.cross(unit, best.direction);
+        if (!vec3.isZero(normal, 0.05)) {
+          return { ...axisPlaneBasis(best.direction, vec3.normalize(normal), origin), label: "Edges" };
+        }
+      }
+    }
+
+    // No drag yet, or every candidate is parallel to it: fall back to the edges at the point
+    // itself. A lone ground-level edge deliberately decides nothing.
+    const first = directions[0];
+    const second = directions[1];
+    if (second) {
+      const normal = vec3.cross(first, second);
+      if (!vec3.isZero(normal, 0.05)) {
+        return { ...axisPlaneBasis(first, vec3.normalize(normal), origin), label: "Edges" };
+      }
+    }
+    if (Math.abs(first.z) < 0.9) return null;
+    return planeContainingAxis(first, origin, this.viewport.viewDirection(), "Edge");
+  }
+
   private planeAt(screenX: number, screenY: number): DrawingPlane {
     const lock = this.currentLock();
     if (lock) {
@@ -262,9 +401,16 @@ export class ToolController {
       );
     }
 
-    const direct = this.viewport.raycastFace(screenX, screenY);
-    const hit = direct ?? this.viewport.raycast(screenX, screenY);
-    const faceId = hit?.kind === "face" ? hit.entityId : hit ? this.incidentFace(hit.entityId) : null;
+    const target = this.planeTarget(screenX, screenY);
+
+    // Aiming at a vertex or an edge decides the plane, even with a face underneath.
+    if (target && target.kind !== "face") {
+      const fromEdges = this.edgePlane(target);
+      if (fromEdges) return fromEdges;
+    }
+
+    const faceId = target?.kind === "face" ? target.id : target ? this.incidentFace(target.id) : null;
+    const hit = target;
     if (hit && faceId) {
       const face = this.store.getState().entities[faceId];
       if (face && face.kind === "face") {
