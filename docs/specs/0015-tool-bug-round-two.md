@@ -95,6 +95,31 @@ at the same depth, with the black winning. The base pass now skips them.
 - [x] Picking a nested pair selects the inner face, and the outer one outside it
 - [x] The marquee draws over a solid, and a selected face shows its blue outline (screenshots)
 - [x] 92 unit tests and 19 browser tests pass, and all six earlier fixes still pass
+- [x] Hovering a vertex or an edge of a face reports `Face`, and empty space reports `Ground`
+- [x] A selected vertex draws a highlight (screenshot)
+
+## Addendum: what the owner's verification found
+
+Three things came back from clicking through the change. Two were real gaps in this work; one is not a
+bug at all.
+
+**The drawing plane followed the pick order, not the geometry.** Hovering over the top face of a solid
+reported the plane as `Ground` whenever the pointer was near one of that face's vertices or edges,
+because the general pick prefers a point or an edge and the plane code only accepted a face hit. So the
+shape landed on the ground even with a face right under the pointer — which is what "the line and
+rectangle tools cannot draw on a different plane" actually was. Fixed with a faces-only raycast plus an
+incident-face lookup, so clicking a vertex or an edge of a face draws on that face. The status bar now
+names the plane (`Ground`, `Face`, `Axis Z`) so this is visible instead of mysterious, which is what
+made the behaviour look like a mystery in the first place.
+
+**A selected vertex had no highlight.** Picking one worked — the document held the point, and the status
+bar said `1 point selected` — but the selection layer drew only faces and edges, so the click looked
+like it had gone nowhere. Selected points now draw as a larger dot.
+
+**Pulling a small face to make a hole is not a bug.** It is a boolean subtract, and it is exactly what
+[decision 0011](../decisions/0011-geometry-kernel-strategy.md) deferred: extrusion only, no kernel.
+It needs its own spec and its own decision, not a ride-along on a bug fix. Recorded as the next
+follow-up rather than quietly skipped.
 
 ## Result
 
@@ -105,4 +130,5 @@ at the same depth, with the black winning. The base pass now skips them.
 - **Deviations from the plan:** nothing was cut. Item 1's root cause turned out to be axis inference
   rather than the loop search, and both were fixed; the plan had assumed only the loop search.
 - **Follow-up specs:** a real boolean cut, so a face inside a face becomes a hole rather than two
-  stacked faces.
+  stacked faces. This is the one thing the owner asked for that this spec does not do, and it needs a
+  kernel decision first ([0011](../decisions/0011-geometry-kernel-strategy.md)).

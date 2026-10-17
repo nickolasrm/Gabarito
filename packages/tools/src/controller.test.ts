@@ -30,6 +30,18 @@ function fakeViewport(store: Store): ViewportAdapter {
     rayAt(x, y) {
       return { origin: { x, y, z: 0 }, direction: VIEW_DIRECTION };
     },
+    raycastFace(x, y) {
+      const doc = store.getState();
+      for (const face of facesOf(doc)) {
+        const positions = facePositions(doc, face);
+        if (positions.length < 3) continue;
+        const normal = polyOps.normal(positions);
+        if (normal && polyOps.containsPoint(positions, { x, y, z: 0 }, 1e-6)) {
+          return { entityId: face.id, kind: "face", point: { x, y, z: 0 }, distance: 0 };
+        }
+      }
+      return null;
+    },
     raycastPlane(x, y, plane: Plane) {
       const origin = { x, y, z: 0 };
       const denominator = vec3.dot(VIEW_DIRECTION, plane.normal);

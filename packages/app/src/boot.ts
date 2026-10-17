@@ -59,6 +59,7 @@ export function boot({ root }: BootOptions): void {
       const selection = store.getState().selection;
       return {
         toolLabel: status.label,
+        planeLabel: status.planeLabel,
         hint: status.hint,
         numberHint: status.numberHint,
         typed: status.typed,

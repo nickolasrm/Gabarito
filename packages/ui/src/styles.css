@@ -270,7 +270,8 @@ kbd {
   color: #a35c00;
 }
 
-.chip.axis {
+.chip.axis,
+.chip.plane {
   background: var(--accent-soft);
   color: var(--accent);
 }

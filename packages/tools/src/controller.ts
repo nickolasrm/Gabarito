@@ -2,10 +2,12 @@ import { poly as polyOps, vec3 } from "@gabarito/geometry";
 import type { Plane, Ray, Vec3 } from "@gabarito/geometry";
 import {
   facePositions,
+  facesOf,
   parseAngle,
   parseLength,
   unitSuffix,
   type Command,
+  type EntityId,
   type Store,
 } from "@gabarito/core";
 import { axisForArrow } from "./axis-lock";
@@ -33,6 +35,8 @@ export interface ViewportAdapter {
   raycast(screenX: number, screenY: number): PickResult | null;
   /** The pointer ray in world space. */
   rayAt(screenX: number, screenY: number): Ray;
+  /** The face under the pointer, ignoring nearer points and edges. */
+  raycastFace(screenX: number, screenY: number): PickResult | null;
   raycastPlane(screenX: number, screenY: number, plane: Plane): Vec3 | null;
   worldToScreen(point: Vec3): { x: number; y: number; visible: boolean };
   pixelsPerWorldUnit(at: Vec3): number;
@@ -54,6 +58,8 @@ export interface PointerState {
 export interface ToolStatus {
   toolId: ToolId;
   label: string;
+  /** Which plane the next click will land on: "Ground", "Face", "Axis Z". */
+  planeLabel: string;
   hint: string;
   numberHint: string | null;
   typed: string;
@@ -96,8 +102,13 @@ function basisFor(normal: Vec3): { u: Vec3; v: Vec3 } {
  * possible. This is what makes a locked axis usable on the third dimension: with the
  * ground plane, a point locked to Z can never leave z = 0.
  */
-function planeContainingAxis(axis: Vec3, origin: Vec3, viewDirection: Vec3): DrawingPlane {
-  return axisPlaneBasis(axis, axisPlaneNormal(axis, viewDirection), origin);
+function planeContainingAxis(
+  axis: Vec3,
+  origin: Vec3,
+  viewDirection: Vec3,
+  label: string,
+): DrawingPlane {
+  return { ...axisPlaneBasis(axis, axisPlaneNormal(axis, viewDirection), origin), label };
 }
 
 /**
@@ -121,6 +132,7 @@ export class ToolController {
     normal: GROUND_PLANE.normal,
     u: { x: 1, y: 0, z: 0 },
     v: { x: 0, y: 1, z: 0 },
+    label: "Ground",
   };
 
   constructor(store: Store, viewport: ViewportAdapter, onChange: () => void) {
@@ -216,6 +228,24 @@ export class ToolController {
     return context;
   }
 
+  /**
+   * A face that touches the given point or edge. Clicking an edge or a vertex of a face
+   * means that face, so the drawing plane should follow it instead of falling back to the
+   * ground.
+   */
+  private incidentFace(entityId: EntityId): EntityId | null {
+    const doc = this.store.getState();
+    const entity = doc.entities[entityId];
+    if (!entity) return null;
+    const ids =
+      entity.kind === "point" ? [entity.id] : entity.kind === "edge" ? entity.points : null;
+    if (!ids) return null;
+    for (const face of facesOf(doc)) {
+      if (ids.some((id) => face.points.includes(id))) return face.id;
+    }
+    return null;
+  }
+
   private planeAt(screenX: number, screenY: number): DrawingPlane {
     const lock = this.currentLock();
     if (lock) {
@@ -224,24 +254,31 @@ export class ToolController {
         anchor ??
         this.viewport.raycastPlane(screenX, screenY, GROUND_PLANE) ??
         this.cursor;
-      return planeContainingAxis(lock.direction, origin, this.viewport.viewDirection());
+      return planeContainingAxis(
+        lock.direction,
+        origin,
+        this.viewport.viewDirection(),
+        `Axis ${lock.axisKey.toUpperCase()}`,
+      );
     }
 
-    const hit = this.viewport.raycast(screenX, screenY);
-    if (hit && hit.kind === "face") {
-      const face = this.store.getState().entities[hit.entityId];
+    const direct = this.viewport.raycastFace(screenX, screenY);
+    const hit = direct ?? this.viewport.raycast(screenX, screenY);
+    const faceId = hit?.kind === "face" ? hit.entityId : hit ? this.incidentFace(hit.entityId) : null;
+    if (hit && faceId) {
+      const face = this.store.getState().entities[faceId];
       if (face && face.kind === "face") {
         const positions = facePositions(this.store.getState(), face);
         const normal = polyOps.normal(positions);
         if (normal) {
           const plane = { origin: positions[0], normal };
           const { u, v } = basisFor(normal);
-          return { plane, normal, u, v };
+          return { plane, normal, u, v, label: "Face" };
         }
       }
     }
     const { u, v } = basisFor(GROUND_PLANE.normal);
-    return { plane: GROUND_PLANE, normal: GROUND_PLANE.normal, u, v };
+    return { plane: GROUND_PLANE, normal: GROUND_PLANE.normal, u, v, label: "Ground" };
   }
 
   private buildEvent(state: PointerState): ToolPointerEvent {
@@ -401,6 +438,7 @@ export class ToolController {
     return {
       toolId: tool.id,
       label: tool.label,
+      planeLabel: this.plane.label,
       hint: tool.hint,
       numberHint: tool.numbers?.example ?? null,
       typed: this.typed,

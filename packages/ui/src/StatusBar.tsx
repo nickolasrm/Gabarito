@@ -10,7 +10,11 @@ export function StatusBar({ api }: { api: UiApi }): ReactElement {
       <span className="status-tool">{status.toolLabel}</span>
       <span className="status-hint">{status.hint}</span>
 
-      {status.axisKey && <span className="chip axis">Axis lock: {AXIS_NAMES[status.axisKey]}</span>}
+      {status.axisKey ? (
+        <span className="chip axis">Axis lock: {AXIS_NAMES[status.axisKey]}</span>
+      ) : (
+        <span className="chip plane">Plane: {status.planeLabel}</span>
+      )}
       {status.snapLabel && <span className="chip snap">{status.snapLabel}</span>}
 
       <span className="spacer" />

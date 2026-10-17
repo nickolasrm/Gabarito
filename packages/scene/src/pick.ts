@@ -67,6 +67,24 @@ function pointCandidate(
  * no dependence on three.js objects, and the same maths can be tested headlessly.
  * Faces win over edges win over points at equal distance, which is what a user expects.
  */
+export function pickFace(ray: Ray, doc: DocumentState): PickHit | null {
+  const candidates: Candidate[] = [];
+  for (const face of facesOf(doc)) {
+    const positions = facePositions(doc, face);
+    if (positions.length < 3) continue;
+    const candidate = faceCandidate(ray, face.id, positions);
+    if (candidate) candidates.push(candidate);
+  }
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => {
+    const gap = a.t - b.t;
+    if (Math.abs(gap) / Math.max(a.t, b.t, 1) > 0.02) return gap;
+    return a.area - b.area;
+  });
+  const best = candidates[0];
+  return { entityId: best.entityId, kind: "face", point: best.point, distance: best.distance };
+}
+
 export function pick(ray: Ray, doc: DocumentState, tolerance: number): PickHit | null {
   const candidates: Candidate[] = [];
 

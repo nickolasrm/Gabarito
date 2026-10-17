@@ -77,6 +77,10 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     distance, so the smaller area decides, and every tool inherits it.
   - The selection marquee draws over the model, and a selected face shows its own outline instead of
     a black base edge drawn on top of it.
+  - The drawing plane follows the face under the pointer even at a vertex or an edge of that face, and
+    the status bar names the plane: `Ground`, `Face` or `Axis Z`.
+  - A selected vertex is highlighted. Picking one already worked, but nothing was drawn for it, so the
+    click looked like it had gone nowhere.
 
 ### Changed
 

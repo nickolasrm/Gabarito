@@ -5,7 +5,7 @@ import { documentBounds, type Store } from "@gabarito/core";
 import { CameraController, type ScreenPoint } from "./camera";
 import { COLORS, createSceneGraph, disposeScene, extentFor, rebuildScene, type SceneGraph } from "./build-scene";
 import type { Ray } from "./camera";
-import { pick, type PickHit } from "./pick";
+import { pick, pickFace, type PickHit } from "./pick";
 
 export interface PointerInfo {
   /** Position in CSS pixels relative to the canvas. */
@@ -424,6 +424,12 @@ export class Viewport {
   /** The pointer ray in world space, for inference that has to leave the drawing plane. */
   rayAt(screenX: number, screenY: number): Ray {
     return this.cameraController.screenToRay(screenX, screenY, this.width(), this.height());
+  }
+
+  /** The face under the pointer, ignoring nearer points and edges. Used to pick a drawing plane. */
+  raycastFace(screenX: number, screenY: number): PickHit | null {
+    const ray = this.cameraController.screenToRay(screenX, screenY, this.width(), this.height());
+    return pickFace(ray, this.store.getState());
   }
 
   raycast(screenX: number, screenY: number): PickHit | null {

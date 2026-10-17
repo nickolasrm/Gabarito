@@ -101,16 +101,23 @@ function edgeGeometry(
   return geometry;
 }
 
-function pointGeometry(doc: DocumentState): THREE.BufferGeometry {
+function pointGeometry(doc: DocumentState, selected?: Set<EntityId>): THREE.BufferGeometry {
   const positions: number[] = [];
   const seen = new Set<EntityId>();
   for (const edge of edgesOf(doc)) {
     for (const id of edge.points) {
       if (seen.has(id)) continue;
       seen.add(id);
+      if (selected && !selected.has(id)) continue;
       const point = getPoint(doc, id);
       if (point) positions.push(point.x, point.y, point.z);
     }
+  }
+  // Points that no edge references can still be selected.
+  for (const id of doc.selection) {
+    if (!selected?.has(id) || seen.has(id)) continue;
+    const entity = doc.entities[id];
+    if (entity?.kind === "point") positions.push(entity.position.x, entity.position.y, entity.position.z);
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
@@ -186,6 +193,7 @@ export function rebuildScene(graph: SceneGraph, doc: DocumentState): void {
       new THREE.PointsMaterial({ color: COLORS.edge, size: 5, sizeAttenuation: false }),
     ),
   );
+  graph.selection.renderOrder = 5;
 
   disposeGroup(graph.guides);
   const guideLines = new THREE.LineSegments(
@@ -224,7 +232,20 @@ export function rebuildScene(graph: SceneGraph, doc: DocumentState): void {
     graph.selection.add(
       new THREE.LineSegments(
         edgeGeometry(doc, selected),
-        new THREE.LineBasicMaterial({ color: COLORS.selection }),
+        new THREE.LineBasicMaterial({ color: COLORS.selection, depthTest: false }),
+      ),
+    );
+    // Selected vertices need their own highlight: picking one worked, but with nothing
+    // drawn for it the click looked like it had gone nowhere.
+    graph.selection.add(
+      new THREE.Points(
+        pointGeometry(doc, selected),
+        new THREE.PointsMaterial({
+          color: COLORS.selection,
+          size: 11,
+          sizeAttenuation: false,
+          depthTest: false,
+        }),
       ),
     );
   }
