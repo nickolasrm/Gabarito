@@ -81,6 +81,13 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   reuses existing points instead of silently doing nothing; refusals replace silence.
   — [spec 0019](./docs/specs/0019-pull-is-a-union.md),
   [decision 0025](./docs/decisions/0025-pull-is-a-union.md)
+- **No limit on holes**: an opening's face holds every hole it gets — openings nest and repeat
+  without end, and several coplanar regions (two tunnels' walls) stay separate faces. The kernel
+  triangulator's winding rule (outer counter-clockwise, holes clockwise in the projection) is
+  normalised and its refusal made structural. Five through holes, three through one face, leave one
+  face with five holes and a solid of genus five, exact.
+  — [spec 0020](./docs/specs/0020-no-hole-limit.md),
+  [decision 0026](./docs/decisions/0026-face-holds-every-hole.md)
 
 ### Fixed
 

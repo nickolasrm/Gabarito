@@ -118,27 +118,15 @@ export function sweepShell(shell: ShellFace[], tool: Bounds): { verb: "cut" | "a
           ? "y"
           : "z";
     const value = outer[0][axis];
-    // The kernel triangulator reads a hole as a hole when it winds against the outer contour; the
-    // document stores hole loops the way the kernel mesh wound them, which is the same way round as
-    // the outer loop, so they are reversed here before projecting.
-    const outermost = holes.map((hole) => {
-      const holeNormal = poly.normal(hole);
-      return holeNormal && vec3.dot(holeNormal, normal) > 0 ? [...hole].reverse() : hole;
-    });
-    const loops = [outer, ...outermost];
-    for (const loop of loops) {
+    const [u, v] = rect.inPlaneAxes(axis);
+    for (const loop of [outer, ...holes]) {
       for (const point of loop) {
         if (Math.abs(point[axis] - value) > EPS.MERGE) {
           throw new Error("The solid has a face that is not axis-aligned");
         }
       }
     }
-    const [u, v] = rect.inPlaneAxes(axis);
-    // The kernel triangulator indexes the concatenated contours: outer first, then each hole.
-    const flat = loops.map((loop) => loop.map((p) => [p[u], p[v]] as [number, number]));
-    const corners = loops.flat();
-    for (const t of triangulate(flat)) {
-      const [a, b, c] = [corners[t[0]], corners[t[1]], corners[t[2]]];
+    for (const [a, b, c] of triangulateFace([outer, ...holes], u, v, triangulate)) {
       const winding = vec3.cross(vec3.sub(b, a), vec3.sub(c, a));
       const flip = vec3.dot(winding, normal) < 0;
       triVerts.push(weld(a), weld(flip ? c : b), weld(flip ? b : c));
@@ -168,6 +156,43 @@ export function sweepShell(shell: ShellFace[], tool: Bounds): { verb: "cut" | "a
       verb === "cut" ? "The cut kernel refused the subtraction" : "The kernel refused the union",
     ),
   };
+}
+
+/**
+ * Triangulate one face's loops in its projected plane.
+ *
+ * The kernel triangulator reads the first contour as the outer and the rest as holes under a
+ * nonzero fill rule: the outer must wind counter-clockwise in the projection and every hole
+ * clockwise, or the hole is swallowed whole. The document winds a −axis face's outer clockwise, so
+ * both are normalised here on their own signed area. The result is checked against the count a
+ * region with that many holes must have — a swallowed hole cannot tile an annulus — and refused
+ * rather than passed on.
+ */
+function triangulateFace(
+  loops: Vec3[][],
+  u: "x" | "y" | "z",
+  v: "x" | "y" | "z",
+  triangulate: (polygons: [number, number][][], epsilon?: number, allowConvex?: boolean) => [number, number, number][],
+): Array<[Vec3, Vec3, Vec3]> {
+  const signed2D = (loop: Vec3[]): number =>
+    loop.reduce(
+      (sum, point, index) =>
+        sum + point[u] * loop[(index + 1) % loop.length][v] - loop[(index + 1) % loop.length][u] * point[v],
+      0,
+    );
+
+  const [outer, ...holes] = loops;
+  const outerCCW = signed2D(outer) < 0 ? [...outer].reverse() : outer;
+  const holesCW = holes.map((hole) => (signed2D(hole) > 0 ? [...hole].reverse() : hole));
+  const flat = [outerCCW, ...holesCW].map((loop) => loop.map((p) => [p[u], p[v]] as [number, number]));
+
+  const triangles = triangulate(flat);
+  const expected = loops.reduce((sum, loop) => sum + loop.length, 0) - 2 + 2 * holes.length;
+  if (triangles.length !== expected) {
+    throw new Error("The cut kernel produced a face the document cannot hold");
+  }
+  const corners = [outerCCW, ...holesCW].flat();
+  return triangles.map((t) => [corners[t[0]], corners[t[1]], corners[t[2]]]);
 }
 
 /** A kernel result as a validated `SolidMesh`, or the given refusal message. */

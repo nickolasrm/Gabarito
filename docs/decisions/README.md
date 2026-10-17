@@ -43,6 +43,7 @@ stays searchable forever.
 | [0023](./0023-faces-hold-holes.md) | A document face can hold holes | accepted | core, geometry, scene, document-model | — |
 | [0024](./0024-cuts-enter-any-rectilinear-solid.md) | A cut can enter any rectilinear closed solid | **superseded** by 0025 | core, geometry, csg, scope | — |
 | [0025](./0025-pull-is-a-union.md) | The sweep follows the drag, and pull is a union | accepted | core, geometry, csg, tools | 0024 |
+| [0026](./0026-face-holds-every-hole.md) | A face holds every hole it gets, and there is no limit | accepted | core, geometry, csg, document-model | — |
 
 Statuses: `proposed` → `accepted` → (`superseded` | `deprecated` | `rejected`).
 

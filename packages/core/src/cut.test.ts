@@ -307,6 +307,47 @@ describe("planCut", () => {
     expect(facesOf(doc()).filter((face) => (face.holes?.length ?? 0) > 0)).toHaveLength(0);
   });
 
+  it("cuts three openings through the same face, and the face holds them all", () => {
+    const store = createStore();
+    const doc = () => store.getState();
+    store.dispatch({ type: "addEntities", entities: buildRectangle(doc(), ORIGIN, U, V).entities });
+    const bottom = facesOf(doc())[0];
+    const box = buildExtrusion(doc(), bottom.id, SIDE);
+    store.dispatch([
+      { type: "removeEntities", ids: box.removeFaceIds ?? [] },
+      { type: "addEntities", entities: box.entities },
+    ]);
+
+    // Three tunnels through the box, two of them opening through the top face's own material.
+    const spots: Array<[number, number]> = [
+      [300, 300],
+      [1000, 300],
+      [1700, 300],
+    ];
+    for (const [cx, cy] of spots) {
+      const drawn = buildRectangle(
+        doc(),
+        { x: cx - 150, y: cy - 150, z: SIDE },
+        { x: 300, y: 0, z: 0 },
+        { x: 0, y: 300, z: 0 },
+      );
+      store.dispatch({ type: "addEntities", entities: drawn.entities });
+      const drawnFace = drawn.entities.find((entity) => entity.kind === "face");
+      expect(drawnFace).toBeDefined();
+      const plan = planCut(doc(), drawnFace!.id as EntityId, -SIDE * 2);
+      expect(plan.kind).toBe("cut");
+      if (plan.kind !== "cut") return;
+      apply(store, plan);
+    }
+
+    expect(documentVolume(doc())).toBeCloseTo(SIDE * SIDE * SIDE - 3 * 300 * 300 * SIDE, 0);
+    expect(everyEdgeSharedTwice(doc())).toBe(true);
+    // Both the top and the bottom hold all three openings as one face with three holes.
+    const rings = facesOf(doc()).filter((face) => (face.holes?.length ?? 0) > 0);
+    expect(rings).toHaveLength(2);
+    for (const ring of rings) expect(ring.holes).toHaveLength(3);
+  });
+
   it("adds material when there is no solid at all, as push/pull always has", () => {
     const store = createStore();
     store.dispatch({ type: "addEntities", entities: buildRectangle(store.getState(), ORIGIN, U, V).entities });

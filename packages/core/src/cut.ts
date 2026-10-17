@@ -160,10 +160,9 @@ interface FaceLoops {
  * The kernel mesh as faces the document can hold.
  *
  * Coplanar triangles group into a face; each group's once-used edges form its boundary loops, in the
- * kernel's own winding. One loop is a face; two are a face with a hole
- * ([decision 0023](../../docs/decisions/0023-faces-hold-holes.md)) — the ring an opening leaves in
- * the face it was cut from. Anything else is refused — the input is two boxes, so anything else
- * means the conversion is wrong.
+ * kernel's own winding. One loop is a face; more are a face with that many holes
+ * ([decision 0023](../../docs/decisions/0023-faces-hold-holes.md)) — the ring an opening leaves, and
+ * any further openings cut into it. There is no limit to how many a face holds.
  */
 function meshToFaces(mesh: SolidMesh): FaceLoops[] {
   const { verts, ids } = weld(mesh);
@@ -240,27 +239,40 @@ function meshToFaces(mesh: SolidMesh): FaceLoops[] {
       return loop;
     });
 
-    if (loops.length === 1) {
-      faces.push({ outer: loops[0], holes: [] });
-      continue;
+    // One plane can hold several regions — two tunnel mouths' walls, coplanar but separate — and a
+    // region with holes, however many, is one face (decision 0023). Largest first, so each loop
+    // lands either as a region's outer or as a hole of the smallest region that contains it.
+    const areaOf = (loop: Vec3[]): number => {
+      const [u, v] = rect.inPlaneAxes(axis);
+      const pts = loop.map((p) => ({ x: p[u], y: p[v] }));
+      let sum = 0;
+      for (let index = 0; index < pts.length; index += 1) {
+        sum += pts[index].x * pts[(index + 1) % pts.length].y - pts[(index + 1) % pts.length].x * pts[index].y;
+      }
+      return Math.abs(sum / 2);
+    };
+    const spans = (outer: Vec3[], loop: Vec3[]): boolean => {
+      const [u, v] = rect.inPlaneAxes(axis);
+      const outerMinU = Math.min(...outer.map((p) => p[u]));
+      const outerMaxU = Math.max(...outer.map((p) => p[u]));
+      const outerMinV = Math.min(...outer.map((p) => p[v]));
+      const outerMaxV = Math.max(...outer.map((p) => p[v]));
+      return (
+        loop.every((p) => p[u] >= outerMinU - EPS.MERGE) &&
+        loop.every((p) => p[u] <= outerMaxU + EPS.MERGE) &&
+        loop.every((p) => p[v] >= outerMinV - EPS.MERGE) &&
+        loop.every((p) => p[v] <= outerMaxV + EPS.MERGE)
+      );
+    };
+    const regions: FaceLoops[] = [];
+    for (const loop of [...loops].sort((a, b) => areaOf(b) - areaOf(a))) {
+      const host = regions
+        .filter((region) => spans(region.outer, loop))
+        .sort((a, b) => areaOf(a.outer) - areaOf(b.outer))[0];
+      if (host) host.holes.push(loop);
+      else regions.push({ outer: loop, holes: [] });
     }
-    if (loops.length === 2) {
-      // The ring around the opening. The larger loop bounds the other, which the kernel guarantees
-      // for a planar region with one hole.
-      const [a, b] = loops;
-      const areaOf = (loop: Vec3[]): number => {
-        const [u, v] = rect.inPlaneAxes(axis);
-        const pts = loop.map((p) => ({ x: p[u], y: p[v] }));
-        let sum = 0;
-        for (let index = 0; index < pts.length; index += 1) {
-          sum += pts[index].x * pts[(index + 1) % pts.length].y - pts[(index + 1) % pts.length].x * pts[index].y;
-        }
-        return Math.abs(sum / 2);
-      };
-      faces.push(areaOf(a) >= areaOf(b) ? { outer: a, holes: [b] } : { outer: b, holes: [a] });
-      continue;
-    }
-    throw new Error("The cut kernel produced a face the document cannot hold");
+    faces.push(...regions);
   }
   return faces;
 }
