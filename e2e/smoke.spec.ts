@@ -511,3 +511,44 @@ test("a rectangle spans across an open notch between two vertices", async ({ pag
   const state = await snapshot(page);
   expect(count(state, "face")).toBe(4);
 });
+
+test("pushing an inner face cuts a recess into the box", async ({ page }) => {
+  // A box.
+  await page.getByRole("button", { name: /^Rectangle/ }).click();
+  await clickWorld(page, { x: -1000, y: -1000, z: 0 });
+  await page.keyboard.type("2000");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: /Push\/Pull/ }).click();
+  await clickWorld(page, { x: 0, y: 0, z: 0 });
+  await page.keyboard.type("2000");
+  await page.keyboard.press("Enter");
+
+  // A smaller rectangle drawn inside the top face, which is the reported scene. The camera is
+  // framed first: a human zooms as the model grows, and without it the screen-space tolerance is
+  // derived from a view that no longer matches the model, so the first click snaps to nonsense.
+  await page.evaluate(() => window.__gabarito!.viewport.frameDocument());
+  await page.getByRole("button", { name: /^Rectangle/ }).click();
+  await clickWorld(page, { x: -600, y: -600, z: 2000 });
+  await page.keyboard.type("1200");
+  await page.keyboard.press("Enter");
+  expect(count(await snapshot(page), "face")).toBe(7);
+
+  // Push it down into the solid.
+  await page.getByRole("button", { name: /Push\/Pull/ }).click();
+  await clickWorld(page, { x: 0, y: 0, z: 2000 });
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.type("500");
+  await page.keyboard.press("Enter");
+
+  const state = await snapshot(page);
+  expect(count(state, "face")).toBeGreaterThan(7);
+  // The recess has a floor 500 down from the top.
+  const zs = Object.values(state.entities)
+    .filter((entity) => entity.kind === "point")
+    .map((entity) => entity.position!.z);
+  expect(zs.some((z) => Math.abs(z - 1500) < 1)).toBe(true);
+
+  // And undo puts the box back exactly.
+  await page.getByRole("button", { name: "Undo" }).click();
+  expect(count(await snapshot(page), "face")).toBe(7);
+});

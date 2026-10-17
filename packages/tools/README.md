@@ -34,7 +34,7 @@ accepts; it never sees raw text.
 | Line | `L` | `100` (length) |
 | Rectangle | `R` | `100, 50` or `100` (square) |
 | Circle | `C` | `10` (radius) |
-| Push/Pull | `P` | `50` (distance) |
+| Push/Pull | `P` | `50` (distance; into a solid cuts, away adds) |
 | Move | `M` | `100` (distance) |
 | Rotate | `Q` | `45` (degrees) |
 | Ruler | `T` | `300` (guide offset) |

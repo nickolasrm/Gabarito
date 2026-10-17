@@ -16,6 +16,8 @@ Every numerical guarantee in the product. Testable in plain Node, with no browse
 
 ```ts
 vec3          of, add, sub, scale, mul, dot, cross, len, normalize, lerp, dist, equals, isZero …
+rect          fromPolygon, intersect, subtract (a ring becomes at most four rectangles),
+              corners, cornersOutward, conformRects (no T-junctions across shared edges)
 plane         fromPoints, fromPointNormal, fromAxis, distanceToPoint, projectPoint, contains, flip
 ray           of, at, intersectPlane, intersectSegment, closestPointsToSegment
 segment       length, direction, midpoint, closestPointToPoint, closestPoints

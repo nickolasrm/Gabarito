@@ -38,6 +38,12 @@ Entity kinds and the full command list are in `src/types.ts` and `src/commands.t
 derived data (`edgesOf`, `facesOf`, `facePoints`, `pointIdsForEntities`, `documentBounds`) are in
 `src/document.ts`.
 
+Solid operations live in `src/cut.ts`: `shellFaces` computes the closed set of faces bounding a solid
+(shared-edge **or** coplanar-overlap adjacency — a face drawn inside a face still finds its solid), and
+`planCut` returns one of three outcomes: `cut` (remove and add entity lists, one transaction),
+`extrude` (the drag points away from any solid), or `refuse` with a message. Straight cuts only:
+[decision 0021](../../docs/decisions/0021-straight-cuts-by-face-surgery.md).
+
 **Note on the dependency rule.** `core` imports `@gabarito/geometry` and nothing else
 ([decision 0015](../../docs/decisions/0015-core-depends-on-geometry.md)). It re-exports the geometry
 types it uses (`Vec3`, `Bounds`) so consumers of `core` do not have to reach into `geometry` for them.

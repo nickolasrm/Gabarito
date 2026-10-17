@@ -238,7 +238,10 @@ describe("faces and solids", () => {
     const store = rectangleStore();
     const face = facesOf(store.getState())[0];
     const built = buildExtrusion(store.getState(), face.id, 1000);
-    store.dispatch({ type: "addEntities", entities: built.entities });
+    store.dispatch([
+      { type: "removeEntities", ids: built.removeFaceIds ?? [] },
+      { type: "addEntities", entities: built.entities },
+    ]);
 
     expect(pointsOf(store.getState())).toHaveLength(8);
     expect(edgesOf(store.getState())).toHaveLength(12);
@@ -249,7 +252,11 @@ describe("faces and solids", () => {
   it("reverses an extrusion with undo", () => {
     const store = rectangleStore();
     const face = facesOf(store.getState())[0];
-    store.dispatch({ type: "addEntities", entities: buildExtrusion(store.getState(), face.id, 500).entities });
+    const built = buildExtrusion(store.getState(), face.id, 500);
+    store.dispatch([
+      { type: "removeEntities", ids: built.removeFaceIds ?? [] },
+      { type: "addEntities", entities: built.entities },
+    ]);
     expect(facesOf(store.getState())).toHaveLength(6);
     store.undo();
     expect(facesOf(store.getState())).toHaveLength(1);

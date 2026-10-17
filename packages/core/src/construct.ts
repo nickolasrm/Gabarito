@@ -16,6 +16,11 @@ import type {
 /** Entities produced by a construct helper, ready to be added in one command. */
 export interface BuildResult {
   entities: Entity[];
+  /**
+   * Faces to remove before adding `entities`, as one transaction. The extrusion replaces its
+   * source face when that face ends up on the wrong side of the new solid.
+   */
+  removeFaceIds?: EntityId[];
 }
 
 const EMPTY: BuildResult = { entities: [] };
@@ -137,18 +142,29 @@ export function buildExtrusion(
   if (vec3.isZero(normal)) return EMPTY;
 
   const delta = vec3.scale(normal, distance);
-  const top = bottom.map((position) => buildPoint(doc, vec3.add(position, delta)));
-  if (top.some((entry) => !entry.created)) return EMPTY;
+  const offset = bottom.map((position) => buildPoint(doc, vec3.add(position, delta)));
+  if (offset.some((entry) => !entry.created)) return EMPTY;
 
-  const entities: Entity[] = top.map((entry) => entry.point);
-  const bottomIds = face.points;
-  const topIds = top.map((entry) => entry.point.id);
-  const count = bottomIds.length;
+  const entities: Entity[] = offset.map((entry) => entry.point);
+  const sourceIds = face.points;
+  const offsetIds = offset.map((entry) => entry.point.id);
+  const count = sourceIds.length;
+
+  // Which cap sits at the lower axial coordinate decides the winding of everything: walls run
+  // lower -> lower -> upper -> upper, the lower cap points against the normal and the upper cap
+  // along it. Getting this wrong leaves one face of the solid pointing into itself.
+  const sourceIsNear = distance > 0;
+  const nearIds = sourceIsNear ? sourceIds : offsetIds;
+  const farIds = sourceIsNear ? offsetIds : sourceIds;
 
   const addEdge = (a: EntityId, b: EntityId) => {
     if (a === b) return;
     if (findEdgeBetween(doc, a, b)) return;
-    if (entities.some((item) => item.kind === "edge" && item.points.includes(a) && item.points.includes(b))) {
+    if (
+      entities.some(
+        (item) => item.kind === "edge" && item.points.includes(a) && item.points.includes(b),
+      )
+    ) {
       return;
     }
     entities.push({ id: allocId(doc, "e"), kind: "edge", points: [a, b] });
@@ -156,18 +172,24 @@ export function buildExtrusion(
 
   for (let index = 0; index < count; index += 1) {
     const next = (index + 1) % count;
-    addEdge(topIds[index], topIds[next]);
-    addEdge(bottomIds[index], topIds[index]);
+    addEdge(nearIds[index], nearIds[next]);
+    addEdge(farIds[index], farIds[next]);
+    addEdge(nearIds[index], farIds[index]);
     entities.push({
       id: allocId(doc, "f"),
       kind: "face",
-      points: [bottomIds[index], bottomIds[next], topIds[next], topIds[index]],
+      points: [nearIds[index], nearIds[next], farIds[next], farIds[index]],
     });
   }
 
-  entities.push({ id: allocId(doc, "f"), kind: "face", points: topIds });
+  // Caps: the lower one points against the normal, the upper one along it.
+  const lowerCap = nearIds.slice().reverse();
+  entities.push({ id: allocId(doc, "f"), kind: "face", points: lowerCap });
+  entities.push({ id: allocId(doc, "f"), kind: "face", points: farIds });
 
-  return { entities };
+  // When the source face ends up as the lower cap it points the wrong way, so it is replaced by
+  // the reversed copy above.
+  return { entities, removeFaceIds: sourceIsNear ? [faceId] : [] };
 }
 
 /** An infinite construction line through a point, in a direction. */

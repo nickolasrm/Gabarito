@@ -11,7 +11,7 @@ import {
   facesOf,
 } from "./index";
 import type { DocumentState, EntityId } from "./index";
-import { isCutError, planCut } from "./cut";
+import { planCut } from "./cut";
 
 const SIDE = 2000;
 const INNER = 600;
@@ -67,7 +67,11 @@ function boxWithInnerFaceOnTop() {
   const doc = () => store.getState();
   store.dispatch({ type: "addEntities", entities: buildRectangle(doc(), ORIGIN, U, V).entities });
   const bottom = facesOf(doc())[0];
-  store.dispatch({ type: "addEntities", entities: buildExtrusion(doc(), bottom.id, SIDE).entities });
+  const box = buildExtrusion(doc(), bottom.id, SIDE);
+  store.dispatch([
+    { type: "removeEntities", ids: box.removeFaceIds ?? [] },
+    { type: "addEntities", entities: box.entities },
+  ]);
 
   const inset = (SIDE - INNER) / 2;
   const inner = buildRectangle(
@@ -83,44 +87,67 @@ function boxWithInnerFaceOnTop() {
   return { store, innerFaceId: innerFace?.id as EntityId, doc };
 }
 
+/** Apply a cut plan the way the push/pull tool does, as one transaction. */
+function apply(store: ReturnType<typeof createStore>, plan: ReturnType<typeof planCut>): void {
+  if (plan.kind !== "cut") throw new Error(`expected a cut, got ${plan.kind}`);
+  store.dispatch([
+    { type: "removeEntities", ids: plan.remove },
+    { type: "addEntities", entities: plan.add },
+  ]);
+}
+
+/** Sum of face areas lying in the plane `value` along `axis`. */
+function areaInPlane(doc: DocumentState, axis: "x" | "y" | "z", value: number): number {
+  let total = 0;
+  for (const face of facesOf(doc)) {
+    const points = facePositions(doc, face);
+    const along = points.map((point) => point[axis]);
+    if (Math.max(...along) - Math.min(...along) > 1e-6) continue;
+    if (Math.abs(along[0] - value) > 1e-6) continue;
+    let sum = 0;
+    for (let index = 0; index < points.length; index += 1) {
+      const a = points[index];
+      const b = points[(index + 1) % points.length];
+      sum += (a.x * b.y - b.x * a.y) * (axis === "z" ? 1 : 0);
+    }
+    total += Math.abs(sum / 2);
+  }
+  return total;
+}
+
 describe("planCut", () => {
   it("cuts a recess when the drag goes into the solid", () => {
     const { store, innerFaceId, doc } = boxWithInnerFaceOnTop();
     expect(facesOf(doc())).toHaveLength(7);
 
     const plan = planCut(doc(), innerFaceId, -DEPTH);
-    expect(isCutError(plan)).toBe(false);
-    if (isCutError(plan)) return;
+    expect(plan.kind).toBe("cut");
+    if (plan.kind !== "cut") return;
 
-    store.dispatch([
-      { type: "removeEntities", ids: plan.remove },
-      { type: "addEntities", entities: plan.add },
-    ]);
+    apply(store, plan);
 
-    // The top face became a ring of four, the inner face is gone, the four sides and the bottom
-    // survive, and the opening adds four walls and a floor: seven faces become fourteen.
-    expect(facesOf(doc())).toHaveLength(14);
+    // The invariants that matter: the material is really gone, the shell still closes, and the
+    // top plane now holds the ring rather than the two stacked faces we started with.
     expect(documentVolume(doc())).toBeCloseTo(SIDE * SIDE * SIDE - INNER * INNER * DEPTH, 0);
     expect(everyEdgeSharedTwice(doc())).toBe(true);
+    expect(areaInPlane(doc(), "z", SIDE)).toBeCloseTo(SIDE * SIDE - INNER * INNER, 0);
+    // The opening has a floor at the drag depth.
+    expect(areaInPlane(doc(), "z", SIDE - DEPTH)).toBeCloseTo(INNER * INNER, 0);
   });
 
   it("cuts right through when the drag exceeds the solid", () => {
     const { store, innerFaceId, doc } = boxWithInnerFaceOnTop();
     const plan = planCut(doc(), innerFaceId, -SIDE * 2);
-    expect(isCutError(plan)).toBe(false);
-    if (isCutError(plan)) return;
+    expect(plan.kind).toBe("cut");
+    if (plan.kind !== "cut") return;
 
-    store.dispatch([
-      { type: "removeEntities", ids: plan.remove },
-      { type: "addEntities", entities: plan.add },
-    ]);
+    apply(store, plan);
 
-    // No floor, because the cut passes out the other side: both the top and the bottom become
-    // rings, so seven faces become sixteen.
-    expect(facesOf(doc())).toHaveLength(16);
+    // No floor, because the cut passes out the other side: both large faces become rings.
+    expect(documentVolume(doc())).toBeCloseTo(SIDE * SIDE * SIDE - INNER * INNER * SIDE, 0);
     expect(everyEdgeSharedTwice(doc())).toBe(true);
-    const rings = facesOf(doc()).filter((face) => facePositions(doc(), face).every((p) => p.z === 0 || p.z === SIDE));
-    expect(rings).toHaveLength(8);
+    expect(areaInPlane(doc(), "z", 0)).toBeCloseTo(SIDE * SIDE - INNER * INNER, 0);
+    expect(areaInPlane(doc(), "z", SIDE)).toBeCloseTo(SIDE * SIDE - INNER * INNER, 0);
   });
 
   it("undoes a cut exactly", () => {
@@ -133,11 +160,8 @@ describe("planCut", () => {
     const before = snapshot(doc());
 
     const plan = planCut(doc(), innerFaceId, -DEPTH);
-    if (isCutError(plan)) throw new Error(plan.error);
-    store.dispatch([
-      { type: "removeEntities", ids: plan.remove },
-      { type: "addEntities", entities: plan.add },
-    ]);
+    if (plan.kind !== "cut") throw new Error(plan.kind);
+    apply(store, plan);
     expect(snapshot(doc())).not.toBe(before);
 
     store.undo();
@@ -159,12 +183,19 @@ describe("planCut", () => {
     const triangle = facesOf(doc()).find((face) => face.points.length === 3);
     expect(triangle).toBeDefined();
     const plan = planCut(doc(), triangle?.id as EntityId, -200);
-    expect(isCutError(plan)).toBe(true);
+    expect(plan.kind).toBe("refuse");
   });
 
-  it("refuses a drag that cuts nothing", () => {
+  it("adds material when the drag points out of the solid", () => {
     const { innerFaceId, doc } = boxWithInnerFaceOnTop();
     const plan = planCut(doc(), innerFaceId, 300);
-    expect(isCutError(plan)).toBe(true);
+    expect(plan.kind).toBe("extrude");
+  });
+
+  it("adds material when there is no solid at all, as push/pull always has", () => {
+    const store = createStore();
+    store.dispatch({ type: "addEntities", entities: buildRectangle(store.getState(), ORIGIN, U, V).entities });
+    const face = facesOf(store.getState())[0];
+    expect(planCut(store.getState(), face.id, 500).kind).toBe("extrude");
   });
 });
