@@ -1,6 +1,6 @@
 import { EPS, poly as polyOps, vec3 } from "@gabarito/geometry";
 import { allocId, facePositions, findEdgeBetween, findPointNear } from "./document";
-import { detectFace } from "./face-detection";
+import { detectFaces } from "./face-detection";
 import type {
   DocumentState,
   EdgeEntity,
@@ -54,8 +54,7 @@ export function buildEdge(doc: DocumentState, a: Vec3, b: Vec3): BuildResult {
   if (end.created) entities.push(end.point);
   entities.push(edge);
 
-  const face = detectFace(doc, edge);
-  if (face) entities.push(face);
+  entities.push(...detectFaces(doc, edge));
 
   return { entities };
 }

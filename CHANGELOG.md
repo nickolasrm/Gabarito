@@ -81,6 +81,9 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     the status bar names the plane: `Ground`, `Face` or `Axis Z`.
   - A selected vertex is highlighted. Picking one already worked, but nothing was drawn for it, so the
     click looked like it had gone nowhere.
+  - Vertex snapping is measured against the pointer ray, so the line tool can be pointed at a vertex
+    that is not on the plane under the cursor.
+  - An edge that closes several loops now creates a face for each of them, not only the first.
 
 ### Changed
 

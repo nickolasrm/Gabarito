@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { poly as polyOps, vec3 } from "@gabarito/geometry";
 import type { Plane } from "@gabarito/geometry";
-import { createStore, edgesOf, facePositions, facesOf, getPoint, pointsOf, type Store } from "@gabarito/core";
+import {
+  buildEdge,
+  createStore,
+  edgesOf,
+  facePositions,
+  facesOf,
+  getPoint,
+  pointsOf,
+  type Store,
+} from "@gabarito/core";
 import { ToolController, type PointerState, type ViewportAdapter } from "./controller";
 
 /** A fixed, non-axis-aligned view direction, so locked planes are representable. */
@@ -359,6 +368,23 @@ describe("tool controller", () => {
     const preview = controller.getPreview();
     expect(preview.polygons).toHaveLength(1);
     expect(preview.segments).toHaveLength(4);
+  });
+
+  it("snaps to a vertex that is not on the drawing plane", () => {
+    const { store, controller, down } = harness();
+    // An edge floating 400 above the ground.
+    store.dispatch({
+      type: "addEntities",
+      entities: buildEdge(store.getState(), { x: 0, y: 0, z: 400 }, { x: 1000, y: 0, z: 400 }).entities,
+    });
+    const before = pointsOf(store.getState()).length;
+
+    controller.setTool("line");
+    // Screen position of the elevated vertex: the fake projects (x, y - z).
+    down(1000, -400);
+
+    expect(controller.getStatus().snapLabel).toBe("Endpoint");
+    expect(pointsOf(store.getState())).toHaveLength(before);
   });
 
   it("stops chaining once an edge closes a face", () => {

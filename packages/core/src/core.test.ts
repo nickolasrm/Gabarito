@@ -163,6 +163,27 @@ describe("faces and solids", () => {
     expect(pointsOf(store.getState())).toHaveLength(3);
   });
 
+  it("creates every face an edge closes, not just one", () => {
+    const store = createStore();
+    const add = (a: Vec3, b: Vec3) => {
+      const built = buildEdge(store.getState(), a, b);
+      if (built.entities.length > 0) store.dispatch({ type: "addEntities", entities: built.entities });
+    };
+    const a = { x: 0, y: 0, z: 0 };
+    const b = { x: 1000, y: 0, z: 0 };
+    const c = { x: 1000, y: 1000, z: 0 };
+    const d = { x: 0, y: 1000, z: 0 };
+    add(a, b);
+    add(b, c);
+    add(c, d);
+    add(d, a);
+    expect(facesOf(store.getState())).toHaveLength(1);
+
+    // The diagonal closes a triangle on each side of itself.
+    add(a, c);
+    expect(facesOf(store.getState())).toHaveLength(3);
+  });
+
   it("closes a face on a hand-drawn polygon of 24 sides", () => {
     const store = createStore();
     const ring = Array.from({ length: 24 }, (_, index) => {

@@ -97,6 +97,8 @@ at the same depth, with the black winning. The base pass now skips them.
 - [x] 92 unit tests and 19 browser tests pass, and all six earlier fixes still pass
 - [x] Hovering a vertex or an edge of a face reports `Face`, and empty space reports `Ground`
 - [x] A selected vertex draws a highlight (screenshot)
+- [x] The line tool snaps to a vertex 2000 above the drawing plane (browser: `Endpoint`, edge z = 2000)
+- [x] A diagonal in a square creates both triangles (browser: 7 faces to 9)
 
 ## Addendum: what the owner's verification found
 
@@ -115,6 +117,19 @@ made the behaviour look like a mystery in the first place.
 **A selected vertex had no highlight.** Picking one worked — the document held the point, and the status
 bar said `1 point selected` — but the selection layer drew only faces and edges, so the click looked
 like it had gone nowhere. Selected points now draw as a larger dot.
+
+**Snapping measured from the drawing plane, so a vertex off it could never snap.** The line tool
+could not be pointed at an existing vertex unless that vertex happened to lie on the plane under the
+pointer. The vertex candidate was measured from the point *on the drawing plane*, which is the same
+structural mistake as the axis bug at the top of this spec: a vertex at `z = 2000` is far from the
+ground point under the pointer, so no tolerance helps. Vertex snapping is now measured against the
+pointer ray and gated by screen distance, like the axes. That is also what makes the line tool usable
+across heights: an edge can now run from the ground to a corner of a solid.
+
+**One edge often closes more than one loop, and only one face was created.** Dropping a diagonal into
+a square closes a triangle on each side of it; the search returned the first and stopped. `detectFace`
+became `detectFaces` and creates a face for every valid loop the new edge completes. A square plus a
+diagonal now yields three faces instead of two.
 
 **Pulling a small face to make a hole is not a bug.** It is a boolean subtract, and it is exactly what
 [decision 0011](../decisions/0011-geometry-kernel-strategy.md) deferred: extrusion only, no kernel.

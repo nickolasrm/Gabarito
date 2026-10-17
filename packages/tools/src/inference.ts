@@ -21,6 +21,8 @@ const PRIORITY: Record<SnapKind, number> = {
 const MAX_INTERSECTION_PAIRS = 600;
 /** How close the pointer must look to an axis before inference binds to it, in pixels. */
 const AXIS_SCREEN_TOLERANCE = 10;
+/** Endpoints are the snap a user aims at deliberately, so they reach a little further. */
+const VERTEX_SCREEN_TOLERANCE = 16;
 
 /** Snaps to real geometry. These beat inferred axes and the bare drawing plane. */
 const GEOMETRY_SNAPS: SnapKind[] = ["endpoint", "intersection", "midpoint", "edge", "extension", "guide"];
@@ -127,10 +129,27 @@ export function resolveSnap(input: ResolveInput): SnapResult {
   // duplicate point, leaving the polygon open with no face.
   const vertexTolerance = tolerance * 1.4;
   for (const vertex of pointsOf(doc)) {
-    const radius = vec3.dist(vertex.position, free);
-    if (radius <= vertexTolerance) {
-      push({ point: vertex.position, kind: "endpoint", label: "Endpoint", radius });
+    let radius = vec3.dist(vertex.position, free);
+    if (ray) {
+      // Measure against the pointer ray, not the point on the drawing plane. A vertex
+      // that is not on that plane can never snap otherwise, however close it looks.
+      const along = vec3.dot(vec3.sub(vertex.position, ray.origin), ray.direction);
+      const nearest = vec3.add(ray.origin, vec3.scale(ray.direction, Math.max(along, 0)));
+      // Visibility and screen distance are the gate when a projector is available; the
+      // ray's own origin is the camera, so anything behind it is rejected as not visible.
+      const onScreen = project?.(vertex.position);
+      if (screen && onScreen) {
+        if (!onScreen.visible) continue;
+        const pixels = Math.hypot(onScreen.x - screen.x, onScreen.y - screen.y);
+        if (pixels > VERTEX_SCREEN_TOLERANCE) continue;
+      } else if (vec3.dist(nearest, vertex.position) > vertexTolerance) {
+        continue;
+      }
+      radius = vec3.dist(nearest, vertex.position);
+    } else if (radius > vertexTolerance) {
+      continue;
     }
+    push({ point: vertex.position, kind: "endpoint", label: "Endpoint", radius });
   }
 
   for (const segment of edgeSegments(doc)) {

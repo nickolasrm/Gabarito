@@ -134,24 +134,21 @@ function validLoop(doc: DocumentState, loop: EntityId[]): boolean {
  * A closed, planar loop of edges becomes a face. Called with the edge that was just drawn,
  * because it is not in the document yet.
  */
-export function detectFace(doc: DocumentState, candidate: EdgeEntity): FaceEntity | null {
+export function detectFaces(doc: DocumentState, candidate: EdgeEntity): FaceEntity[] {
   const start = candidate.points[0];
   const end = candidate.points[1];
-  if (start === end) return null;
+  if (start === end) return [];
 
   const adjacency = buildAdjacency([...edgesOf(doc), candidate]);
-  const make = (loop: EntityId[]): FaceEntity => ({
-    id: allocId(doc, "f"),
-    kind: "face",
-    points: loop,
-  });
+  const loops: EntityId[][] = [];
 
+  // One edge can close several loops at once — think of a diagonal dropped into a square,
+  // which closes a triangle on either side. Every one of them is a face.
   const smallest = shortestCycle(adjacency, start, end);
-  if (smallest && validLoop(doc, smallest)) return make(smallest);
-
+  if (smallest && validLoop(doc, smallest)) loops.push(smallest);
   for (const loop of otherCycles(adjacency, start, end, (candidateLoop) => validLoop(doc, candidateLoop))) {
-    return make(loop);
+    if (!loops.some((existing) => existing.join("|") === loop.join("|"))) loops.push(loop);
   }
 
-  return null;
+  return loops.map((points) => ({ id: allocId(doc, "f"), kind: "face", points }));
 }
