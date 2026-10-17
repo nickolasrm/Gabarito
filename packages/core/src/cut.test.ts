@@ -94,7 +94,7 @@ function boxWithInnerFaceOnTop() {
 
 /** Apply a cut plan the way the push/pull tool does, as one transaction. */
 function apply(store: ReturnType<typeof createStore>, plan: ReturnType<typeof planCut>): void {
-  if (plan.kind !== "cut") throw new Error(`expected a cut, got ${plan.kind}`);
+  if (plan.kind !== "cut" && plan.kind !== "add") throw new Error(`expected a cut, got ${plan.kind}`);
   store.dispatch([
     { type: "removeEntities", ids: plan.remove },
     { type: "addEntities", entities: plan.add },
@@ -210,10 +210,101 @@ describe("planCut", () => {
     expect(plan.kind).toBe("refuse");
   });
 
-  it("adds material when the drag points out of the solid", () => {
-    const { innerFaceId, doc } = boxWithInnerFaceOnTop();
+  it("pulls material out of the solid, leaving the host face ringed", () => {
+    const { store, innerFaceId, doc } = boxWithInnerFaceOnTop();
     const plan = planCut(doc(), innerFaceId, 300);
-    expect(plan.kind).toBe("extrude");
+    expect(plan.kind).toBe("add");
+    if (plan.kind !== "add") return;
+    apply(store, plan);
+
+    expect(documentVolume(doc())).toBeCloseTo(SIDE * SIDE * SIDE + INNER * INNER * 300, 0);
+    expect(everyEdgeSharedTwice(doc())).toBe(true);
+    // The face the pull left from is now a ring around the new block.
+    const rings = facesOf(doc()).filter(
+      (face) =>
+        (face.holes?.length ?? 0) > 0 &&
+        facePositions(doc(), face).every((point) => Math.abs(point.z - SIDE) < 1e-6),
+    );
+    expect(rings).toHaveLength(1);
+  });
+
+  it("cuts on the pushed side of a face that is wound the other way", () => {
+    const store = createStore();
+    const doc = () => store.getState();
+    store.dispatch({ type: "addEntities", entities: buildRectangle(doc(), ORIGIN, U, V).entities });
+    const bottom = facesOf(doc())[0];
+    const box = buildExtrusion(doc(), bottom.id, SIDE);
+    store.dispatch([
+      { type: "removeEntities", ids: box.removeFaceIds ?? [] },
+      { type: "addEntities", entities: box.entities },
+    ]);
+    // A rectangle drawn on the top face but wound into the material (its normal points down).
+    const drawn = buildRectangle(
+      doc(),
+      { x: 700, y: 1300, z: SIDE },
+      { x: 600, y: 0, z: 0 },
+      { x: 0, y: -600, z: 0 },
+    );
+    store.dispatch({ type: "addEntities", entities: drawn.entities });
+    const drawnFace = drawn.entities.find((entity) => entity.kind === "face");
+    expect(drawnFace).toBeDefined();
+
+    // Pushing down is a positive drag along this face's winding, and it cuts the marked region.
+    const plan = planCut(doc(), drawnFace!.id as EntityId, DEPTH);
+    expect(plan.kind).toBe("cut");
+    if (plan.kind !== "cut") return;
+    apply(store, plan);
+
+    expect(documentVolume(doc())).toBeCloseTo(SIDE * SIDE * SIDE - INNER * INNER * DEPTH, 0);
+    expect(everyEdgeSharedTwice(doc())).toBe(true);
+  });
+
+  it("pushes the box's bottom face up into the solid", () => {
+    const store = createStore();
+    const doc = () => store.getState();
+    store.dispatch({ type: "addEntities", entities: buildRectangle(doc(), ORIGIN, U, V).entities });
+    const bottom = facesOf(doc())[0];
+    const box = buildExtrusion(doc(), bottom.id, SIDE);
+    store.dispatch([
+      { type: "removeEntities", ids: box.removeFaceIds ?? [] },
+      { type: "addEntities", entities: box.entities },
+    ]);
+    const underside = facesOf(doc()).find((face) =>
+      facePositions(doc(), face).every((point) => Math.abs(point.z) < 1e-6),
+    );
+    expect(underside).toBeDefined();
+
+    const plan = planCut(doc(), underside!.id as EntityId, -300);
+    expect(plan.kind).toBe("cut");
+    if (plan.kind !== "cut") return;
+    apply(store, plan);
+
+    expect(documentVolume(doc())).toBeCloseTo(SIDE * SIDE * (SIDE - 300), 0);
+    expect(everyEdgeSharedTwice(doc())).toBe(true);
+  });
+
+  it("fills the cavity exactly when the recess floor is pulled to the rim", () => {
+    const { store, innerFaceId, doc } = boxWithInnerFaceOnTop();
+    const first = planCut(doc(), innerFaceId, -DEPTH);
+    if (first.kind !== "cut") throw new Error(first.kind);
+    apply(store, first);
+
+    // The floor pulled all the way back to the rim: the cavity closes and the box is whole again.
+    const floor = facesOf(doc()).find(
+      (face) =>
+        (face.holes?.length ?? 0) === 0 &&
+        facePositions(doc(), face).every((point) => Math.abs(point.z - (SIDE - DEPTH)) < 1e-6),
+    );
+    expect(floor).toBeDefined();
+
+    const second = planCut(doc(), floor!.id as EntityId, DEPTH);
+    expect(second.kind).toBe("add");
+    if (second.kind !== "add") return;
+    apply(store, second);
+
+    expect(documentVolume(doc())).toBeCloseTo(SIDE * SIDE * SIDE, 0);
+    expect(everyEdgeSharedTwice(doc())).toBe(true);
+    expect(facesOf(doc()).filter((face) => (face.holes?.length ?? 0) > 0)).toHaveLength(0);
   });
 
   it("adds material when there is no solid at all, as push/pull always has", () => {

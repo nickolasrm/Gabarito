@@ -72,9 +72,15 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   cut's cavity — deepen a recess, window a cavity wall, cut a rectangle drawn on a cut solid. The
   shell feeds the kernel as a mesh (drawn-on markings dropped from the mesh input), the cut against
   extrude is decided by measuring the sweep's overlap with the solid, and the box-only gate is gone.
-  Pulling a cavity's floor up still extrudes rather than filling (no union operation yet).
   — [spec 0018](./docs/specs/0018-second-cut.md),
   [decision 0024](./docs/decisions/0024-cuts-enter-any-rectilinear-solid.md)
+- **The sweep follows the drag, and pull is a union**: push and pull can no longer swap sides on a
+  face wound the other way (the sweep lands where the preview shows), and pulling material out goes
+  through the kernel as a union — pulling a cavity's floor to the rim fills the cavity exactly, with
+  the walls trimmed, instead of stacking a prism inside it. The extrusion at the no-solid case
+  reuses existing points instead of silently doing nothing; refusals replace silence.
+  — [spec 0019](./docs/specs/0019-pull-is-a-union.md),
+  [decision 0025](./docs/decisions/0025-pull-is-a-union.md)
 
 ### Fixed
 

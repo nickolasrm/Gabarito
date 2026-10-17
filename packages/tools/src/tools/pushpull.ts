@@ -48,7 +48,7 @@ export function createPushPullTool(): Tool {
       return;
     }
     const outcome = planCut(ctx.doc, faceId, value);
-    if (outcome.kind === "cut") {
+    if (outcome.kind === "cut" || outcome.kind === "add") {
       ctx.dispatch([
         { type: "removeEntities", ids: outcome.remove },
         { type: "addEntities", entities: outcome.add },
@@ -142,7 +142,8 @@ export function createPushPullTool(): Tool {
       const length = `${formatLength(Math.abs(distance), ctx.settings.unit)} ${unitSuffix(ctx.settings.unit)}`;
       if (distance === 0) return length;
       const outcome = planCut(ctx.doc, faceId, distance);
-      const doing = outcome.kind === "cut" ? "cut" : outcome.kind === "extrude" ? "add" : "";
+      const doing =
+        outcome.kind === "cut" ? "cut" : outcome.kind === "add" || outcome.kind === "extrude" ? "add" : "";
       return doing ? `${length} — ${doing}` : length;
     },
 

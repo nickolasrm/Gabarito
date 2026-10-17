@@ -41,7 +41,8 @@ stays searchable forever.
 | [0021](./0021-straight-cuts-by-face-surgery.md) | Straight cuts are face surgery, not a CSG kernel | **superseded** by 0022 | geometry, csg, scope | 0019 |
 | [0022](./0022-cuts-run-on-manifold.md) | Cuts run on manifold-3d | accepted | geometry, csg, kernel | 0021 |
 | [0023](./0023-faces-hold-holes.md) | A document face can hold holes | accepted | core, geometry, scene, document-model | — |
-| [0024](./0024-cuts-enter-any-rectilinear-solid.md) | A cut can enter any rectilinear closed solid | accepted | core, geometry, csg, scope | — |
+| [0024](./0024-cuts-enter-any-rectilinear-solid.md) | A cut can enter any rectilinear closed solid | **superseded** by 0025 | core, geometry, csg, scope | — |
+| [0025](./0025-pull-is-a-union.md) | The sweep follows the drag, and pull is a union | accepted | core, geometry, csg, tools | 0024 |
 
 Statuses: `proposed` → `accepted` → (`superseded` | `deprecated` | `rejected`).
 

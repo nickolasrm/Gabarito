@@ -22,8 +22,8 @@ vec3          of, add, sub, scale, mul, dot, cross, len, normalize, lerp, dist, 
 rect          fromPolygon, intersect, corners, cornersOutward
 solid         ensureSolid (await the kernel), solidReady, subtractSolid (outer, inner) →
               { positions, triangles } — throws on an open or inside-out result;
-              subtractShell (shell of loops, tool box) → the cut mesh, or nothing when the sweep
-              misses the solid
+              sweepShell (shell of loops, tool box) → { verb: "cut" | "add", mesh } — the measured
+              sweep: material subtracts, an empty sweep unions (decision 0025)
 plane         fromPoints, fromPointNormal, fromAxis, distanceToPoint, projectPoint, contains, flip
 ray           of, at, intersectPlane, intersectSegment, closestPointsToSegment
 segment       length, direction, midpoint, closestPointToPoint, closestPoints

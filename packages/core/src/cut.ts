@@ -1,12 +1,15 @@
-import { EPS, rect, solidReady, subtractShell, vec3 } from "@gabarito/geometry";
+import { EPS, poly, rect, solidReady, sweepShell, vec3 } from "@gabarito/geometry";
 import type { Axis, Bounds, PlaneRect, ShellFace, SolidMesh, Vec3 } from "@gabarito/geometry";
 import { allocId, edgesOf, faceHoles, facePositions, facesOf, pointsOf } from "./document";
 import type { DocumentState, Entity, EntityId, FaceEntity } from "./types";
 
 /** Entities to remove and add, applied as one transaction so undo is one step. */
 export type CutPlan =
+  /** Material removed: the sweep hit the solid (decision 0025). */
   | { kind: "cut"; remove: EntityId[]; add: Entity[] }
-  /** The drag points away from any solid, so material is added: the behaviour push/pull always had. */
+  /** Material added: the sweep missed the solid, so the prism merges with it. */
+  | { kind: "add"; remove: EntityId[]; add: Entity[] }
+  /** No solid at all: the prism is built in face soup, the behaviour push/pull always had. */
   | { kind: "extrude" }
   /** Straight cuts have limits, and a refusal beats a wrong solid (decision 0022). */
   | { kind: "refuse"; error: string };
@@ -309,13 +312,13 @@ function rebuild(doc: DocumentState, faces: FaceLoops[]): Entity[] {
 }
 
 /**
- * Plan pushing a face: material removed when the sweep hits material, material added when it does
- * not — the behaviour push/pull always had, and still the one that applies with no solid to cut.
+ * Plan pushing a face: material removed when the sweep hits material (`cut`), material added when
+ * the sweep is empty (`add` — the prism merges with the solid through the kernel), and the plain
+ * face extrusion when there is no solid at all (`extrude`).
  *
- * The cut itself is the kernel subtracting the swept tool box from the solid's shell, whatever
- * rectilinear shape earlier cuts left it in (decisions 0022 and 0024). A face that is not a
- * rectangle, or a solid that is not made of them, is refused with a message and the document is
- * left alone.
+ * The sweep lands on the side the drag points to, whatever the face's winding (decision 0025). A
+ * face that is not a rectangle, or a solid that is not made of them, is refused with a message and
+ * the document is left alone.
  */
 export function planCut(doc: DocumentState, faceId: EntityId, distance: number): CutPlan {
   const entity = doc.entities[faceId];
@@ -353,7 +356,11 @@ export function planCut(doc: DocumentState, faceId: EntityId, distance: number):
   const axis = pushed.axis;
   const [u, v] = rect.inPlaneAxes(axis);
   const start = pushed.value;
-  const end = start + distance;
+  // The sweep lands on the side the drag points to — the side the preview shows — which is the
+  // face's winding direction, not always the axis's positive side (decision 0025).
+  const winding = poly.normal(facePositions(doc, entity));
+  const sign = winding && winding[axis] >= 0 ? 1 : -1;
+  const end = start + sign * distance;
   const low: Record<Axis, number> = { x: 0, y: 0, z: 0 };
   const high: Record<Axis, number> = { x: 0, y: 0, z: 0 };
   low[axis] = Math.min(start, end);
@@ -364,25 +371,24 @@ export function planCut(doc: DocumentState, faceId: EntityId, distance: number):
   high[v] = pushed.vMax;
   const tool: Bounds = { min: vec3.of(low.x, low.y, low.z), max: vec3.of(high.x, high.y, high.z) };
 
-  // Nothing in the sweep: the drag adds material, which is the extrusion push/pull always did.
-  let mesh: SolidMesh | null;
+  // Material in the sweep decides cut against add; both replace the shell the walk found.
+  let swept: { verb: "cut" | "add"; mesh: SolidMesh };
   try {
-    mesh = subtractShell(shellLoops, tool);
+    swept = sweepShell(shellLoops, tool);
   } catch (error) {
     return { kind: "refuse", error: error instanceof Error ? error.message : "The cut failed" };
   }
-  if (!mesh) return { kind: "extrude" };
 
   let faces: FaceLoops[];
   try {
-    faces = meshToFaces(mesh);
+    faces = meshToFaces(swept.mesh);
   } catch (error) {
     return { kind: "refuse", error: error instanceof Error ? error.message : "The cut failed" };
   }
 
   if (faces.length === 0) return { kind: "refuse", error: "Nothing left after the cut" };
 
-  return { kind: "cut", remove: removalClosure(doc, shell), add: rebuild(doc, faces) };
+  return { kind: swept.verb, remove: removalClosure(doc, shell), add: rebuild(doc, faces) };
 }
 
 /**

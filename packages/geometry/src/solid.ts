@@ -80,15 +80,16 @@ export function subtractSolid(outer: Bounds, inner: Bounds): SolidMesh {
 }
 
 /**
- * The solid bounded by `shell` minus the box `tool`; nothing when the sweep misses the solid, which
- * is the measured answer to "cut or add material" (decision 0024).
+ * The solid bounded by `shell` swept against the box `tool`: material in the sweep → subtraction;
+ * the sweep empty → union, which is the pull that adds material — filling a cavity, trimming its
+ * walls, instead of stacking a prism (decision 0025). The verb says which.
  *
  * `shell` is the closed surface of a rectilinear solid: every loop an axis-aligned rectangle in its
  * face's plane. It is welded, triangulated — the kernel's own triangulator handles a face with
  * holes — oriented outward, and handed to `ofMesh`; a status other than `NoError` throws, so a
  * flawed solid is refused rather than cut wrongly.
  */
-export function subtractShell(shell: ShellFace[], tool: Bounds): SolidMesh | null {
+export function sweepShell(shell: ShellFace[], tool: Bounds): { verb: "cut" | "add"; mesh: SolidMesh } {
   if (!toplevel) throw new Error("The geometry engine is still loading");
   const { Manifold, Mesh, triangulate } = toplevel;
   if (shell.length === 0) throw new Error("The solid has no faces to cut");
@@ -157,11 +158,16 @@ export function subtractShell(shell: ShellFace[], tool: Bounds): SolidMesh | nul
   }
 
   const toolManifold = boxOf(tool);
-  // The sweep's overlap with the solid decides cut against extrude, immune to how the pushed face
-  // happens to be wound.
-  if (solid.intersect(toolManifold).volume() <= 1e-6) return null;
-
-  return meshOf(solid.subtract(toolManifold), "The cut kernel refused the subtraction");
+  // Material in the sweep decides cut against add, immune to how the pushed face happens to be wound.
+  const verb = solid.intersect(toolManifold).volume() > 1e-6 ? "cut" : "add";
+  const result = verb === "cut" ? solid.subtract(toolManifold) : solid.add(toolManifold);
+  return {
+    verb,
+    mesh: meshOf(
+      result,
+      verb === "cut" ? "The cut kernel refused the subtraction" : "The kernel refused the union",
+    ),
+  };
 }
 
 /** A kernel result as a validated `SolidMesh`, or the given refusal message. */

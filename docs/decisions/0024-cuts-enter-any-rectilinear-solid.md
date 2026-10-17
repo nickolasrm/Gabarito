@@ -1,15 +1,20 @@
 ---
 id: 0024
 title: A cut can enter any rectilinear closed solid
-status: accepted
+status: superseded
 date: 2026-10-17
 tags: [core, geometry, csg, scope]
 supersedes: []
-superseded_by: null
+superseded_by: 0025
 specs: [0018]
 ---
 
 # 0024 — A cut can enter any rectilinear closed solid
+
+> **Superseded by [0025](./0025-pull-is-a-union.md) on 2026-10-17.** The one-path rule and the
+> measured sweep stand; what 0025 changes is the sweep's side (it follows the drag rather than the
+> +axis) and the pull, which becomes a kernel union instead of a prism in face soup — ending the
+> "pulling a cavity's floor up still extrudes" ceiling this record accepted.
 
 ## Context
 

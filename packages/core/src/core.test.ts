@@ -139,6 +139,29 @@ describe("commands", () => {
 });
 
 describe("faces and solids", () => {
+  it("an extrusion reuses an existing point at the offset plane instead of doing nothing", () => {
+    const store = createStore();
+    store.dispatch({
+      type: "addEntities",
+      entities: buildRectangle(store.getState(), ORIGIN, U, V).entities,
+    });
+    const face = facesOf(store.getState())[0];
+    // A point already exists where the cap's first corner will land.
+    const existing = buildEdge(store.getState(), ORIGIN, { x: 0, y: 0, z: 500 });
+    store.dispatch({ type: "addEntities", entities: existing.entities });
+
+    const built = buildExtrusion(store.getState(), face.id, 500);
+    expect(built.entities.length).toBeGreaterThan(0);
+    // Three new points at the offset plane; the fourth was already there and is re-pushed harmlessly.
+    const created = built.entities.filter(
+      (entity) => entity.kind === "point" && store.getState().entities[entity.id] === undefined,
+    );
+    expect(created).toHaveLength(3);
+    // The cap welds to the pre-existing point.
+    const cap = built.entities.find((entity) => entity.kind === "face");
+    expect(cap && "points" in cap && cap.points.includes(existing.entities[0].id)).toBe(true);
+  });
+
   it("closes a face when the fourth line completes the loop", () => {
     const store = createStore();
     const corners: Vec3[] = [ORIGIN, U, vec3.add(U, V), V];

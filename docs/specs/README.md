@@ -36,6 +36,7 @@ and by decision records, so a rejected spec keeps its number forever.
 | [0016](./0016-cut-holes-with-push-pull.md) | Cut holes with push/pull | **implemented** | core, geometry, tools | 0022 |
 | [0017](./0017-faces-hold-holes.md) | Faces hold holes | **implemented** | core, geometry, scene, tools | 0023 |
 | [0018](./0018-second-cut.md) | A second cut can enter a cut solid | **implemented** | core, geometry, tools | 0024 |
+| [0019](./0019-pull-is-a-union.md) | Pull is a union, and the sweep follows the drag | **implemented** | core, geometry, tools | 0025 |
 
 Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 

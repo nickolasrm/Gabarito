@@ -142,8 +142,9 @@ export function buildExtrusion(
   if (vec3.isZero(normal)) return EMPTY;
 
   const delta = vec3.scale(normal, distance);
+  // An offset point that already exists is reused, not refused: the cap welds onto whatever shares
+  // that corner, and a silent no-op was the behaviour that read as push/pull being dead.
   const offset = bottom.map((position) => buildPoint(doc, vec3.add(position, delta)));
-  if (offset.some((entry) => !entry.created)) return EMPTY;
 
   const entities: Entity[] = offset.map((entry) => entry.point);
   const sourceIds = face.points;

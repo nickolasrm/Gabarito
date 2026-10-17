@@ -40,12 +40,13 @@ derived data (`edgesOf`, `facesOf`, `facePoints`, `pointIdsForEntities`, `docume
 
 Solid operations live in `src/cut.ts`: `shellFaces` computes the closed set of faces bounding a solid
 (shared-edge **or** coplanar-overlap adjacency — a face drawn inside a face still finds its solid), and
-`planCut` returns one of three outcomes: `cut` (remove and add entity lists, one transaction),
-`extrude` (the sweep misses the solid), or `refuse` with a message. The cut feeds the shell to the
-kernel as a mesh — drawn-on markings dropped, loops triangulated, the sweep's overlap measured — so a
-cut lands on any rectilinear closed solid, including one an earlier cut left
-([decision 0024](../../docs/decisions/0024-cuts-enter-any-rectilinear-solid.md)); the ring an opening
-leaves is stored as one face with a hole
+`planCut` returns one of three outcomes: `cut` or `add` (remove and add entity lists, one transaction
+— the sweep hit the solid, or missed and the prism merged with it
+([decision 0025](../../docs/decisions/0025-pull-is-a-union.md))), `extrude` (no solid at all), or
+`refuse` with a message. The kernel feeds on the shell as a mesh — drawn-on markings dropped, loops
+triangulated, the sweep's overlap measured — so it lands on any rectilinear closed solid, including
+one an earlier cut left ([decision 0024](../../docs/decisions/0024-cuts-enter-any-rectilinear-solid.md));
+the ring an opening leaves is stored as one face with a hole
 ([decision 0023](../../docs/decisions/0023-faces-hold-holes.md)), and a face that itself has holes is
 refused rather than pushed. A cut before the kernel has loaded is refused with a "still loading"
 message.

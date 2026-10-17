@@ -25,4 +25,4 @@ export { extrude } from "./extrude";
 export { transform } from "./transform";
 export * from "./rect";
 export type { ShellFace, SolidMesh } from "./solid";
-export { ensureSolid, solidReady, subtractShell, subtractSolid } from "./solid";
+export { ensureSolid, solidReady, subtractSolid, sweepShell } from "./solid";
