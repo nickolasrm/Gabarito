@@ -1,4 +1,4 @@
-import { EPS, conformRects, rect, solidReady, subtractSolid, vec3 } from "@gabarito/geometry";
+import { EPS, rect, solidReady, subtractSolid, vec3 } from "@gabarito/geometry";
 import type { Axis, Bounds, PlaneRect, SolidMesh, Vec3 } from "@gabarito/geometry";
 import { allocId, edgesOf, facePositions, facesOf, pointsOf } from "./document";
 import type { DocumentState, Entity, EntityId, FaceEntity } from "./types";
@@ -13,10 +13,12 @@ export type CutPlan =
 
 function loopPairKeys(face: FaceEntity): string[] {
   const keys: string[] = [];
-  for (let index = 0; index < face.points.length; index += 1) {
-    const a = face.points[index];
-    const b = face.points[(index + 1) % face.points.length];
-    keys.push(a < b ? `${a}|${b}` : `${b}|${a}`);
+  for (const loop of [face.points, ...(face.holes ?? [])]) {
+    for (let index = 0; index < loop.length; index += 1) {
+      const a = loop[index];
+      const b = loop[(index + 1) % loop.length];
+      keys.push(a < b ? `${a}|${b}` : `${b}|${a}`);
+    }
   }
   return keys;
 }
@@ -123,29 +125,36 @@ function weld(mesh: SolidMesh): { verts: Vec3[]; ids: Map<number, number> } {
   return { verts, ids };
 }
 
-/** The axis-aligned rectangle a boundary loop bounds: every point of it lies on the rectangle. */
-function asRect(loop: Vec3[], axis: Axis): PlaneRect | null {
+/** Whether every point of the loop lies on its bounding rectangle: the loop bounds an axis-aligned rectangle. */
+function isRectangular(loop: Vec3[], axis: Axis): boolean {
   const [u, v] = rect.inPlaneAxes(axis);
   const uMin = Math.min(...loop.map((p) => p[u]));
   const uMax = Math.max(...loop.map((p) => p[u]));
   const vMin = Math.min(...loop.map((p) => p[v]));
   const vMax = Math.max(...loop.map((p) => p[v]));
   for (const point of loop) {
-    if (Math.abs(point[u] - uMin) > EPS.MERGE && Math.abs(point[u] - uMax) > EPS.MERGE) return null;
-    if (Math.abs(point[v] - vMin) > EPS.MERGE && Math.abs(point[v] - vMax) > EPS.MERGE) return null;
+    if (Math.abs(point[u] - uMin) > EPS.MERGE && Math.abs(point[u] - uMax) > EPS.MERGE) return false;
+    if (Math.abs(point[v] - vMin) > EPS.MERGE && Math.abs(point[v] - vMax) > EPS.MERGE) return false;
   }
-  return { axis, value: loop[0][axis], uMin, uMax, vMin, vMax };
+  return true;
+}
+
+/** A face loop as the document holds it: the kernel's outer loop, plus one loop per hole. */
+interface FaceLoops {
+  outer: Vec3[];
+  holes: Vec3[][];
 }
 
 /**
- * The kernel mesh as rectangle pieces the document can hold, each with the way it must face.
+ * The kernel mesh as faces the document can hold.
  *
  * Coplanar triangles group into a face; each group's once-used edges form its boundary loops, in the
- * kernel's own winding. One loop is a rectangle face; two are a ring, which a single-loop document
- * face cannot hold, so it is split back into rectangles (at most four, `rect.subtract`). Anything
- * else is refused — the input is two boxes, so anything else means the conversion is wrong.
+ * kernel's own winding. One loop is a face; two are a face with a hole
+ * ([decision 0023](../../docs/decisions/0023-faces-hold-holes.md)) — the ring an opening leaves in
+ * the face it was cut from. Anything else is refused — the input is two boxes, so anything else
+ * means the conversion is wrong.
  */
-function meshToPieces(mesh: SolidMesh): Array<{ piece: PlaneRect; meta: boolean }> {
+function meshToFaces(mesh: SolidMesh): FaceLoops[] {
   const { verts, ids } = weld(mesh);
   const tris: Array<[number, number, number]> = [];
   for (let index = 0; index + 2 < mesh.triangles.length; index += 3) {
@@ -170,7 +179,7 @@ function meshToPieces(mesh: SolidMesh): Array<{ piece: PlaneRect; meta: boolean 
     groups.set(key, group);
   }
 
-  const pieces: Array<{ piece: PlaneRect; meta: boolean }> = [];
+  const faces: FaceLoops[] = [];
   for (const [key, group] of groups) {
     const axis = key.split(":")[0] as Axis;
     // Directed edge uses within the group: an interior edge runs once each way, a boundary edge
@@ -213,34 +222,46 @@ function meshToPieces(mesh: SolidMesh): Array<{ piece: PlaneRect; meta: boolean 
       raw.push(loop.map((id) => verts[id]));
     }
 
-    // The group's outward normal direction, from any triangle of the kernel mesh.
-    const [ta, tb, tc] = group[0];
-    const n = vec3.cross(vec3.sub(verts[tb], verts[ta]), vec3.sub(verts[tc], verts[ta]));
-    const outward = n[axis] >= 0;
+    const loops = raw.map((loop) => {
+      if (!isRectangular(loop, axis)) {
+        throw new Error("The cut kernel produced a face the document cannot hold");
+      }
+      return loop;
+    });
 
-    if (raw.length === 1) {
-      const face = asRect(raw[0], axis);
-      if (!face) throw new Error("The cut kernel produced a face the document cannot hold");
-      pieces.push({ piece: face, meta: outward });
+    if (loops.length === 1) {
+      faces.push({ outer: loops[0], holes: [] });
       continue;
     }
-    if (raw.length === 2) {
-      const rects = raw.map((loop) => asRect(loop, axis));
-      if (rects.some((r) => !r)) throw new Error("The cut kernel produced a hole the document cannot hold");
-      const [a, b] = rects as PlaneRect[];
-      const [outer, hole] = rect.area(a) >= rect.area(b) ? [a, b] : [b, a];
-      for (const piece of rect.subtract(outer, hole)) {
-        pieces.push({ piece, meta: outward });
-      }
+    if (loops.length === 2) {
+      // The ring around the opening. The larger loop bounds the other, which the kernel guarantees
+      // for a planar region with one hole.
+      const [a, b] = loops;
+      const areaOf = (loop: Vec3[]): number => {
+        const [u, v] = rect.inPlaneAxes(axis);
+        const pts = loop.map((p) => ({ x: p[u], y: p[v] }));
+        let sum = 0;
+        for (let index = 0; index < pts.length; index += 1) {
+          sum += pts[index].x * pts[(index + 1) % pts.length].y - pts[(index + 1) % pts.length].x * pts[index].y;
+        }
+        return Math.abs(sum / 2);
+      };
+      faces.push(areaOf(a) >= areaOf(b) ? { outer: a, holes: [b] } : { outer: b, holes: [a] });
       continue;
     }
     throw new Error("The cut kernel produced a face the document cannot hold");
   }
-  return pieces;
+  return faces;
 }
 
-/** Build fresh entities from rectangle pieces, welding corners between them so the shell stays closed. */
-function rebuild(doc: DocumentState, pieces: Array<{ piece: PlaneRect; meta: boolean }>): Entity[] {
+/**
+ * Build fresh entities from face loops, welding corners between them so the shell stays closed.
+ *
+ * Winding comes straight from the kernel mesh, which is consistently outward
+ * ([decision 0022](../../docs/decisions/0022-cuts-run-on-manifold.md)); a hole loop is stored the way
+ * the kernel wound it.
+ */
+function rebuild(doc: DocumentState, faces: FaceLoops[]): Entity[] {
   const entities: Entity[] = [];
   const pointIds = new Map<string, EntityId>();
   const edgeKeys = new Set<string>();
@@ -255,19 +276,26 @@ function rebuild(doc: DocumentState, pieces: Array<{ piece: PlaneRect; meta: boo
     return id;
   };
 
-  for (const { piece, meta } of pieces) {
-    const ccw = rect.corners(piece);
-    const corners = meta ? ccw : [...ccw].reverse();
-    const ids = corners.map(pointAt);
-    for (let index = 0; index < ids.length; index += 1) {
-      const a = ids[index];
-      const b = ids[(index + 1) % ids.length];
-      const key = a < b ? `${a}|${b}` : `${b}|${a}`;
-      if (edgeKeys.has(key)) continue;
-      edgeKeys.add(key);
-      entities.push({ id: allocId(doc, "e"), kind: "edge", points: [a, b] });
+  for (const { outer, holes } of faces) {
+    const loops = [outer, ...holes];
+    for (const loop of loops) {
+      const ids = loop.map(pointAt);
+      for (let index = 0; index < ids.length; index += 1) {
+        const a = ids[index];
+        const b = ids[(index + 1) % ids.length];
+        const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+        if (edgeKeys.has(key)) continue;
+        edgeKeys.add(key);
+        entities.push({ id: allocId(doc, "e"), kind: "edge", points: [a, b] });
+      }
     }
-    entities.push({ id: allocId(doc, "f"), kind: "face", points: ids });
+    const [outerIds, ...holeIds] = loops.map((loop) => loop.map(pointAt));
+    entities.push({
+      id: allocId(doc, "f"),
+      kind: "face",
+      points: outerIds,
+      ...(holeIds.length > 0 ? { holes: holeIds } : {}),
+    });
   }
   return entities;
 }
@@ -284,6 +312,9 @@ function rebuild(doc: DocumentState, pieces: Array<{ piece: PlaneRect; meta: boo
 export function planCut(doc: DocumentState, faceId: EntityId, distance: number): CutPlan {
   const entity = doc.entities[faceId];
   if (!entity || entity.kind !== "face") return { kind: "refuse", error: "Pick a face to push or pull" };
+  // A face with a hole pushed along its normal is a prism with a hole — not a straight cut. The
+  // opening's floor and walls are the faces to push (decision 0023).
+  if (entity.holes?.length) return { kind: "refuse", error: "Push the opening's floor or walls instead" };
 
   const pushed = rect.fromPolygon(facePositions(doc, entity));
   if (!pushed) return { kind: "refuse", error: "Straight cuts need a rectangular face" };
@@ -326,20 +357,16 @@ export function planCut(doc: DocumentState, faceId: EntityId, distance: number):
     return { kind: "refuse", error: error instanceof Error ? error.message : "The cut failed" };
   }
 
-  let pieces: Array<{ piece: PlaneRect; meta: boolean }>;
+  let faces: FaceLoops[];
   try {
-    pieces = meshToPieces(mesh);
+    faces = meshToFaces(mesh);
   } catch (error) {
     return { kind: "refuse", error: error instanceof Error ? error.message : "The cut failed" };
   }
 
-  // Splitting a face splits the edges it shares with its neighbours; the neighbours must carry the
-  // same subdivision or the shell has T-junctions and no longer closes.
-  const conformed = conformRects(pieces);
+  if (faces.length === 0) return { kind: "refuse", error: "Nothing left after the cut" };
 
-  if (conformed.length === 0) return { kind: "refuse", error: "Nothing left after the cut" };
-
-  return { kind: "cut", remove: removalClosure(doc, shell), add: rebuild(doc, conformed) };
+  return { kind: "cut", remove: removalClosure(doc, shell), add: rebuild(doc, faces) };
 }
 
 /**
@@ -354,20 +381,25 @@ function removalClosure(doc: DocumentState, shell: FaceEntity[]): EntityId[] {
   const goingFaces = new Set(shell.map((face) => face.id));
   const remove: EntityId[] = [...goingFaces];
 
+  /** Every loop of the face, outer first — edges and points are used by any of them (decision 0023). */
+  const loopsOf = (face: FaceEntity): EntityId[][] => [face.points, ...(face.holes ?? [])];
+
   for (const edge of edgesOf(doc)) {
-    const owners = facesOf(doc).filter((face) => {
-      for (let index = 0; index < face.points.length; index += 1) {
-        const a = face.points[index];
-        const b = face.points[(index + 1) % face.points.length];
-        if (
-          (a === edge.points[0] && b === edge.points[1]) ||
-          (a === edge.points[1] && b === edge.points[0])
-        ) {
-          return true;
+    const owners = facesOf(doc).filter((face) =>
+      loopsOf(face).some((loop) => {
+        for (let index = 0; index < loop.length; index += 1) {
+          const a = loop[index];
+          const b = loop[(index + 1) % loop.length];
+          if (
+            (a === edge.points[0] && b === edge.points[1]) ||
+            (a === edge.points[1] && b === edge.points[0])
+          ) {
+            return true;
+          }
         }
-      }
-      return false;
-    });
+        return false;
+      }),
+    );
     if (owners.length > 0 && owners.every((face) => goingFaces.has(face.id))) remove.push(edge.id);
   }
 
@@ -375,7 +407,7 @@ function removalClosure(doc: DocumentState, shell: FaceEntity[]): EntityId[] {
   for (const point of pointsOf(doc)) {
     const users = [
       ...edgesOf(doc).filter((edge) => edge.points.includes(point.id)),
-      ...facesOf(doc).filter((face) => face.points.includes(point.id)),
+      ...facesOf(doc).filter((face) => loopsOf(face).some((loop) => loop.includes(point.id))),
     ];
     if (users.length > 0 && users.every((entity) => going.has(entity.id))) remove.push(point.id);
   }

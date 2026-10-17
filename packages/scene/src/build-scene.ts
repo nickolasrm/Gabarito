@@ -1,14 +1,15 @@
 import * as THREE from "three";
-import { triangulate, vec3 } from "@gabarito/geometry";
+import { poly as polyOps, triangulate, vec3 } from "@gabarito/geometry";
 import {
   dimensionsOf,
   edgesOf,
+  faceHoles,
   facePositions,
   facesOf,
   getPoint,
   guidesOf,
 } from "@gabarito/core";
-import type { DocumentState, EntityId } from "@gabarito/core";
+import type { DocumentState, EntityId, Vec3 } from "@gabarito/core";
 
 export const COLORS = {
   face: 0xf2f2ef,
@@ -65,11 +66,45 @@ function faceGeometry(doc: DocumentState, ids: Set<EntityId> | null): THREE.Buff
     if (ids && !ids.has(face.id)) continue;
     const points = facePositions(doc, face);
     if (points.length < 3) continue;
+    const holes = faceHoles(doc, face).filter((loop) => loop.length >= 3);
     const base = positions.length / 3;
-    for (const point of points) positions.push(point.x, point.y, point.z);
-    const triangles = triangulate.polygon(points);
-    for (let index = 0; index < triangles.length; index += 3) {
-      indices.push(base + triangles[index], base + triangles[index + 1], base + triangles[index + 2]);
+
+    if (holes.length === 0) {
+      for (const point of points) positions.push(point.x, point.y, point.z);
+      const triangles = triangulate.polygon(points);
+      for (let index = 0; index < triangles.length; index += 3) {
+        indices.push(base + triangles[index], base + triangles[index + 1], base + triangles[index + 2]);
+      }
+      continue;
+    }
+
+    // One region with holes (decision 0023): triangulated together, so the border renders seamless.
+    const normal = polyOps.normal(points);
+    if (!normal) continue;
+    // Flatten to the plane by dropping the dominant axis of the face's own normal.
+    const axis =
+      Math.abs(normal.x) >= Math.abs(normal.y) && Math.abs(normal.x) >= Math.abs(normal.z)
+        ? "x"
+        : Math.abs(normal.y) >= Math.abs(normal.z)
+          ? "y"
+          : "z";
+    const others = axis === "x" ? (["y", "z"] as const) : axis === "y" ? (["x", "z"] as const) : (["x", "y"] as const);
+    const flat = (loop: Vec3[]): THREE.Vector2[] =>
+      loop.map((p) => new THREE.Vector2(p[others[0]], p[others[1]]));
+    let triangles: number[][];
+    try {
+      triangles = THREE.ShapeUtils.triangulateShape(flat(points), holes.map(flat));
+    } catch {
+      continue; // A face the renderer cannot triangulate is skipped rather than taken down.
+    }
+    const combined = [points, ...holes].flat();
+    // Match the document's winding: the 2D triangulation may come out against the face normal.
+    const [i0, i1, i2] = triangles[0];
+    const abc = [combined[i0], combined[i1], combined[i2]];
+    const triNormal = vec3.cross(vec3.sub(abc[1], abc[0]), vec3.sub(abc[2], abc[0]));
+    const flip = vec3.dot(triNormal, normal) < 0;
+    for (const [a, b, c] of triangles) {
+      indices.push(base + a, base + (flip ? c : b), base + (flip ? b : c));
     }
   }
 

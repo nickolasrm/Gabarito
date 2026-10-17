@@ -19,8 +19,7 @@ Every numerical guarantee in the product. Testable in plain Node, with no browse
 
 ```ts
 vec3          of, add, sub, scale, mul, dot, cross, len, normalize, lerp, dist, equals, isZero …
-rect          fromPolygon, intersect, subtract (a ring becomes at most four rectangles),
-              corners, cornersOutward, conformRects (no T-junctions across shared edges)
+rect          fromPolygon, intersect, corners, cornersOutward
 solid         ensureSolid (await the kernel), solidReady, subtractSolid (outer, inner) →
               { positions, triangles } — throws on an open or inside-out result
 plane         fromPoints, fromPointNormal, fromAxis, distanceToPoint, projectPoint, contains, flip

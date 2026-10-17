@@ -43,9 +43,11 @@ Solid operations live in `src/cut.ts`: `shellFaces` computes the closed set of f
 `planCut` returns one of three outcomes: `cut` (remove and add entity lists, one transaction),
 `extrude` (the drag points away from any solid), or `refuse` with a message. The cut itself is a
 kernel subtraction of two axis-aligned boxes, converted back to entities by grouping coplanar
-triangles and reading boundary loops ([decision 0022](../../docs/decisions/0022-cuts-run-on-manifold.md)).
-Anything not an axis-aligned box of rectangles is refused, and a cut before the kernel has loaded is
-refused with a "still loading" message.
+triangles and reading boundary loops ([decision 0022](../../docs/decisions/0022-cuts-run-on-manifold.md));
+the ring an opening leaves is stored as one face with a hole
+([decision 0023](../../docs/decisions/0023-faces-hold-holes.md)), and a face that itself has holes is
+refused rather than pushed. Anything not an axis-aligned box of rectangles is refused, and a cut
+before the kernel has loaded is refused with a "still loading" message.
 
 **Note on the dependency rule.** `core` imports `@gabarito/geometry` and nothing else
 ([decision 0015](../../docs/decisions/0015-core-depends-on-geometry.md)). It re-exports the geometry

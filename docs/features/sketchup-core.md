@@ -15,7 +15,7 @@ The core is done when a user can build a small building without fighting the too
 | Capability | Status | Notes |
 |---|---|---|
 | Draw on faces and planes | ✅ | Line, rectangle and circle. Faces are created implicitly from closed loops. |
-| Push/pull | ✅ | Extrudes outward and **cuts** inward on axis-aligned boxes; straight cuts only, refused otherwise ([decision 0022](../decisions/0022-cuts-run-on-manifold.md)). |
+| Push/pull | ✅ | Extrudes outward and **cuts** inward on axis-aligned boxes; straight cuts only, refused otherwise ([decision 0022](../decisions/0022-cuts-run-on-manifold.md)). An opening's border stays one face with a hole ([decision 0023](../decisions/0023-faces-hold-holes.md)). |
 | Move / rotate | ✅ | Axis-lockable, with typed distances and angles. |
 | Inference and snapping | ✅ | Endpoints, midpoints, edges, guides, virtual intersections, extensions, axes, plus measurement entry while dragging. |
 | Guides and measurement | ✅ | The ruler creates construction lines; measure leaves dimensions. |

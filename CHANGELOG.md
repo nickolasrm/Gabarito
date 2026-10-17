@@ -57,11 +57,17 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Push/pull now **cuts**: pushing a face into a solid removes the material, and pulling out adds it.
   Shells are computed from face connectivity rather than stored; the cut is a `manifold-3d`
   subtraction of two axis-aligned boxes, converted back to entities with topology and winding taken
-  from the kernel mesh, and a ring face is split back into rectangles because a document face is a
-  single loop. The cut is refused with a message when the solid is not an axis-aligned box of
+  from the kernel mesh. The cut is refused with a message when the solid is not an axis-aligned box of
   rectangles, or before the WASM kernel has loaded. Extrusion still works everywhere it did.
   — [spec 0016](./docs/specs/0016-cut-holes-with-push-pull.md),
   [decision 0022](./docs/decisions/0022-cuts-run-on-manifold.md)
+- An opening's border is **one face with a hole**, the way this product's inspiration keeps it, not
+  four rectangle strips with seams: `FaceEntity` gained an optional `holes` (loops of point ids),
+  rendering triangulates the contour with its holes, picking misses a hit inside a hole, and the
+  strip arithmetic the old model forced (`conformRects`, `rect.subtract`) is gone. Pushing a face
+  that has holes is refused with a message.
+  — [spec 0017](./docs/specs/0017-faces-hold-holes.md),
+  [decision 0023](./docs/decisions/0023-faces-hold-holes.md)
 
 ### Fixed
 

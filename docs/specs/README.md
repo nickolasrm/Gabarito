@@ -34,6 +34,7 @@ and by decision records, so a rejected spec keeps its number forever.
 | [0014](./0014-stronger-agent-modes.md) | Raise the agent modes to ultracave and ponytail ultra | implemented | docs | — |
 | [0015](./0015-tool-bug-round-two.md) | Fix the tool bugs reported from real use, second round | implemented | core, scene, tools | — |
 | [0016](./0016-cut-holes-with-push-pull.md) | Cut holes with push/pull | **implemented** | core, geometry, tools | 0022 |
+| [0017](./0017-faces-hold-holes.md) | Faces hold holes | **implemented** | core, geometry, scene, tools | 0023 |
 
 Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 

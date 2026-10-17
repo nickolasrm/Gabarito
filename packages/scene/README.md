@@ -8,8 +8,10 @@ Everything between the document and the GPU.
 
 - The renderer, render loop, lights, and grid.
 - The spherical orbit camera and all navigation input.
-- Document → scene rebuilding, on every change of `revision`.
-- Analytic picking against document entities.
+- Document → scene rebuilding, on every change of `revision`. A face with holes triangulates as one
+  region, contour plus holes, so an opening's border renders seamless
+  ([decision 0023](../../docs/decisions/0023-faces-hold-holes.md)).
+- Analytic picking against document entities. A plane hit that lands inside a hole is a miss.
 - Projection helpers used by the tools for snap tolerance and screen-space overlays.
 
 ## Public interface

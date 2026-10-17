@@ -40,6 +40,7 @@ stays searchable forever.
 | [0020](./0020-drawing-plane-inference.md) | The drawing plane is chosen by what the pointer aims at | accepted | tools, geometry, ux | — |
 | [0021](./0021-straight-cuts-by-face-surgery.md) | Straight cuts are face surgery, not a CSG kernel | **superseded** by 0022 | geometry, csg, scope | 0019 |
 | [0022](./0022-cuts-run-on-manifold.md) | Cuts run on manifold-3d | accepted | geometry, csg, kernel | 0021 |
+| [0023](./0023-faces-hold-holes.md) | A document face can hold holes | accepted | core, geometry, scene, document-model | — |
 
 Statuses: `proposed` → `accepted` → (`superseded` | `deprecated` | `rejected`).
 

@@ -108,25 +108,6 @@ export const rect = {
     return isEmpty(overlap) ? null : overlap;
   },
 
-  /**
-   * `outer` minus `inner`, in the same plane.
-   *
-   * At most four rectangles, and never a hole: a document face is a single loop, so a hole cannot be
-   * represented, and this is why the straight case is expressible at all (decision 0022).
-   */
-  subtract(outer: PlaneRect, inner: PlaneRect): PlaneRect[] {
-    const overlap = this.intersect(outer, inner);
-    if (!overlap) return [outer];
-
-    const pieces: PlaneRect[] = [
-      { ...outer, vMin: outer.vMin, vMax: outer.vMax, uMin: outer.uMin, uMax: overlap.uMin },
-      { ...outer, uMin: overlap.uMax, uMax: outer.uMax },
-      { ...outer, uMin: overlap.uMin, uMax: overlap.uMax, vMin: outer.vMin, vMax: overlap.vMin },
-      { ...outer, uMin: overlap.uMin, uMax: overlap.uMax, vMin: overlap.vMax, vMax: outer.vMax },
-    ];
-    return pieces.filter((piece) => !isEmpty(piece));
-  },
-
   /** Four corners, wound counter-clockwise about the positive `axis`. */
   corners(value: PlaneRect): Vec3[] {
     const [u, v] = inPlaneAxes(value.axis);
@@ -159,81 +140,3 @@ export const rect = {
   },
 
 };
-
-/** Rounded key for merging coincident vertices. Matches the weld the document applies. */
-const VERTEX_KEY = 1e-3;
-
-/**
- * Split rectangles until no vertex of one lies strictly inside the edge of another.
- *
- * Subdividing a face subdivides the edges it shares with its neighbours, and the neighbours must
- * carry the same subdivision or the surface has T-junctions: geometrically closed, but the edges no
- * longer match by their endpoints, which breaks the every-edge-is-shared-by-two-faces rule the shell
- * invariant relies on. Each split is along an existing vertex, so the pass terminates.
- *
- * Carries arbitrary metadata through the splits, because callers attach orientation to each piece.
- */
-export function conformRects<T>(
-  items: ReadonlyArray<{ piece: PlaneRect; meta: T }>,
-): Array<{ piece: PlaneRect; meta: T }> {
-  let current = [...items];
-
-  const component = (point: Vec3, axis: Axis): number =>
-    axis === "x" ? point.x : axis === "y" ? point.y : point.z;
-
-  for (let guard = 0; guard < 200; guard += 1) {
-    const vertices: Vec3[] = [];
-    const seen = new Set<string>();
-    for (const { piece } of current) {
-      for (const corner of rect.corners(piece)) {
-        const key = `${Math.round(corner.x / VERTEX_KEY)},${Math.round(corner.y / VERTEX_KEY)},${Math.round(
-          corner.z / VERTEX_KEY,
-        )}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          vertices.push(corner);
-        }
-      }
-    }
-
-    let split: { index: number; along: "u" | "v"; at: number } | null = null;
-    for (let index = 0; index < current.length && !split; index += 1) {
-      const { piece } = current[index];
-      const [u, v] = inPlaneAxes(piece.axis);
-      for (const vertex of vertices) {
-        if (Math.abs(component(vertex, piece.axis) - piece.value) > VERTEX_KEY) continue;
-        const vu = component(vertex, u);
-        const vv = component(vertex, v);
-        const onURange =
-          Math.abs(vv - piece.vMin) <= VERTEX_KEY || Math.abs(vv - piece.vMax) <= VERTEX_KEY;
-        const onVRange =
-          Math.abs(vu - piece.uMin) <= VERTEX_KEY || Math.abs(vu - piece.uMax) <= VERTEX_KEY;
-        // Strictly inside, and far enough from the ends that the halves stay real rectangles.
-        if (onURange && vu > piece.uMin + VERTEX_KEY && vu < piece.uMax - VERTEX_KEY) {
-          split = { index, along: "u", at: vu };
-          break;
-        }
-        if (onVRange && vv > piece.vMin + VERTEX_KEY && vv < piece.vMax - VERTEX_KEY) {
-          split = { index, along: "v", at: vv };
-          break;
-        }
-      }
-    }
-
-    if (!split) return current;
-    const { piece, meta } = current[split.index];
-    const halves =
-      split.along === "u"
-        ? [
-            { piece: { ...piece, uMax: split.at }, meta },
-            { piece: { ...piece, uMin: split.at }, meta },
-          ]
-        : [
-            { piece: { ...piece, vMax: split.at }, meta },
-            { piece: { ...piece, vMin: split.at }, meta },
-          ];
-    current = [...current.slice(0, split.index), ...halves, ...current.slice(split.index + 1)];
-  }
-
-  return current;
-}

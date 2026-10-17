@@ -7,6 +7,7 @@ import {
   buildRectangle,
   createStore,
   edgesOf,
+  faceHoles,
   facePositions,
   facesOf,
 } from "./index";
@@ -30,12 +31,14 @@ const V: Vec3 = { x: 0, y: SIDE, z: 0 };
 function documentVolume(doc: DocumentState): number {
   let total = 0;
   for (const face of facesOf(doc)) {
-    const points = facePositions(doc, face);
-    for (let index = 1; index < points.length - 1; index += 1) {
-      const a = points[0];
-      const b = points[index];
-      const c = points[index + 1];
-      total += vec3.dot(a, vec3.cross(b, c)) / 6;
+    // A face with holes contributes its outer fan minus each hole's fan (decision 0023).
+    for (const loop of [facePositions(doc, face), ...faceHoles(doc, face)]) {
+      for (let index = 1; index < loop.length - 1; index += 1) {
+        const a = loop[0];
+        const b = loop[index];
+        const c = loop[index + 1];
+        total += vec3.dot(a, vec3.cross(b, c)) / 6;
+      }
     }
   }
   return Math.abs(total);
@@ -45,14 +48,16 @@ function documentVolume(doc: DocumentState): number {
 function everyEdgeSharedTwice(doc: DocumentState): boolean {
   return edgesOf(doc).every((edge) => {
     const owners = facesOf(doc).filter((face) => {
-      for (let index = 0; index < face.points.length; index += 1) {
-        const a = face.points[index];
-        const b = face.points[(index + 1) % face.points.length];
-        if (
-          (a === edge.points[0] && b === edge.points[1]) ||
-          (a === edge.points[1] && b === edge.points[0])
-        ) {
-          return true;
+      for (const loop of [face.points, ...(face.holes ?? [])]) {
+        for (let index = 0; index < loop.length; index += 1) {
+          const a = loop[index];
+          const b = loop[(index + 1) % loop.length];
+          if (
+            (a === edge.points[0] && b === edge.points[1]) ||
+            (a === edge.points[1] && b === edge.points[0])
+          ) {
+            return true;
+          }
         }
       }
       return false;
@@ -100,17 +105,23 @@ function apply(store: ReturnType<typeof createStore>, plan: ReturnType<typeof pl
 function areaInPlane(doc: DocumentState, axis: "x" | "y" | "z", value: number): number {
   let total = 0;
   for (const face of facesOf(doc)) {
-    const points = facePositions(doc, face);
-    const along = points.map((point) => point[axis]);
+    // A face with holes contributes its outline minus each hole (decision 0023).
+    const loops = [facePositions(doc, face), ...faceHoles(doc, face)];
+    const along = loops[0].map((point) => point[axis]);
     if (Math.max(...along) - Math.min(...along) > 1e-6) continue;
     if (Math.abs(along[0] - value) > 1e-6) continue;
     let sum = 0;
-    for (let index = 0; index < points.length; index += 1) {
-      const a = points[index];
-      const b = points[(index + 1) % points.length];
-      sum += (a.x * b.y - b.x * a.y) * (axis === "z" ? 1 : 0);
+    for (const [loopIndex, loop] of loops.entries()) {
+      let area = 0;
+      for (let index = 0; index < loop.length; index += 1) {
+        const a = loop[index];
+        const b = loop[(index + 1) % loop.length];
+        area += (a.x * b.y - b.x * a.y) * (axis === "z" ? 1 : 0);
+      }
+      // The hole's winding may agree or disagree with the outer loop; only its size matters.
+      sum += Math.abs(area / 2) * (loopIndex === 0 ? 1 : -1);
     }
-    total += Math.abs(sum / 2);
+    total += sum;
   }
   return total;
 }
@@ -138,6 +149,14 @@ describe("planCut", () => {
     expect(areaInPlane(doc(), "z", SIDE)).toBeCloseTo(SIDE * SIDE - INNER * INNER, 0);
     // The opening has a floor at the drag depth.
     expect(areaInPlane(doc(), "z", SIDE - DEPTH)).toBeCloseTo(INNER * INNER, 0);
+    // The border of the opening is one face with one hole, the way the kernel returned it.
+    const rings = facesOf(doc()).filter((face) => (face.holes?.length ?? 0) > 0);
+    expect(rings).toHaveLength(1);
+    expect(rings[0].holes).toHaveLength(1);
+    expect(rings[0].holes?.[0]).toHaveLength(4);
+    // Pushing the ring itself is refused; the opening's floor is the face to push.
+    const pushed = planCut(doc(), rings[0].id, -DEPTH);
+    expect(pushed.kind).toBe("refuse");
   });
 
   it("cuts right through when the drag exceeds the solid", () => {
