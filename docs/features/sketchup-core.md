@@ -15,7 +15,7 @@ The core is done when a user can build a small building without fighting the too
 | Capability | Status | Notes |
 |---|---|---|
 | Draw on faces and planes | ✅ | Line, rectangle and circle. Faces are created implicitly from closed loops. |
-| Push/pull | ✅ | Extrusion only, no booleans yet ([decision 0011](../decisions/0011-geometry-kernel-strategy.md)). |
+| Push/pull | ✅ | Cuts where pushed and adds where pulled, on any rectilinear closed solid — deepen a recess, window a wall, pull a cavity's floor to the rim and it fills ([decision 0025](../decisions/0025-pull-is-a-union.md)). An opening's border stays one face with a hole ([decision 0023](../decisions/0023-faces-hold-holes.md)). |
 | Move / rotate | ✅ | Axis-lockable, with typed distances and angles. |
 | Inference and snapping | ✅ | Endpoints, midpoints, edges, guides, virtual intersections, extensions, axes, plus measurement entry while dragging. |
 | Guides and measurement | ✅ | The ruler creates construction lines; measure leaves dimensions. |
@@ -53,8 +53,9 @@ The first slices are done: tooling and the static build
 ([spec 0007](../specs/0007-drawing-and-transform-tools.md)) and camera navigation
 ([spec 0008](../specs/0008-camera-navigation.md)).
 
-The geometry kernel question is settled: none is adopted, and push/pull is straight extrusion
-([decision 0011](../decisions/0011-geometry-kernel-strategy.md)). Persistence is not started.
+The geometry kernel question is settled: the cut runs on `manifold-3d` behind `geometry`'s `solid`
+interface ([decision 0022](../decisions/0022-cuts-run-on-manifold.md)); there is no in-house kernel.
+Persistence is not started.
 Next slices, in the order that unblocks the most: **save and load**, then **groups and components**,
 then **erase, offset and follow-me**.
 

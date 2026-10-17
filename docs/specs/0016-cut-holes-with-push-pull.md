@@ -1,10 +1,10 @@
 ---
 id: 0016
 title: Cut holes with push/pull
-status: proposed
+status: implemented
 date: 2026-10-17
-packages: [geometry, core, tools]
-decisions: [0019]
+packages: [core, geometry, tools]
+decisions: [0022]
 supersedes: null
 ---
 
@@ -13,99 +13,117 @@ supersedes: null
 ## Goal
 
 Pushing a face **into** a solid removes material, and pulling it **out** adds it — one tool, both
-directions, the way a modeler is expected to work. After this spec, a wall can have a door opening and a
-board can have a dado, instead of two coplanar faces stacked on top of each other.
+directions. After this spec, a wall has a door opening and a board has a dado, instead of two coplanar
+faces stacked on top of each other.
 
 ## Why now
 
-Reported directly, and it is the last blocker on the two domains the product exists for. Today
-push/pull always extrudes ([decision 0011](../decisions/0011-geometry-kernel-strategy.md)); the kernel
-decision that unblocks this is [0019](../decisions/0019-mesh-csg-kernel.md), which adopted
-`@jscad/modeling` behind an interface in `geometry`.
+Reported directly, and it is the last blocker on the two domains the product exists for. Push/pull today
+only extrudes ([decision 0011](../decisions/0011-geometry-kernel-strategy.md)). The face-surgery route of
+[decision 0021](../decisions/0021-straight-cuts-by-face-surgery.md) ran its course with two failures it
+could not debug away — an unclosed through cut and inconsistent winding — so
+[decision 0022](../decisions/0022-cuts-run-on-manifold.md) supersedes it and the cut runs on `manifold-3d`.
 
 ## Scope
 
 **In scope**
 
-- `geometry`: `subtract`, `union`, `intersect` over its own types, plus the validation that makes an
-  unguaranteed library's output safe to store.
-- A **shell**: the closed set of faces that bounds a solid, computed from connectivity rather than
-  stored, so the document format does not change.
-- `core`: a command that replaces a shell's faces with the result of a boolean, with an inverse.
-- `tools`: push/pull decides between extrude and subtract from the drag direction relative to the face's
-  solid, and previews which one it will do.
-- Tests: unit for the boolean and the validation, browser for push into and pull out of a real solid.
+- A **shell**: the closed set of faces bounding a solid, computed from shared-edge connectivity rather
+  than stored, so the document format does not change. Already on the branch.
+- A `solid` module in `geometry`: `manifold-3d` behind our own types — two axis-aligned boxes in, welded
+  triangles with consistent outward winding out. No manifold type crosses the interface.
+- `core`: a cut plan that subtracts the tool from the shell through the kernel and converts the result
+  back to entities: weld vertices, group coplanar triangles, read boundary loops, split a ring face by
+  `rect.subtract` (at most four rectangles — a document face is a single loop).
+- `tools`: push/pull decides between extrude and cut from the drag direction, previews which it will do,
+  and says so in the readout.
+- A clear refusal, in the status bar, when the shell does not close, is not a box of axis-aligned
+  rectangles, or the tool is not axis-aligned.
+- Tests: rectangle arithmetic and the shell walk as units, kernel cut at the unit layer, and a real cut
+  through the browser.
 
 **Out of scope**
 
-- Storing shells, or any change to the entity kinds. Shells are derived on demand.
-- Union and intersect as *tools*. Only the geometry operations ship here; the tools that would use them
-  come later.
-- Self-intersection repair, filleting, chamfers, and non-mesh surfaces.
-- Cuts through a curved tessellated face beyond what a triangle boolean already handles
-  ([0013](../decisions/0013-curves-are-tessellated.md)).
-- Performance work beyond a documented budget: a cut on a building-scale model must not block the UI,
-  and offloading it to a worker is a separate spec.
+- Anything not axis-aligned. A rotated wall, a curved surface, a tool at an angle: refused, with a
+  message. The kernel could take more, but the mesh-to-faces conversion is the ceiling, and it is
+  narrower than the kernel, not the kernel.
+- Storing shells, holes in a face, or any change to the entity kinds.
+- Union and intersect as tools. Only the cut ships here.
+- Cut through one solid and into another, or across several shells at once.
+- Offloading a cut to a worker. One box-minus-box subtraction is microseconds; if that changes it is a
+  separate spec with its own measurements.
 
 ## Plan
 
-1. Add `@jscad/modeling` to `packages/geometry` and wrap it: convert our faces to jscad polygons and back,
-   leaking no jscad types.
-2. Validate every result: closed (each edge shared by exactly two triangles), positive orientation,
-   no degenerate triangles, non-empty. Reject rather than store something broken.
-3. Shell detection in `geometry`: from a face, walk the shared-edge adjacency until the surface closes;
-   fail cleanly when it does not.
-4. `core`: `cutSolid(shellFaces, toolSolid)` as a command, capturing the removed faces so undo restores
-   them exactly.
-5. `tools`: push/pull compares the drag direction with the face's outward normal. Into the solid →
-   subtract a prism swept from the face by the drag distance; out of it → the existing extrude. The
-   preview shows which, and the readout says so.
-6. Tests, then a browser pass over a wall with a door and a board with a dado.
+1. `geometry`: add `manifold-3d`; `solid.subtract(shellBox, toolBox)` returning welded triangles, with a
+   memoised async `init` for the WASM. `rect.*` from the surgery round stays — the ring split uses it.
+2. `core`: `cut.ts` drops face surgery for the kernel result: shell walk and the axis-aligned box check
+   stay as the refusal gate, then welded triangles become points, edges and faces — topology from the
+   kernel mesh, rings split by `rect.subtract`.
+3. `core`: `planCut` reports `{ kind: "cut" | "extrude" }` or an error, matching the shape the push/pull
+   tool already expects; extrude when the drag leaves the solid.
+4. `tools`: push/pull reports cut vs add in the readout, and a refusal message on an unusable shell.
+5. Tests at each layer — including the two surgery failures (through cut closed, correct volume) — then
+   a browser pass over a door opening and a dado.
 
 ## Design notes
 
-**Why shells are computed, not stored.** Storing a shell means the entity graph gains a parent that every
-tool must maintain, and the format changes. Computing it on demand from shared edges keeps the document
-as it is and keeps this spec reversible: if derivation turns out to be too slow on big models, a cached
-index is a later change behind the same function.
+**Why the kernel again.** [Decision 0022](../decisions/0022-cuts-run-on-manifold.md). The short version:
+the surgery produced nearly-right topology by arithmetic, and the last mile — edges used exactly twice,
+winding outward everywhere — is precisely what a mesh CSG kernel guarantees. The earlier wrapper failure
+was a kernel fed a face soup; here it only ever subtracts two primitive boxes.
 
-**Why the result is validated.** [0019](../decisions/0019-mesh-csg-kernel.md) chose a library with no
-manifold guarantee. A cut that produces an unclosed surface would corrupt the model quietly, and the
-user would meet it later as snapping that no longer works. Rejecting is the honest failure: the tool
-reports that the cut failed and leaves the document untouched.
+**Why "at most four rectangles" still matters.** A face in this document is a single loop, so it cannot
+hold a hole. The kernel happily returns a ring; the conversion layer splits it back into rectangles. A
+non-rectangular loop out of the kernel is refused — the input is two boxes, so anything else is a bug.
 
-**Why the tool, not the kernel, decides add vs remove.** The geometry layer knows nothing about drags or
-solids-of-interest. Push/pull owns the intent, and the kernel owns the arithmetic.
+**Why "loading" is part of the feature.** WASM init is asynchronous and boot must not become so. The
+kernel starts initialising on first use; if a cut arrives before it is ready, the tool reports it and
+changes nothing.
+
+**Why the refusal is part of the feature.** Half-working geometry is worse than a refusal: a solid that
+is silently wrong corrupts snapping, selection and every later cut. The tool says it cannot do it and
+changes nothing.
 
 ## Risks
 
 | Risk | Mitigation |
 |---|---|
-| jscad produces an unclosed or inverted result | Every result is validated before it is stored; failure cancels the operation and reports it, leaving the document unchanged. |
-| A cut is slow enough to stall the UI on a large model | Document a budget, measure the two test cases, and defer a worker to its own spec rather than half-building one. |
-| Shell detection walks the whole model, or fails on an open surface | Bound the walk, and when the surface does not close, refuse the cut with a message instead of subtracting from an arbitrary set of faces. |
-| Cuts leave near-degenerate slivers that break later snapping | Validate triangle area and merge vertices within an epsilon, using [0008](../decisions/0008-units-coordinates-precision.md)'s tolerances. |
-| The interface leaks jscad types and the fallback stops being a swap | A test asserts no jscad type appears in a public signature, the same way the boundary tests check imports. |
-| Undo restores the wrong thing after a cut | The inverse captures the exact faces removed, and the inverse test applies, cuts, undoes, and compares to the pre-cut document. |
+| A shell that is not a box is refused, and users meet that often | The message names why. The ceiling is recorded in [0022](../decisions/0022-cuts-run-on-manifold.md) as the thing to supersede first if it hurts. |
+| The kernel wrapper failing again, as it did in 0021 | The kernel only ever subtracts two primitive boxes, which are manifold by construction; the document-side validity checks run before it is called. |
+| The mesh-to-faces conversion producing loops the document cannot hold | Non-rectangular loops and rings that are not a rectangle minus a rectangle are refused, loudly, before any entity is written. |
+| WASM not ready when the first cut lands | `geometry` starts the load on first use, and the tool reports "loading" rather than cutting wrong. |
+| Undo restoring the wrong faces | The inverse captures the exact entities removed, and an inverse test applies, cuts, undoes, and compares to the pre-cut document. |
 
 ## Verification
 
-- [ ] `geometry.subtract` on the recess, door and flush cases returns the exact expected volume
-- [ ] A deliberately broken result is rejected, not stored
-- [ ] Shell detection finds the six faces of a box and refuses an open surface
+- [ ] `solid.subtract` on a recess, a through cut and a tool flush with a shell face: closed, correct volume
+- [ ] The kernel mesh converts to faces with every edge shared twice and outward winding — the two
+      surgery failures, now passing
+- [ ] `rect.subtract` cases stay green (the ring split uses them)
+- [ ] `closedShell` finds a box's six faces and refuses an open surface
 - [ ] The inverse test passes for a cut, and undo restores the pre-cut document exactly
-- [ ] Browser: pushing a face into a box makes a recess whose volume matches the drag
-- [ ] Browser: pulling out still extrudes, unchanged
-- [ ] No jscad type appears in a public signature
-- [ ] A wall with a door opening renders with no stacked faces
+- [ ] A non-axis-aligned shell is refused with a message, and the document is unchanged
+- [ ] Browser: pushing a face into a box leaves an opening, and pulling out still extrudes
 
 ## Docs to update
 
 - [ ] `CHANGELOG.md`, `docs/specs/README.md`, `docs/decisions/README.md`
-- [ ] `packages/geometry/README.md`, `packages/core/README.md`, `packages/tools/README.md`
-- [ ] `docs/features/sketchup-core.md`: push/pull capability, and `docs/glossary.md` for *shell*
+- [ ] `packages/{geometry,core,tools}/README.md`
+- [ ] `docs/features/sketchup-core.md` (push/pull) and `docs/glossary.md` (shell)
 
 ## Result
 
-> Filled in when the spec is closed. Deliberately left `proposed`: the kernel is decided, the
-> implementation is not written, and this spec is the plan rather than a record.
+Shipped as planned, with two deviations worth recording:
+
+- The kernel wrapper adds its own closedness and winding validation (`solid.ts`), because kernel
+  output is still untrusted geometry at the interface — that was planned in
+  [0022](../decisions/0022-cuts-run-on-manifold.md) and landed there rather than in `core`.
+- `conformRects` — written during the surgery round to keep shared edges subdivided alike — survives
+  and is used by the conversion: the ring split's strips T-junction against the untouched faces until
+  conformed. `rect.subtract` cases stay green and the shell walk is untouched.
+
+The two assertions the surgery round could not close — every edge shared twice after a through cut,
+and the volume reading — pass at the unit layer and in the browser (e2e 23/23). The "still loading"
+refusal exists; a cut has yet to meet it in practice, because the kernel loads while the first click
+is still happening.

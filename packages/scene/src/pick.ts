@@ -1,6 +1,6 @@
 import { ray as rayOps, plane as planeOps, poly as polyOps, vec3 } from "@gabarito/geometry";
 import type { Ray, Vec3 } from "@gabarito/geometry";
-import { edgesOf, facePositions, facesOf, getPoint, guidesOf, dimensionsOf } from "@gabarito/core";
+import { edgesOf, faceHoles, facePositions, facesOf, getPoint, guidesOf, dimensionsOf } from "@gabarito/core";
 import type { DocumentState, EntityId } from "@gabarito/core";
 
 export interface PickHit {
@@ -16,13 +16,15 @@ interface Candidate extends PickHit {
   area: number;
 }
 
-function faceCandidate(ray: Ray, entityId: EntityId, positions: Vec3[]): Candidate | null {
+function faceCandidate(ray: Ray, entityId: EntityId, positions: Vec3[], holes: Vec3[][]): Candidate | null {
   const normal = polyOps.normal(positions);
   if (!normal) return null;
   const plane = planeOps.fromPointNormal(positions[0], normal);
   const hit = rayOps.intersectPlane(ray, plane);
   if (!hit) return null;
   if (!polyOps.containsPoint(positions, hit, 1e-6)) return null;
+  // A hit inside a hole is a miss: the face is the material around the hole, not the hole.
+  if (holes.some((hole) => polyOps.containsPoint(hole, hit, 1e-6))) return null;
   const t = vec3.dist(hit, ray.origin);
   return { entityId, kind: "face", point: hit, distance: t, t, area: polyOps.area(positions) };
 }
@@ -72,7 +74,7 @@ export function pickFace(ray: Ray, doc: DocumentState): PickHit | null {
   for (const face of facesOf(doc)) {
     const positions = facePositions(doc, face);
     if (positions.length < 3) continue;
-    const candidate = faceCandidate(ray, face.id, positions);
+    const candidate = faceCandidate(ray, face.id, positions, faceHoles(doc, face));
     if (candidate) candidates.push(candidate);
   }
   if (candidates.length === 0) return null;
@@ -91,7 +93,7 @@ export function pick(ray: Ray, doc: DocumentState, tolerance: number): PickHit |
   for (const face of facesOf(doc)) {
     const positions = facePositions(doc, face);
     if (positions.length < 3) continue;
-    const candidate = faceCandidate(ray, face.id, positions);
+    const candidate = faceCandidate(ray, face.id, positions, faceHoles(doc, face));
     if (candidate) candidates.push(candidate);
   }
 

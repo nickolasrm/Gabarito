@@ -1,6 +1,6 @@
 import { poly as polyOps, vec3 } from "@gabarito/geometry";
 import type { Vec3 } from "@gabarito/geometry";
-import { buildExtrusion, facePositions, formatLength, unitSuffix } from "@gabarito/core";
+import { buildExtrusion, facePositions, formatLength, planCut, unitSuffix } from "@gabarito/core";
 import type { EntityId } from "@gabarito/core";
 import { axisPlaneNormal } from "../planes";
 import { PREVIEW } from "../style";
@@ -22,6 +22,7 @@ export function createPushPullTool(): Tool {
   let normal: Vec3 | null = null;
   let distance = 0;
   let inverted = false;
+  let refusal: string | null = null;
 
   const clear = (ctx: ToolContext): void => {
     faceId = null;
@@ -46,9 +47,30 @@ export function createPushPullTool(): Tool {
       clear(ctx);
       return;
     }
-    const built = buildExtrusion(ctx.doc, faceId, value, pullAxis(ctx));
-    if (built.entities.length > 0) ctx.dispatch({ type: "addEntities", entities: built.entities });
-    clear(ctx);
+    const outcome = planCut(ctx.doc, faceId, value);
+    if (outcome.kind === "cut" || outcome.kind === "add") {
+      ctx.dispatch([
+        { type: "removeEntities", ids: outcome.remove },
+        { type: "addEntities", entities: outcome.add },
+      ]);
+      clear(ctx);
+      return;
+    }
+    if (outcome.kind === "extrude") {
+      const built = buildExtrusion(ctx.doc, faceId, value, pullAxis(ctx));
+      const commands = [];
+      if (built.removeFaceIds && built.removeFaceIds.length > 0) {
+        commands.push({ type: "removeEntities" as const, ids: built.removeFaceIds });
+      }
+      if (built.entities.length > 0) {
+        commands.push({ type: "addEntities" as const, entities: built.entities });
+      }
+      if (commands.length > 0) ctx.dispatch(commands);
+      clear(ctx);
+      return;
+    }
+    // A refusal keeps the operation alive so the message stays readable in the status bar.
+    refusal = outcome.error;
   };
 
   return {
@@ -79,6 +101,7 @@ export function createPushPullTool(): Tool {
     },
 
     pointerMove(event, ctx) {
+      refusal = null;
       if (!faceId || !normal || !origin) return;
       const axis = pullAxis(ctx);
       const world = pullPoint(event, ctx, origin, axis);
@@ -115,7 +138,13 @@ export function createPushPullTool(): Tool {
 
     readout(ctx) {
       if (!faceId) return null;
-      return `${formatLength(distance, ctx.settings.unit)} ${unitSuffix(ctx.settings.unit)}`;
+      if (refusal) return refusal;
+      const length = `${formatLength(Math.abs(distance), ctx.settings.unit)} ${unitSuffix(ctx.settings.unit)}`;
+      if (distance === 0) return length;
+      const outcome = planCut(ctx.doc, faceId, distance);
+      const doing =
+        outcome.kind === "cut" ? "cut" : outcome.kind === "add" || outcome.kind === "extrude" ? "add" : "";
+      return doing ? `${length} — ${doing}` : length;
     },
 
     isActive: () => faceId !== null,

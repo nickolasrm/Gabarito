@@ -54,6 +54,41 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   compression, 2.5 kB instead of 4.7 kB) and ponytail at `ultra`. — [spec
   0014](./docs/specs/0014-stronger-agent-modes.md)
 
+- Push/pull now **cuts**: pushing a face into a solid removes the material, and pulling out adds it.
+  Shells are computed from face connectivity rather than stored; the cut is a `manifold-3d`
+  subtraction of two axis-aligned boxes, converted back to entities with topology and winding taken
+  from the kernel mesh. The cut is refused with a message when the solid is not an axis-aligned box of
+  rectangles, or before the WASM kernel has loaded. Extrusion still works everywhere it did.
+  — [spec 0016](./docs/specs/0016-cut-holes-with-push-pull.md),
+  [decision 0022](./docs/decisions/0022-cuts-run-on-manifold.md)
+- An opening's border is **one face with a hole**, the way this product's inspiration keeps it, not
+  four rectangle strips with seams: `FaceEntity` gained an optional `holes` (loops of point ids),
+  rendering triangulates the contour with its holes, picking misses a hit inside a hole, and the
+  strip arithmetic the old model forced (`conformRects`, `rect.subtract`) is gone. Pushing a face
+  that has holes is refused with a message.
+  — [spec 0017](./docs/specs/0017-faces-hold-holes.md),
+  [decision 0023](./docs/decisions/0023-faces-hold-holes.md)
+- **Cuts land on any rectilinear closed solid, not just boxes**: the second cut enters the first
+  cut's cavity — deepen a recess, window a cavity wall, cut a rectangle drawn on a cut solid. The
+  shell feeds the kernel as a mesh (drawn-on markings dropped from the mesh input), the cut against
+  extrude is decided by measuring the sweep's overlap with the solid, and the box-only gate is gone.
+  — [spec 0018](./docs/specs/0018-second-cut.md),
+  [decision 0024](./docs/decisions/0024-cuts-enter-any-rectilinear-solid.md)
+- **The sweep follows the drag, and pull is a union**: push and pull can no longer swap sides on a
+  face wound the other way (the sweep lands where the preview shows), and pulling material out goes
+  through the kernel as a union — pulling a cavity's floor to the rim fills the cavity exactly, with
+  the walls trimmed, instead of stacking a prism inside it. The extrusion at the no-solid case
+  reuses existing points instead of silently doing nothing; refusals replace silence.
+  — [spec 0019](./docs/specs/0019-pull-is-a-union.md),
+  [decision 0025](./docs/decisions/0025-pull-is-a-union.md)
+- **No limit on holes**: an opening's face holds every hole it gets — openings nest and repeat
+  without end, and several coplanar regions (two tunnels' walls) stay separate faces. The kernel
+  triangulator's winding rule (outer counter-clockwise, holes clockwise in the projection) is
+  normalised and its refusal made structural. Five through holes, three through one face, leave one
+  face with five holes and a solid of genus five, exact.
+  — [spec 0020](./docs/specs/0020-no-hole-limit.md),
+  [decision 0026](./docs/decisions/0026-face-holds-every-hole.md)
+
 ### Fixed
 
 - Six tool interaction bugs reported from real use. — [spec 0012](./docs/specs/0012-tool-interaction-fixes.md)
@@ -94,10 +129,12 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     a width/depth rectangle floating at that height. The plane now follows the geometry under the
     pointer while no axis is pinned.
 
-- Decision [0019](./docs/decisions/0019-mesh-csg-kernel.md): solid cuts use `@jscad/modeling` behind an
-  interface owned by `packages/geometry`, superseding decision 0011. Chosen on measured cost after a
-  spike: 58 KB gzipped against 223 KB for `manifold-3d`, both exact on a recess, a door opening and a
-  coplanar flush notch, and the `three`-based libraries ruled out by the module boundaries. Plan in
+- Decision [0021](./docs/decisions/0021-straight-cuts-by-face-surgery.md): straight cuts are **face
+  surgery on axis-aligned rectangles**, with no CSG library and no runtime dependency, superseding
+  decision 0019. The adopted library produced T-junctions on the first real cut — 16 edges used once,
+  which the closedness check rejects — and the recorded fallback, `manifold-3d`, then failed on its input
+  mesh rather than on the maths. The operation push/pull needs is one axis-aligned box minus another, so
+  a kernel was four hundred kilobytes and a WASM bridge for rectangle arithmetic. Plan in
   [spec 0016](./docs/specs/0016-cut-holes-with-push-pull.md), left `proposed`.
 
 ### Changed

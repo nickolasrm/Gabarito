@@ -23,3 +23,6 @@ export type { MeshData } from "./extrude";
 export { extrude } from "./extrude";
 
 export { transform } from "./transform";
+export * from "./rect";
+export type { ShellFace, SolidMesh } from "./solid";
+export { ensureSolid, solidReady, subtractSolid, sweepShell } from "./solid";

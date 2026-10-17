@@ -19,6 +19,8 @@ One shared vocabulary. If a term is missing, add it here in the same commit that
 | **B-rep** | Boundary representation: solids described by faces/edges/vertices rather than a triangle soup. |
 | **CSG** | Constructive solid geometry: combining solids with union, difference, intersection. |
 | **Scene graph** | The Three.js object tree. A *derived view* of the entity graph, rebuilt from it and never authoritative. |
+| **Shell** | The closed set of faces bounding one solid, computed from shared-edge and coplanar adjacency rather than stored. The unit a cut operates on. |
+| **Hole (in a face)** | A closed loop of points inside a face's outer loop, part of the same face. A face holds every hole it gets; there is no limit. |
 | **Project file** | The portable, versioned container the user saves: `.gabarito`. |
 | **Local-first** | The device holds the authoritative copy; the network is optional and never required to edit. |
 | **Static bundle** | The build output that GitHub Pages serves. No server code, no runtime secrets. |

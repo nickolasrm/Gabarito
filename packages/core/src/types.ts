@@ -32,6 +32,11 @@ export interface FaceEntity {
   kind: "face";
   /** Ordered, closed loop of point ids. */
   points: EntityId[];
+  /**
+   * Ordered, closed loops of point ids inside `points`, each the boundary of a hole in the face.
+   * Absent when the face has no hole (decision 0023).
+   */
+  holes?: EntityId[][];
 }
 
 /** A construction line: infinite, snappable, never an operand of a solid operation. */

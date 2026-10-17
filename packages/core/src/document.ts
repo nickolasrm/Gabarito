@@ -66,6 +66,11 @@ export function facePositions(doc: DocumentState, face: FaceEntity): Vec3[] {
   return pointPositions(doc, face.points);
 }
 
+/** The positions of each hole loop of a face, in order; empty when the face has no hole. */
+export function faceHoles(doc: DocumentState, face: FaceEntity): Vec3[][] {
+  return (face.holes ?? []).map((loop) => pointPositions(doc, loop));
+}
+
 export function edgePositions(doc: DocumentState, edge: EdgeEntity): [Vec3, Vec3] | null {
   const a = getPoint(doc, edge.points[0]);
   const b = getPoint(doc, edge.points[1]);

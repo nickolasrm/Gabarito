@@ -33,7 +33,11 @@ and by decision records, so a rejected spec keeps its number forever.
 | [0013](./0013-owner-verifies-before-merge.md) | The owner verifies the running app before a merge | implemented | docs | — |
 | [0014](./0014-stronger-agent-modes.md) | Raise the agent modes to ultracave and ponytail ultra | implemented | docs | — |
 | [0015](./0015-tool-bug-round-two.md) | Fix the tool bugs reported from real use, second round | implemented | core, scene, tools | — |
-| [0016](./0016-cut-holes-with-push-pull.md) | Cut holes with push/pull | **proposed** | geometry, core, tools | 0019 |
+| [0016](./0016-cut-holes-with-push-pull.md) | Cut holes with push/pull | **implemented** | core, geometry, tools | 0022 |
+| [0017](./0017-faces-hold-holes.md) | Faces hold holes | **implemented** | core, geometry, scene, tools | 0023 |
+| [0018](./0018-second-cut.md) | A second cut can enter a cut solid | **implemented** | core, geometry, tools | 0024 |
+| [0019](./0019-pull-is-a-union.md) | Pull is a union, and the sweep follows the drag | **implemented** | core, geometry, tools | 0025 |
+| [0020](./0020-no-hole-limit.md) | No limit on holes | **implemented** | core, geometry, scene | 0026 |
 
 Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 

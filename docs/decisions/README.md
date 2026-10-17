@@ -36,8 +36,14 @@ stays searchable forever.
 | [0016](./0016-name-other-tools-as-inspiration.md) | Name other tools as inspiration, never as a target | accepted | docs, positioning, legal | — |
 | [0017](./0017-pull-requests-only.md) | Every change lands through a pull request | accepted | process, git, review | — |
 | [0018](./0018-axis-lock-semantics.md) | What an axis lock means, and the plane it needs | accepted | tools, input, geometry | — |
-| [0019](./0019-mesh-csg-kernel.md) | Adopt a mesh CSG library for solid cuts | accepted | geometry, csg, kernel | 0011 |
+| [0019](./0019-mesh-csg-kernel.md) | Adopt a mesh CSG library for solid cuts | **superseded** by 0021 | geometry, csg, kernel | 0011 |
 | [0020](./0020-drawing-plane-inference.md) | The drawing plane is chosen by what the pointer aims at | accepted | tools, geometry, ux | — |
+| [0021](./0021-straight-cuts-by-face-surgery.md) | Straight cuts are face surgery, not a CSG kernel | **superseded** by 0022 | geometry, csg, scope | 0019 |
+| [0022](./0022-cuts-run-on-manifold.md) | Cuts run on manifold-3d | accepted | geometry, csg, kernel | 0021 |
+| [0023](./0023-faces-hold-holes.md) | A document face can hold holes | accepted | core, geometry, scene, document-model | — |
+| [0024](./0024-cuts-enter-any-rectilinear-solid.md) | A cut can enter any rectilinear closed solid | **superseded** by 0025 | core, geometry, csg, scope | — |
+| [0025](./0025-pull-is-a-union.md) | The sweep follows the drag, and pull is a union | accepted | core, geometry, csg, tools | 0024 |
+| [0026](./0026-face-holds-every-hole.md) | A face holds every hole it gets, and there is no limit | accepted | core, geometry, csg, document-model | — |
 
 Statuses: `proposed` → `accepted` → (`superseded` | `deprecated` | `rejected`).
 

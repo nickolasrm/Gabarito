@@ -245,7 +245,8 @@ export class ToolController {
       entity.kind === "point" ? [entity.id] : entity.kind === "edge" ? entity.points : null;
     if (!ids) return null;
     for (const face of facesOf(doc)) {
-      if (ids.some((id) => face.points.includes(id))) return face.id;
+      const loops = [face.points, ...(face.holes ?? [])];
+      if (loops.some((loop) => ids.some((id) => loop.includes(id)))) return face.id;
     }
     return null;
   }
