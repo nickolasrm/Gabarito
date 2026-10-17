@@ -25,7 +25,10 @@ interface DebugState {
 
 interface DebugHandle {
   store: { getState(): DebugState };
-  viewport: { worldToScreen(point: WorldPoint): { x: number; y: number } };
+  viewport: {
+    worldToScreen(point: WorldPoint): { x: number; y: number };
+    frameDocument(): void;
+  };
   controller: { getStatus(): { active: boolean } };
   activeTool: () => string;
 }
