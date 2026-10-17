@@ -68,6 +68,13 @@ spec. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   that has holes is refused with a message.
   — [spec 0017](./docs/specs/0017-faces-hold-holes.md),
   [decision 0023](./docs/decisions/0023-faces-hold-holes.md)
+- **Cuts land on any rectilinear closed solid, not just boxes**: the second cut enters the first
+  cut's cavity — deepen a recess, window a cavity wall, cut a rectangle drawn on a cut solid. The
+  shell feeds the kernel as a mesh (drawn-on markings dropped from the mesh input), the cut against
+  extrude is decided by measuring the sweep's overlap with the solid, and the box-only gate is gone.
+  Pulling a cavity's floor up still extrudes rather than filling (no union operation yet).
+  — [spec 0018](./docs/specs/0018-second-cut.md),
+  [decision 0024](./docs/decisions/0024-cuts-enter-any-rectilinear-solid.md)
 
 ### Fixed
 

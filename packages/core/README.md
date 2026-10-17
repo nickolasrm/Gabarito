@@ -41,13 +41,14 @@ derived data (`edgesOf`, `facesOf`, `facePoints`, `pointIdsForEntities`, `docume
 Solid operations live in `src/cut.ts`: `shellFaces` computes the closed set of faces bounding a solid
 (shared-edge **or** coplanar-overlap adjacency — a face drawn inside a face still finds its solid), and
 `planCut` returns one of three outcomes: `cut` (remove and add entity lists, one transaction),
-`extrude` (the drag points away from any solid), or `refuse` with a message. The cut itself is a
-kernel subtraction of two axis-aligned boxes, converted back to entities by grouping coplanar
-triangles and reading boundary loops ([decision 0022](../../docs/decisions/0022-cuts-run-on-manifold.md));
-the ring an opening leaves is stored as one face with a hole
+`extrude` (the sweep misses the solid), or `refuse` with a message. The cut feeds the shell to the
+kernel as a mesh — drawn-on markings dropped, loops triangulated, the sweep's overlap measured — so a
+cut lands on any rectilinear closed solid, including one an earlier cut left
+([decision 0024](../../docs/decisions/0024-cuts-enter-any-rectilinear-solid.md)); the ring an opening
+leaves is stored as one face with a hole
 ([decision 0023](../../docs/decisions/0023-faces-hold-holes.md)), and a face that itself has holes is
-refused rather than pushed. Anything not an axis-aligned box of rectangles is refused, and a cut
-before the kernel has loaded is refused with a "still loading" message.
+refused rather than pushed. A cut before the kernel has loaded is refused with a "still loading"
+message.
 
 **Note on the dependency rule.** `core` imports `@gabarito/geometry` and nothing else
 ([decision 0015](../../docs/decisions/0015-core-depends-on-geometry.md)). It re-exports the geometry

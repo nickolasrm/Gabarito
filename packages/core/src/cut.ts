@@ -1,6 +1,6 @@
-import { EPS, rect, solidReady, subtractSolid, vec3 } from "@gabarito/geometry";
-import type { Axis, Bounds, PlaneRect, SolidMesh, Vec3 } from "@gabarito/geometry";
-import { allocId, edgesOf, facePositions, facesOf, pointsOf } from "./document";
+import { EPS, rect, solidReady, subtractShell, vec3 } from "@gabarito/geometry";
+import type { Axis, Bounds, PlaneRect, ShellFace, SolidMesh, Vec3 } from "@gabarito/geometry";
+import { allocId, edgesOf, faceHoles, facePositions, facesOf, pointsOf } from "./document";
 import type { DocumentState, Entity, EntityId, FaceEntity } from "./types";
 
 /** Entities to remove and add, applied as one transaction so undo is one step. */
@@ -67,42 +67,48 @@ export function shellFaces(doc: DocumentState, start: EntityId): FaceEntity[] {
 }
 
 /**
- * Read a shell as an axis-aligned box, or nothing.
+ * The shell as the solid's true surface: markings dropped, every remaining loop an axis-aligned
+ * rectangle.
  *
- * Anything else is refused rather than cut approximately: a wrong solid corrupts snapping and every
- * later cut (decision 0022). The kernel only ever subtracts boxes, so this check is also what keeps
- * the input manifold by construction.
+ * A face drawn **on** a coplanar larger face is a marking — the solid's boundary at that plane is
+ * the larger face's region — so it is skipped in the mesh input and the cut replaces it with the
+ * opening it created (decision 0024). Anything not rectilinear is refused rather than cut
+ * approximately: a wrong solid corrupts snapping and every later cut.
  */
-function asAxisAlignedBox(doc: DocumentState, faces: FaceEntity[]): (Bounds & { faces: FaceEntity[] }) | null {
-  if (faces.length < 6) return null;
+function asShellLoops(doc: DocumentState, faces: FaceEntity[]): ShellFace[] | null {
+  const dropped = new Set<EntityId>();
   for (const face of faces) {
-    if (!rect.fromPolygon(facePositions(doc, face))) return null;
-  }
-
-  const points = faces.flatMap((face) => facePositions(doc, face));
-  const min = vec3.of(
-    Math.min(...points.map((p) => p.x)),
-    Math.min(...points.map((p) => p.y)),
-    Math.min(...points.map((p) => p.z)),
-  );
-  const max = vec3.of(
-    Math.max(...points.map((p) => p.x)),
-    Math.max(...points.map((p) => p.y)),
-    Math.max(...points.map((p) => p.z)),
-  );
-
-  // Every face must lie on one of the box's six sides and stay within the box otherwise.
-  for (const face of faces) {
-    const rectangle = rect.fromPolygon(facePositions(doc, face)) as PlaneRect;
-    const value = rectangle.value;
-    if (Math.abs(value - min[rectangle.axis]) > EPS.MERGE && Math.abs(value - max[rectangle.axis]) > EPS.MERGE) {
-      return null;
+    const mine = rect.fromPolygon(facePositions(doc, face));
+    if (!mine) return null;
+    for (const other of faces) {
+      if (other.id === face.id || dropped.has(other.id)) continue;
+      const theirs = rect.fromPolygon(facePositions(doc, other));
+      if (!theirs || theirs.axis !== mine.axis || Math.abs(theirs.value - mine.value) > EPS.MERGE) continue;
+      // The other face covers this one: this face is the marking on the other's surface.
+      if (
+        mine.uMin >= theirs.uMin - EPS.MERGE &&
+        mine.uMax <= theirs.uMax + EPS.MERGE &&
+        mine.vMin >= theirs.vMin - EPS.MERGE &&
+        mine.vMax <= theirs.vMax + EPS.MERGE
+      ) {
+        dropped.add(face.id);
+        break;
+      }
     }
-    const [u, v] = rect.inPlaneAxes(rectangle.axis);
-    if (rectangle.uMin < min[u] - EPS.MERGE || rectangle.uMax > max[u] + EPS.MERGE) return null;
-    if (rectangle.vMin < min[v] - EPS.MERGE || rectangle.vMax > max[v] + EPS.MERGE) return null;
   }
-  return { min, max, faces };
+
+  const loops: ShellFace[] = [];
+  for (const face of faces) {
+    if (dropped.has(face.id)) continue;
+    const holes: Vec3[][] = [];
+    for (const hole of faceHoles(doc, face)) {
+      if (!rect.fromPolygon(hole)) return null;
+      holes.push(hole);
+    }
+    if (!rect.fromPolygon(facePositions(doc, face))) return null;
+    loops.push({ outer: facePositions(doc, face), holes });
+  }
+  return loops;
 }
 
 const keyOf = (point: Vec3): string =>
@@ -133,8 +139,10 @@ function isRectangular(loop: Vec3[], axis: Axis): boolean {
   const vMin = Math.min(...loop.map((p) => p[v]));
   const vMax = Math.max(...loop.map((p) => p[v]));
   for (const point of loop) {
-    if (Math.abs(point[u] - uMin) > EPS.MERGE && Math.abs(point[u] - uMax) > EPS.MERGE) return false;
-    if (Math.abs(point[v] - vMin) > EPS.MERGE && Math.abs(point[v] - vMax) > EPS.MERGE) return false;
+    // On one of the four edges: an edge-midpoint sits on one range, a corner on both.
+    const onU = Math.abs(point[u] - uMin) <= EPS.MERGE || Math.abs(point[u] - uMax) <= EPS.MERGE;
+    const onV = Math.abs(point[v] - vMin) <= EPS.MERGE || Math.abs(point[v] - vMax) <= EPS.MERGE;
+    if (!onU && !onV) return false;
   }
   return true;
 }
@@ -301,13 +309,13 @@ function rebuild(doc: DocumentState, faces: FaceLoops[]): Entity[] {
 }
 
 /**
- * Plan pushing a face: material removed when the drag goes into a solid, material added when it
- * points away — the behaviour push/pull always had, and still the one that applies with no solid
- * to cut.
+ * Plan pushing a face: material removed when the sweep hits material, material added when it does
+ * not — the behaviour push/pull always had, and still the one that applies with no solid to cut.
  *
- * The cut itself is a kernel subtraction of two axis-aligned boxes (decision 0022). A shell that is
- * not an axis-aligned box of rectangles, or a face that is not a rectangle, is refused with a
- * message and the document is left alone.
+ * The cut itself is the kernel subtracting the swept tool box from the solid's shell, whatever
+ * rectilinear shape earlier cuts left it in (decisions 0022 and 0024). A face that is not a
+ * rectangle, or a solid that is not made of them, is refused with a message and the document is
+ * left alone.
  */
 export function planCut(doc: DocumentState, faceId: EntityId, distance: number): CutPlan {
   const entity = doc.entities[faceId];
@@ -321,24 +329,30 @@ export function planCut(doc: DocumentState, faceId: EntityId, distance: number):
   if (Math.abs(distance) < EPS.LENGTH) return { kind: "refuse", error: "Drag to set the depth" };
 
   const shell = shellFaces(doc, faceId);
-  const box = asAxisAlignedBox(doc, shell);
-  // No verifiable solid around the face: material is added, exactly as before this feature.
-  if (!box) return { kind: "extrude" };
+  // No closed surface around the face: material is added, exactly as before this feature.
+  if (shell.length === 0) return { kind: "extrude" };
 
-  const axis = pushed.axis;
-  const [u, v] = rect.inPlaneAxes(axis);
-  const start = pushed.value;
-  // The drag enters the material only from the side the face lies on; from the other side it grows
-  // the solid instead of cutting it.
-  const atMin = Math.abs(start - box.min[axis]) <= EPS.MERGE;
-  const atMax = Math.abs(start - box.max[axis]) <= EPS.MERGE;
-  const inward = (atMin && distance > 0) || (atMax && distance < 0);
-  if (!inward) return { kind: "extrude" };
+  // A sheet has no inside — every face in one plane — so the drag adds material rather than cutting
+  // into a surface with no volume behind it.
+  const points = shell.flatMap((face) => facePositions(doc, face));
+  const span = (axis: Axis): number =>
+    Math.max(...points.map((p) => p[axis])) - Math.min(...points.map((p) => p[axis]));
+  if (span("x") <= EPS.MERGE || span("y") <= EPS.MERGE || span("z") <= EPS.MERGE) {
+    return { kind: "extrude" };
+  }
 
   if (!solidReady()) {
     return { kind: "refuse", error: "The geometry engine is still loading — try again in a moment" };
   }
 
+  const shellLoops = asShellLoops(doc, shell);
+  if (!shellLoops) {
+    return { kind: "refuse", error: "Straight cuts need a solid of axis-aligned rectangular faces" };
+  }
+
+  const axis = pushed.axis;
+  const [u, v] = rect.inPlaneAxes(axis);
+  const start = pushed.value;
   const end = start + distance;
   const low: Record<Axis, number> = { x: 0, y: 0, z: 0 };
   const high: Record<Axis, number> = { x: 0, y: 0, z: 0 };
@@ -350,12 +364,14 @@ export function planCut(doc: DocumentState, faceId: EntityId, distance: number):
   high[v] = pushed.vMax;
   const tool: Bounds = { min: vec3.of(low.x, low.y, low.z), max: vec3.of(high.x, high.y, high.z) };
 
-  let mesh: SolidMesh;
+  // Nothing in the sweep: the drag adds material, which is the extrusion push/pull always did.
+  let mesh: SolidMesh | null;
   try {
-    mesh = subtractSolid({ min: box.min, max: box.max }, tool);
+    mesh = subtractShell(shellLoops, tool);
   } catch (error) {
     return { kind: "refuse", error: error instanceof Error ? error.message : "The cut failed" };
   }
+  if (!mesh) return { kind: "extrude" };
 
   let faces: FaceLoops[];
   try {

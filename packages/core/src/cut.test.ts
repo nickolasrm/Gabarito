@@ -222,4 +222,126 @@ describe("planCut", () => {
     const face = facesOf(store.getState())[0];
     expect(planCut(store.getState(), face.id, 500).kind).toBe("extrude");
   });
+
+  it("deepens an existing recess by pushing its floor again", () => {
+    const { store, innerFaceId, doc } = boxWithInnerFaceOnTop();
+    const first = planCut(doc(), innerFaceId, -DEPTH);
+    if (first.kind !== "cut") throw new Error(first.kind);
+    apply(store, first);
+
+    // The cavity's floor is the face that lies one depth below the top, a 600² rectangle.
+    const floor = facesOf(doc()).find(
+      (face) =>
+        (face.holes?.length ?? 0) === 0 &&
+        facePositions(doc(), face).every((point) => Math.abs(point.z - (SIDE - DEPTH)) < 1e-6),
+    );
+    expect(floor).toBeDefined();
+
+    const second = planCut(doc(), floor!.id, -DEPTH);
+    expect(second.kind).toBe("cut");
+    if (second.kind !== "cut") return;
+    apply(store, second);
+
+    expect(documentVolume(doc())).toBeCloseTo(SIDE * SIDE * SIDE - INNER * INNER * DEPTH * 2, 0);
+    expect(everyEdgeSharedTwice(doc())).toBe(true);
+    expect(areaInPlane(doc(), "z", SIDE - DEPTH * 2)).toBeCloseTo(INNER * INNER, 0);
+  });
+
+  it("extends the cavity when a cavity wall is pushed in, and rings when a drawn window is cut", () => {
+    const { store, innerFaceId, doc } = boxWithInnerFaceOnTop();
+    const first = planCut(doc(), innerFaceId, -DEPTH);
+    if (first.kind !== "cut") throw new Error(first.kind);
+    apply(store, first);
+
+    // Pushing a cavity wall's whole face inward moves the wall: the cavity grows, no ring.
+    const wall = facesOf(doc()).find(
+      (face) =>
+        (face.holes?.length ?? 0) === 0 &&
+        facePositions(doc(), face).every((point) => Math.abs(point.x - 700) < 1e-6),
+    );
+    expect(wall).toBeDefined();
+
+    const pushed = planCut(doc(), wall!.id, -400);
+    expect(pushed.kind).toBe("cut");
+    if (pushed.kind !== "cut") return;
+    apply(store, pushed);
+
+    expect(documentVolume(doc())).toBeCloseTo(
+      SIDE * SIDE * SIDE - INNER * INNER * DEPTH - INNER * DEPTH * 400,
+      0,
+    );
+    expect(everyEdgeSharedTwice(doc())).toBe(true);
+    // The wall now stands at x = 300.
+    expect(
+      facesOf(doc()).some(
+        (face) =>
+          (face.holes?.length ?? 0) === 0 &&
+          facePositions(doc(), face).every((point) => Math.abs(point.x - 300) < 1e-6),
+      ),
+    ).toBe(true);
+  });
+
+  it("cuts a drawn window into a cavity wall, leaving a ring", () => {
+    const { store, innerFaceId, doc } = boxWithInnerFaceOnTop();
+    const first = planCut(doc(), innerFaceId, -DEPTH);
+    if (first.kind !== "cut") throw new Error(first.kind);
+    apply(store, first);
+
+    // A smaller rectangle drawn on the cavity wall, 200 × 300, centred in the 600 × 500 face.
+    const drawn = buildRectangle(
+      doc(),
+      { x: 700, y: 900, z: 1600 },
+      { x: 0, y: 200, z: 0 },
+      { x: 0, y: 0, z: 300 },
+    );
+    store.dispatch({ type: "addEntities", entities: drawn.entities });
+    const drawnFace = drawn.entities.find((entity) => entity.kind === "face");
+    expect(drawnFace).toBeDefined();
+
+    const second = planCut(doc(), drawnFace!.id, -200);
+    expect(second.kind).toBe("cut");
+    if (second.kind !== "cut") return;
+    apply(store, second);
+
+    expect(documentVolume(doc())).toBeCloseTo(
+      SIDE * SIDE * SIDE - INNER * INNER * DEPTH - 200 * 300 * 200,
+      0,
+    );
+    expect(everyEdgeSharedTwice(doc())).toBe(true);
+    // The wall now holds the window's ring, in its own plane.
+    const rings = facesOf(doc()).filter((face) => {
+      const points = facePositions(doc(), face);
+      return (face.holes?.length ?? 0) > 0 && points.every((point) => Math.abs(point.x - 700) < 1e-6);
+    });
+    expect(rings).toHaveLength(1);
+  });
+
+  it("cuts a rectangle drawn on a cut solid, and the drawing becomes the opening", () => {
+    const { store, innerFaceId, doc } = boxWithInnerFaceOnTop();
+    const first = planCut(doc(), innerFaceId, -DEPTH);
+    if (first.kind !== "cut") throw new Error(first.kind);
+    apply(store, first);
+
+    // A smaller rectangle drawn on the cavity's floor, 400² centred in the 600² opening.
+    const drawn = buildRectangle(
+      doc(),
+      { x: 800, y: 800, z: SIDE - DEPTH },
+      { x: 400, y: 0, z: 0 },
+      { x: 0, y: 400, z: 0 },
+    );
+    store.dispatch({ type: "addEntities", entities: drawn.entities });
+    const drawnFace = drawn.entities.find((entity) => entity.kind === "face");
+    expect(drawnFace).toBeDefined();
+
+    const second = planCut(doc(), drawnFace!.id, -300);
+    expect(second.kind).toBe("cut");
+    if (second.kind !== "cut") return;
+    apply(store, second);
+
+    expect(documentVolume(doc())).toBeCloseTo(
+      SIDE * SIDE * SIDE - INNER * INNER * DEPTH - 400 * 400 * 300,
+      0,
+    );
+    expect(everyEdgeSharedTwice(doc())).toBe(true);
+  });
 });
