@@ -27,6 +27,8 @@ export function createMeasureTool(): Tool {
     id: "measure",
     label: "Measure",
     shortcut: "Shift+T",
+    cursor: "crosshair",
+    lockMode: "axis",
     hint: "Click two points to measure and leave a dimension. Arrow keys pin an axis; type a length and press Enter.",
     numbers: { kind: "length", max: 1, example: "100", labels: ["length"] },
 

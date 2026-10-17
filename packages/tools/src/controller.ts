@@ -10,6 +10,7 @@ import {
 } from "@gabarito/core";
 import { axisForArrow } from "./axis-lock";
 import { resolveSnap } from "./inference";
+import { axisPlaneBasis, axisPlaneNormal } from "./planes";
 import { createTools } from "./tools";
 import type {
   AxisLockState,
@@ -89,6 +90,15 @@ function basisFor(normal: Vec3): { u: Vec3; v: Vec3 } {
 }
 
 /**
+ * A plane through a point that *contains* an axis and faces the camera as squarely as
+ * possible. This is what makes a locked axis usable on the third dimension: with the
+ * ground plane, a point locked to Z can never leave z = 0.
+ */
+function planeContainingAxis(axis: Vec3, origin: Vec3, viewDirection: Vec3): DrawingPlane {
+  return axisPlaneBasis(axis, axisPlaneNormal(axis, viewDirection), origin);
+}
+
+/**
  * Owns the tool lifecycle, pointer routing, the typed-value buffer, and the axis lock.
  * Tools declare what numbers they accept and never see raw text (decision 0012).
  */
@@ -132,6 +142,11 @@ export class ToolController {
     return { label: tool?.label ?? id, shortcut: tool?.shortcut ?? "" };
   }
 
+  /** CSS cursor for the active tool. */
+  getCursor(): string {
+    return this.getActiveTool().cursor || "default";
+  }
+
   setTool(id: ToolId): void {
     if (id === this.activeId) return;
     const previous = this.tools.get(this.activeId);
@@ -167,6 +182,7 @@ export class ToolController {
       project: (point) => this.viewport.worldToScreen(point),
       planeAt: (x, y) => this.planeAt(x, y),
       viewPlaneAt: (point) => ({ origin: point, normal: vec3.neg(this.viewport.viewDirection()) }),
+      viewDirection: () => this.viewport.viewDirection(),
       worldOnPlane: (x, y, plane) => this.viewport.raycastPlane(x, y, plane),
       pixelsPerWorldUnit: (at) => this.viewport.pixelsPerWorldUnit(at),
     };
@@ -199,6 +215,16 @@ export class ToolController {
   }
 
   private planeAt(screenX: number, screenY: number): DrawingPlane {
+    const lock = this.currentLock();
+    if (lock) {
+      const anchor = this.currentAnchor();
+      const origin =
+        anchor ??
+        this.viewport.raycastPlane(screenX, screenY, GROUND_PLANE) ??
+        this.cursor;
+      return planeContainingAxis(lock.direction, origin, this.viewport.viewDirection());
+    }
+
     const hit = this.viewport.raycast(screenX, screenY);
     if (hit && hit.kind === "face") {
       const face = this.store.getState().entities[hit.entityId];
@@ -226,6 +252,7 @@ export class ToolController {
       tolerance,
       anchor: this.currentAnchor(),
       lock: this.currentLock(),
+      lockMode: this.getActiveTool().lockMode,
       snapping: this.store.getState().settings.snapping,
     });
     this.snap = snap;

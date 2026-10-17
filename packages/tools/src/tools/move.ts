@@ -1,15 +1,59 @@
 import { vec3 } from "@gabarito/geometry";
 import type { Vec3 } from "@gabarito/geometry";
-import { formatLength, getPoint, pointIdsForEntities, unitSuffix } from "@gabarito/core";
+import { edgePositions, facePositions, formatLength, pointIdsForEntities, unitSuffix } from "@gabarito/core";
 import type { EntityId } from "@gabarito/core";
 import { PREVIEW } from "../style";
-import type { Tool, ToolContext } from "../types";
+import type { Tool, ToolContext, ToolPreview } from "../types";
 
 const CLEAR = { segments: [], polygons: [], points: [] };
 
+/** Ghost of what is about to move: faces filled, edges outlined, points marked. */
+function movedGhost(ctx: ToolContext, delta: Vec3): ToolPreview {
+  const segments: ToolPreview["segments"] = [];
+  const polygons: ToolPreview["polygons"] = [];
+  const points: ToolPreview["points"] = [];
+
+  for (const id of ctx.doc.selection) {
+    const entity = ctx.doc.entities[id];
+    if (!entity) continue;
+
+    if (entity.kind === "point") {
+      points.push({ position: vec3.add(entity.position, delta), color: PREVIEW.point });
+      continue;
+    }
+
+    if (entity.kind === "edge") {
+      const ends = edgePositions(ctx.doc, entity);
+      if (ends) {
+        segments.push({
+          a: vec3.add(ends[0], delta),
+          b: vec3.add(ends[1], delta),
+          color: PREVIEW.line,
+        });
+      }
+      continue;
+    }
+
+    if (entity.kind === "face") {
+      const loop = facePositions(ctx.doc, entity).map((point) => vec3.add(point, delta));
+      if (loop.length < 3) continue;
+      polygons.push({ points: loop, color: PREVIEW.face, opacity: 0.3 });
+      for (let index = 0; index < loop.length; index += 1) {
+        segments.push({
+          a: loop[index],
+          b: loop[(index + 1) % loop.length],
+          color: PREVIEW.line,
+        });
+      }
+    }
+  }
+
+  return { segments, polygons, points };
+}
+
 /**
- * Move: click to grab the selection, move, click to drop — so a distance can be typed
- * between the clicks. Axis locks constrain the delta. No copy modifier yet.
+ * Move: click to grab, the geometry follows the cursor, click to drop. `Esc` puts it back
+ * because nothing is applied until the drop. Axis locks constrain the delta to a line.
  */
 export function createMoveTool(): Tool {
   let pointIds: EntityId[] | null = null;
@@ -29,6 +73,8 @@ export function createMoveTool(): Tool {
     id: "move",
     label: "Move",
     shortcut: "M",
+    cursor: "move",
+    lockMode: "axis",
     hint: "Select, then click, move and click again. Type a distance and press Enter. Arrow keys pin an axis.",
     numbers: { kind: "length", max: 1, example: "100", labels: ["distance"] },
 
@@ -61,13 +107,7 @@ export function createMoveTool(): Tool {
       if (!pointIds || !start) return;
       delta = vec3.sub(event.world, start);
       if (!vec3.isZero(delta)) direction = vec3.normalize(delta);
-
-      const segments: Array<{ a: Vec3; b: Vec3; color?: number }> = [];
-      for (const id of pointIds) {
-        const point = getPoint(ctx.doc, id);
-        if (point) segments.push({ a: point, b: vec3.add(point, delta), color: PREVIEW.line });
-      }
-      ctx.preview({ segments, polygons: [], points: [] });
+      ctx.preview(movedGhost(ctx, delta));
     },
 
     commitNumbers(values, ctx) {

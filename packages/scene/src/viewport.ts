@@ -87,6 +87,7 @@ export class Viewport {
   private lastX = 0;
   private lastY = 0;
   private gridSize = 0;
+  private currentCursor = "";
 
   constructor(container: HTMLElement, store: Store) {
     this.container = container;
@@ -250,6 +251,13 @@ export class Viewport {
 
   setHandlers(handlers: ViewportHandlers): void {
     this.handlers = handlers;
+  }
+
+  /** CSS cursor for the canvas. Cheap to call on every change; only writes when it differs. */
+  setCursor(cursor: string): void {
+    if (this.currentCursor === cursor) return;
+    this.currentCursor = cursor;
+    this.renderer.domElement.style.cursor = cursor;
   }
 
   width(): number {

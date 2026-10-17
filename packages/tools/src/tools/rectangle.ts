@@ -6,9 +6,16 @@ import type { DrawingPlane, Tool, ToolContext } from "../types";
 
 const CLEAR = { segments: [], polygons: [], points: [] };
 
+/** Identifies the active axis lock, so the drawing plane can follow it when it changes. */
+function lockKey(ctx: ToolContext): string | null {
+  if (!ctx.axisLock) return null;
+  const { axisKey, direction } = ctx.axisLock;
+  return `${axisKey}${direction.x + direction.y + direction.z < 0 ? "-" : "+"}`;
+}
+
 /** Rectangle: two clicks on the diagonal, or a typed `width, depth`. */
 export function createRectangleTool(): Tool {
-  let anchor: { corner: Vec3; plane: DrawingPlane } | null = null;
+  let anchor: { corner: Vec3; plane: DrawingPlane; lock: string | null } | null = null;
   let extents = { u: 0, v: 0 };
 
   const cornersFrom = (corner: Vec3, plane: DrawingPlane, u: number, v: number): Vec3[] => [
@@ -21,7 +28,12 @@ export function createRectangleTool(): Tool {
   const commit = (u: number, v: number, ctx: ToolContext): void => {
     if (!anchor) return;
     if (Math.abs(u) < 1e-6 || Math.abs(v) < 1e-6) return;
-    const built = buildRectangle(ctx.doc, anchor.corner, vec3.scale(anchor.plane.u, u), vec3.scale(anchor.plane.v, v));
+    const built = buildRectangle(
+      ctx.doc,
+      anchor.corner,
+      vec3.scale(anchor.plane.u, u),
+      vec3.scale(anchor.plane.v, v),
+    );
     if (built.entities.length === 0) return;
     ctx.dispatch({ type: "addEntities", entities: built.entities });
     anchor = null;
@@ -33,12 +45,18 @@ export function createRectangleTool(): Tool {
     id: "rectangle",
     label: "Rectangle",
     shortcut: "R",
-    hint: "Click a corner, then the opposite one. Type `width, depth` and press Enter. Arrow keys pin the plane axis.",
+    cursor: "crosshair",
+    lockMode: "plane",
+    hint: "Click a corner, then the opposite one. Type `width, depth` and press Enter. Arrow keys set the plane (↑ makes it vertical).",
     numbers: { kind: "length", max: 2, example: "100, 50", labels: ["width", "depth"] },
 
     pointerDown(event, ctx) {
       if (!anchor) {
-        anchor = { corner: event.world, plane: ctx.planeAt(event.screenX, event.screenY) };
+        anchor = {
+          corner: event.world,
+          plane: ctx.planeAt(event.screenX, event.screenY),
+          lock: lockKey(ctx),
+        };
         return;
       }
       commit(extents.u, extents.v, ctx);
@@ -46,10 +64,19 @@ export function createRectangleTool(): Tool {
 
     pointerMove(event, ctx) {
       if (!anchor) return;
+      // Pinning an axis after the first click changes which plane the shape lives on.
+      const key = lockKey(ctx);
+      if (key !== anchor.lock) {
+        anchor = { ...anchor, plane: ctx.planeAt(event.screenX, event.screenY), lock: key };
+      }
+
       const delta = vec3.sub(event.world, anchor.corner);
-      const u = ctx.axisLock && ctx.axisLock.axisKey !== "x" ? extents.u : vec3.dot(delta, anchor.plane.u);
-      const v = ctx.axisLock && ctx.axisLock.axisKey !== "y" ? extents.v : vec3.dot(delta, anchor.plane.v);
+      // The plane already accounts for an axis lock: locking Z makes it vertical, with u
+      // along the locked axis, so both extents come straight from the plane basis.
+      const u = vec3.dot(delta, anchor.plane.u);
+      const v = vec3.dot(delta, anchor.plane.v);
       extents = { u, v };
+
       const corners = cornersFrom(anchor.corner, anchor.plane, u, v);
       ctx.preview({
         segments: [

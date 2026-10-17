@@ -30,6 +30,7 @@ export function boot({ root }: BootOptions): void {
   controller = new ToolController(store, viewport, () => {
     viewport.setPreview(controller.getPreview());
     viewport.setSnap(controller.getSnapIndicator());
+    viewport.setCursor(controller.getCursor());
     notify();
   });
 
@@ -140,6 +141,7 @@ export function boot({ root }: BootOptions): void {
 
   mountUi(root, api);
   installKeymap(store, controller, viewport);
+  viewport.setCursor(controller.getCursor());
   viewport.frameDocument();
 
   // Dev-only handle so end-to-end tests can assert real document state rather than

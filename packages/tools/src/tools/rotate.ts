@@ -50,6 +50,8 @@ export function createRotateTool(): Tool {
     id: "rotate",
     label: "Rotate",
     shortcut: "Q",
+    cursor: "grab",
+    lockMode: "plane",
     hint: "Select, click a pivot, then drag. Arrow keys pin the axis (Z by default). Type an angle in degrees and press Enter.",
     numbers: { kind: "angle", max: 1, example: "45", labels: ["angle"] },
 
@@ -65,7 +67,11 @@ export function createRotateTool(): Tool {
     pointerMove(event, ctx) {
       if (!pivot) return;
       const axis = rotationAxis(ctx);
-      const relative = vec3.sub(event.world, pivot);
+      // The angle needs a point on the plane *perpendicular* to the rotation axis, so the
+      // tool raycasts it itself instead of using the drawing-plane point.
+      const world =
+        ctx.worldOnPlane(event.screenX, event.screenY, { origin: pivot, normal: axis }) ?? event.world;
+      const relative = vec3.sub(world, pivot);
       const radial = vec3.sub(relative, vec3.scale(axis, vec3.dot(relative, axis)));
       if (vec3.isZero(radial)) return;
 

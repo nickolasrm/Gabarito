@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { poly as polyOps } from "@gabarito/geometry";
+import { poly as polyOps, vec3 } from "@gabarito/geometry";
 import type { Plane } from "@gabarito/geometry";
 import { createStore, edgesOf, facePositions, facesOf, getPoint, pointsOf, type Store } from "@gabarito/core";
 import { ToolController, type PointerState, type ViewportAdapter } from "./controller";
 
+/** A fixed, non-axis-aligned view direction, so locked planes are representable. */
+const VIEW_DIRECTION = { x: 0, y: -Math.SQRT1_2, z: -Math.SQRT1_2 };
+
 /**
- * A stand-in for the viewport that maps screen coordinates straight onto the ground
- * plane, so tool behaviour can be tested without a browser or a GPU.
+ * A stand-in for the viewport. Screen coordinates map onto the ground plane and the ray
+ * runs along the view direction, which is enough to exercise the geometry that locked
+ * planes and the push/pull plane depend on.
  */
 function fakeViewport(store: Store): ViewportAdapter {
   return {
@@ -24,8 +28,11 @@ function fakeViewport(store: Store): ViewportAdapter {
       return null;
     },
     raycastPlane(x, y, plane: Plane) {
-      if (Math.abs(plane.normal.z) < 1e-9) return null;
-      return { x, y, z: plane.origin.z };
+      const origin = { x, y, z: 0 };
+      const denominator = vec3.dot(VIEW_DIRECTION, plane.normal);
+      if (Math.abs(denominator) < 1e-9) return null;
+      const t = vec3.dot(vec3.sub(plane.origin, origin), plane.normal) / denominator;
+      return vec3.add(origin, vec3.scale(VIEW_DIRECTION, t));
     },
     worldToScreen(point) {
       return { x: point.x, y: point.y, visible: true };
@@ -34,7 +41,7 @@ function fakeViewport(store: Store): ViewportAdapter {
       return 1;
     },
     viewDirection() {
-      return { x: 0, y: 0, z: -1 };
+      return VIEW_DIRECTION;
     },
   };
 }
@@ -250,5 +257,110 @@ describe("tool controller", () => {
     down(0, 750);
     const dimensions = Object.values(store.getState().entities).filter((entity) => entity.kind === "dimension");
     expect(dimensions).toHaveLength(1);
+  });
+
+  // Regression tests for the six reported bugs.
+
+  it("closes a face when three lines form a triangle", () => {
+    const { store, controller, down } = harness();
+    controller.setTool("line");
+    down(0, 0);
+    down(1000, 0);
+    down(0, 600);
+    down(0, 0);
+    const state = store.getState();
+    expect(facesOf(state)).toHaveLength(1);
+    expect(edgesOf(state)).toHaveLength(3);
+    expect(pointsOf(state)).toHaveLength(3);
+  });
+
+  it("makes a rectangle vertical when Z is pinned", () => {
+    const { store, controller, move, down } = harness();
+    controller.setTool("rectangle");
+    down(0, 0);
+    controller.pressKey("ArrowUp", false);
+    move(400, 300);
+    expect(controller.getStatus().axisKey).toBe("z");
+    down(400, 300);
+
+    const positions = facePositions(store.getState(), facesOf(store.getState())[0]);
+    const zs = positions.map((point) => point.z);
+    const ys = positions.map((point) => point.y);
+    expect(Math.max(...zs) - Math.min(...zs)).toBeGreaterThan(1);
+    // Vertical: no depth away from the plane that contains Z.
+    expect(Math.max(...ys) - Math.min(...ys)).toBeLessThan(1e-6);
+  });
+
+  it("draws a vertical edge when Z is pinned", () => {
+    const { store, controller, move, down } = harness();
+    controller.setTool("line");
+    down(0, 0);
+    controller.pressKey("ArrowUp", false);
+    move(0, 300);
+    down(0, 300);
+
+    const edge = edgesOf(store.getState())[0];
+    const a = getPoint(store.getState(), edge.points[0]);
+    const b = getPoint(store.getState(), edge.points[1]);
+    expect(a).not.toBeNull();
+    expect(Math.abs((b?.z ?? 0) - (a?.z ?? 0))).toBeGreaterThan(1);
+  });
+
+  it("extrudes a face by dragging on the pull plane, not the face plane", () => {
+    const { store, controller, move, down, type } = harness();
+    controller.setTool("rectangle");
+    down(0, 0);
+    type("1000");
+    controller.commitTyped();
+
+    controller.setTool("pushpull");
+    down(500, 500);
+    expect(controller.getStatus().active).toBe(true);
+
+    move(500, 200);
+    expect(controller.getStatus().readout).not.toBe("0 mm");
+    down(500, 200);
+
+    expect(facesOf(store.getState())).toHaveLength(6);
+    expect(pointsOf(store.getState())).toHaveLength(8);
+  });
+
+  it("previews the geometry that is about to move, not connector lines", () => {
+    const { store, controller, move, down, type } = harness();
+    controller.setTool("rectangle");
+    down(0, 0);
+    type("1000");
+    controller.commitTyped();
+
+    controller.setTool("select");
+    down(500, 500);
+    expect(store.getState().selection).toHaveLength(1);
+
+    controller.setTool("move");
+    down(500, 500);
+    move(700, 400);
+
+    const preview = controller.getPreview();
+    expect(preview.polygons).toHaveLength(1);
+    expect(preview.segments).toHaveLength(4);
+  });
+
+  it("puts the geometry back when a move is cancelled", () => {
+    const { store, controller, move, down, type } = harness();
+    controller.setTool("rectangle");
+    down(0, 0);
+    type("1000");
+    controller.commitTyped();
+    const before = JSON.stringify(pointsOf(store.getState()).map((point) => point.position));
+
+    controller.setTool("select");
+    down(500, 500);
+    controller.setTool("move");
+    down(0, 0);
+    move(600, 600);
+    controller.cancel();
+
+    expect(JSON.stringify(pointsOf(store.getState()).map((point) => point.position))).toBe(before);
+    expect(controller.getPreview().polygons).toHaveLength(0);
   });
 });

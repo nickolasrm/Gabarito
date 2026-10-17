@@ -28,6 +28,7 @@ export function createLineTool(): Tool {
     id: "line",
     label: "Line",
     shortcut: "L",
+    cursor: "crosshair",
     hint: "Click a start and an end point. Type a length and press Enter, or pin an axis with the arrow keys.",
     numbers: { kind: "length", max: 1, example: "100", labels: ["length"] },
 

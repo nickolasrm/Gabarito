@@ -42,6 +42,7 @@ export function createSelectTool(): Tool {
     id: "select",
     label: "Select",
     shortcut: "Space",
+    cursor: "default",
     hint: "Click to select. Shift-click to add. Drag a box to select what it encloses. Delete removes.",
 
     pointerDown(event, ctx) {

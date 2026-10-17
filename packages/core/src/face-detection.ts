@@ -38,7 +38,8 @@ function findLoopCandidates(adjacency: Adjacency, start: EntityId, end: EntityId
     if (results.length >= MAX_CANDIDATE_LOOPS || path.length > MAX_LOOP_POINTS) return;
     for (const next of adjacency.get(node) ?? []) {
       if (next === end) {
-        if (path.length >= 3) results.push([...path, end]);
+        // A loop needs at least three points: this path plus the end point.
+        if (path.length >= 2) results.push([...path, end]);
         if (results.length >= MAX_CANDIDATE_LOOPS) return;
         continue;
       }
