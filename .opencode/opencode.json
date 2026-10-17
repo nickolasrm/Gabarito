@@ -1,14 +1,18 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  // Caveman and ponytail are always loaded in this project (spec 0010).
+  // Caveman and ponytail are always loaded in this project (specs 0010 and 0014).
   //
   // A skill is on-demand by design: OpenCode advertises it and the agent decides
   // whether to load it, so a skill alone cannot be guaranteed on every request. The
   // `instructions` array is the only channel that is in context for every request, so
-  // the two skill bodies are listed there as well as being registered as skills.
+  // the skill bodies are listed there as well as being registered as skills.
+  //
+  // ultracave, not caveman: same rules at maximum compression. The `caveman`, `megacave`
+  // and `ponytail` skills stay registered, so `@caveman` and `@ponytail` still work.
   "instructions": [
     ".opencode/instructions/00-precedence.md",
-    ".opencode/skills/caveman/SKILL.md",
+    ".opencode/instructions/01-agent-mode.md",
+    ".opencode/skills/ultracave/SKILL.md",
     ".opencode/skills/ponytail/SKILL.md"
   ]
 }

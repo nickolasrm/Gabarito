@@ -7,9 +7,26 @@ Agent configuration for this repository: two vendored style skills, forced on fo
 ```
 opencode.json                        instructions list — this is what forces the skills on
 instructions/00-precedence.md        project rules beat the style skills
+instructions/01-agent-mode.md        the levels: ultracave, ponytail ultra
 skills/caveman/SKILL.md + LICENSE    vendored, unmodified
 skills/ponytail/SKILL.md + LICENSE   vendored, unmodified
+skills/ultracave/SKILL.md + LICENSE  vendored, unmodified
 ```
+
+## Levels
+
+`instructions/01-agent-mode.md` sets the levels and is the file to edit. It loads `ultracave` rather
+than `caveman` — same rules, maximum compression, and 2.5 kB instead of 4.7 kB — and puts ponytail at
+`ultra`. The weaker `caveman` skill stays registered, so `@caveman` still works when someone wants the
+softer voice.
+
+`megacave` is **not** installed. It is caveman in Classical Chinese, which is a change of language, not
+of strength, and it does not fit this project.
+
+Note that loading `ultracave` as an instruction bypasses upstream's `disable-model-invocation: true`,
+which exists so the mode is only used when asked for. That is deliberate here — the owner asked for it
+as the default — and it is the kind of upstream-intent override `instructions/00-precedence.md` exists
+to make explicit.
 
 ## Why `instructions` and not just skills
 
@@ -31,9 +48,10 @@ Vendored unmodified from upstream. Verify with `sha256sum`:
 | Skill | Source | Version fetched | sha256 of `SKILL.md` |
 |---|---|---|---|
 | caveman | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) `skills/caveman/SKILL.md` | `main`, 2026-10-17 | `415d43518f2b1a9498c15a445d4657117b129ee5e81b19454ce348439cc6672b` |
+| ultracave | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) `skills/ultracave/SKILL.md` | `main`, 2026-10-17 | `a8da5b0b3501b853e1b98f2ae09fe8dc9c0edf481b1d3fa9529f8557011c1ef8` |
 | ponytail | [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) `skills/ponytail/SKILL.md` | `main`, 2026-10-17 | `9badd22a32e19cb884e46dfa8d3aae82bb81dfa5484105b8b4f0262df823a509` |
 
-Licences are vendored beside each skill: caveman is Apache-2.0, ponytail is MIT.
+Licences are vendored beside each skill: caveman and ultracave are Apache-2.0, ponytail is MIT.
 
 To update one, re-fetch the upstream file, replace it, and update the hash above. Do not edit the
 vendored files: a local edit makes the hash a lie and the next update silently reverts it.
@@ -44,9 +62,14 @@ vendored files: a local edit makes the hash a lie and the next update silently r
   always-on, so their rules mix in every request. `instructions/00-precedence.md` settles who wins,
   and upstream has an open issue about token-compression skills stacking badly
   ([caveman#574](https://github.com/JuliusBrussee/caveman/issues/574)).
-- **`/caveman ultra` and `/caveman wenyan` do not work here.** The caveman body defers those aliases
-  to the upstream `ultracave` and `megacave` skills, which are not vendored. Only the default voice is
-  installed.
+- **`/caveman wenyan` does not work here.** That alias defers to the upstream `megacave` skill, which
+  is caveman in Classical Chinese — a change of language rather than of strength, so it is not
+  vendored. `/caveman ultra` does work: `ultracave` is installed and is the default.
+- **`ultracave` is loaded as an instruction, which bypasses its own `disable-model-invocation: true`.**
+  That flag exists so the mode is only used when asked for. The owner asked for it as the default, so
+  the override is deliberate and recorded in `instructions/01-agent-mode.md`.
+- **Ponytail's `ultra` level includes push-back.** It is not only terser code: it also means questioning
+  the request before building. Reach for `full` in `instructions/01-agent-mode.md` if that is too much.
 - **The `ponytail-review`, `ponytail-audit` and `ponytail-debt` commands are not installed**, only the
   rules.
 
