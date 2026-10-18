@@ -39,3 +39,9 @@ commands also work on guides. Validation rejects nonfinite origins/directions an
 Geometry queries, face rebuilding and solid operations exclude guides by kind. `guides(model)`
 queries editable rulers; `referenceLines(model)` adds the built-in `WORLD_AXES`. World axes and
 `world:origin` are references outside the entity map, so selection/deletion cannot modify them.
+
+`{ type: "scale", ids, anchor, factors }` scales selected shared vertices once about a fixed world
+anchor with independent positive X/Y/Z factors. Selected rulers transform their origin and direction;
+unselected entities keep their coordinates. `scale.ts` validates the factors and anchor, and the
+existing transaction validation rejects nonplanar/invalid results before publishing. History restores
+exact snapshots. Finite positive factors are accepted when resulting geometry stays valid.

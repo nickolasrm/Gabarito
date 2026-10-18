@@ -1,3 +1,4 @@
+import { createScaleTool } from "./scale-tool";
 import { snapOnFace, midpointEdge } from "./face-snap";
 import { snapAlongAxis } from "./axis-snap";
 import { rectangleRatio, snapProportion } from "./proportions";
@@ -65,6 +66,10 @@ export function createController(store: Store, view: ToolView): Controller {
   const emit = () => {
     for (const fn of listeners) fn();
   };
+  const scaleTool = createScaleTool(store, view, emit);
+  const unsubscribe = store.subscribe(() => {
+    if (tool === "scale") scaleTool.refresh();
+  });
   const cancel = () => {
     axis = null;
     axisSign = 1;
@@ -83,6 +88,7 @@ export function createController(store: Store, view: ToolView): Controller {
     view.preview([]);
     view.cursorHint("", lastX, lastY);
     view.feedback(null);
+    scaleTool.cancel();
     emit();
   };
   const direction = (): Vec3 =>
@@ -320,6 +326,10 @@ export function createController(store: Store, view: ToolView): Controller {
     return true;
   };
   const submit = () => {
+    if (tool === "scale") {
+      scaleTool.submit();
+      return;
+    }
     if (!start) {
       message = "Click a starting point first";
       emit();
@@ -369,6 +379,11 @@ export function createController(store: Store, view: ToolView): Controller {
   ) => {
     lastX = x;
     lastY = y;
+    if (tool === "scale") {
+      scaleTool.pointer(x, y, click);
+      emit();
+      return;
+    }
     inferenceLines = [];
     inferenceLabel = "";
     const ray = view.ray(x, y);
@@ -608,6 +623,11 @@ export function createController(store: Store, view: ToolView): Controller {
     emit();
   };
   return {
+    dispose() {
+      unsubscribe();
+      scaleTool.enable(false);
+      listeners.clear();
+    },
     status: () => ({
       tool,
       active: !!start,
@@ -618,6 +638,7 @@ export function createController(store: Store, view: ToolView): Controller {
       measurement,
       plane: planeLabel,
       snapping,
+      ...(tool === "scale" ? { ...scaleTool.status(), axis: "Free" } : {}),
     }),
     subscribe(fn) {
       listeners.add(fn);
@@ -628,13 +649,14 @@ export function createController(store: Store, view: ToolView): Controller {
     setTool(t) {
       cancel();
       tool = t;
+      scaleTool.enable(t === "scale");
       axis = null;
       axisSign = 1;
       emit();
     },
     setUnit(u) {
       unitId = u;
-      updatePreview();
+      if (tool !== "scale") updatePreview();
       emit();
     },
     setSnapping(enabled) {
@@ -644,17 +666,31 @@ export function createController(store: Store, view: ToolView): Controller {
       emit();
     },
     setTyped(s) {
+      if (tool === "scale") {
+        scaleTool.setTyped(s);
+        return;
+      }
       typed = s;
       emit();
     },
     submit,
     pointer,
     press(x, y) {
+      if (tool === "scale") {
+        scaleTool.press(x, y);
+        emit();
+        return;
+      }
       if (tool !== "tape" && tool !== "pushpull") return;
       gesturePress = { x, y, active: !!start };
       pointer(x, y, !start);
     },
     release(x, y) {
+      if (tool === "scale") {
+        scaleTool.release(x, y);
+        emit();
+        return;
+      }
       if (tool !== "tape" && tool !== "pushpull") return;
       const pressed = gesturePress;
       gesturePress = null;
@@ -690,9 +726,10 @@ export function createController(store: Store, view: ToolView): Controller {
         return true;
       }
       if (key === "Escape") {
-        if (start) cancel();
+        if (start || (tool === "scale" && scaleTool.status().active)) cancel();
         else {
           tool = "select";
+          scaleTool.enable(false);
           axis = null;
           axisSign = 1;
           emit();
@@ -703,11 +740,20 @@ export function createController(store: Store, view: ToolView): Controller {
         submit();
         return true;
       }
-      if (key === "Delete" || (key === "Backspace" && !typed)) {
-        if (!start) run({ type: "delete", ids: store.getState().selection });
+      if (
+        key === "Delete" ||
+        (key === "Backspace" &&
+          !(tool === "scale" ? scaleTool.status().typed : typed))
+      ) {
+        if (!start && !(tool === "scale" && scaleTool.status().active))
+          run({ type: "delete", ids: store.getState().selection });
         return true;
       }
       if (key === "Backspace") {
+        if (tool === "scale") {
+          scaleTool.setTyped(scaleTool.status().typed.slice(0, -1));
+          return true;
+        }
         typed = typed.slice(0, -1);
         emit();
         return true;
@@ -719,6 +765,7 @@ export function createController(store: Store, view: ToolView): Controller {
         ArrowLeft: "y",
       };
       if (mapping[key]) {
+        if (tool === "scale") return true;
         const next = mapping[key],
           sign = key === "ArrowDown" ? -1 : 1;
         axis = axis === next && axisSign === sign ? null : next;
@@ -732,10 +779,12 @@ export function createController(store: Store, view: ToolView): Controller {
         return true;
       }
       if (
-        start &&
+        (start || (tool === "scale" && scaleTool.status().active)) &&
         (/^[0-9.,;+\-]$/.test(key) || (typed && /^[a-z]$/i.test(key)))
       ) {
-        typed += key;
+        if (tool === "scale")
+          scaleTool.setTyped(scaleTool.status().typed + key);
+        else typed += key;
         emit();
         return true;
       }
@@ -748,6 +797,7 @@ export function createController(store: Store, view: ToolView): Controller {
         if (next) {
           cancel();
           tool = next.id;
+          scaleTool.enable(tool === "scale");
           axis = null;
           emit();
           return true;

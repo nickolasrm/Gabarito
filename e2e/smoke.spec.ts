@@ -68,7 +68,7 @@ test.beforeEach(async ({ page }) => {
 test.afterEach(async ({ page }) => {
   expect(errors.get(page)).toEqual([]);
 });
-test("boots with all seven tools and creates exact typed geometry with undo/redo", async ({
+test("boots with all modeling tools and creates exact typed geometry with undo/redo", async ({
   page,
 }) => {
   for (const name of [
@@ -77,6 +77,7 @@ test("boots with all seven tools and creates exact typed geometry with undo/redo
     "Rectangle",
     "Tape Measure",
     "Move",
+    "Scale",
     "Push/Pull",
     "Rotate",
   ])
@@ -1233,4 +1234,147 @@ test("Rotate shows face-center, midpoint and diagonal hints and Alt bypasses the
   expect((await snapshot(page)).entities).toEqual(before.entities);
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   expect((await snapshot(page)).entities).toEqual(after.entities);
+});
+
+async function selectedCube(page: Page) {
+  await rectangle(page);
+  await push(page, { x: 50, y: 50, z: 0 }, "100");
+  await page.keyboard.press("f");
+  await page.getByRole("button", { name: /^Select/ }).click();
+  await page.evaluate(() => {
+    const { store } = window.__gabarito;
+    store.select(Object.keys(store.getState().entities));
+  });
+  await page.getByRole("button", { name: /^Scale/ }).click();
+}
+for (const gesture of ["drag", "click"] as const) {
+  test(`Scale ${gesture} stretches a face grip, keeps its opposite anchor and commits once`, async ({
+    page,
+  }) => {
+    await selectedCube(page);
+    await expect(page.locator(".scale-handle")).toHaveCount(26);
+    const handle = page.locator('[data-scale-handle="1,0,0"]');
+    await expect(handle).toBeVisible();
+    await expect(page.locator('[data-scale-handle="-1,0,0"]')).toBeHidden();
+    const before = await snapshot(page),
+      a = await screenOf(page, { x: 100, y: 50, z: 50 }),
+      b = await screenOf(page, { x: 150, y: 50, z: 50 });
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    if (gesture === "click") await page.mouse.up();
+    await page.mouse.move(b.x, b.y);
+    await expect(page.locator(".cursor-hint")).toContainText("1.500");
+    expect((await snapshot(page)).entities).toEqual(before.entities);
+    if (gesture === "click") await page.mouse.down();
+    await page.mouse.up();
+    const after = await snapshot(page);
+    for (const e of Object.values(before.entities)) {
+      if (e.kind !== "vertex") continue;
+      const v = after.entities[e.id];
+      if (v.kind !== "vertex") throw new Error("Missing scaled vertex");
+      expect(v.position.x).toBeCloseTo(e.position.x * 1.5, 1);
+      expect(v.position.y).toBeCloseTo(e.position.y, 5);
+      expect(v.position.z).toBeCloseTo(e.position.z, 5);
+    }
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    expect((await snapshot(page)).entities).toEqual(before.entities);
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    expect((await snapshot(page)).entities).toEqual(after.entities);
+    await page.getByRole("button", { name: /^Select/ }).click();
+    await expect(page.locator(".scale-handle")).toHaveCount(0);
+  });
+}
+test("Scale corners accept typed factors and Escape/blur discard previews", async ({
+  page,
+}) => {
+  await selectedCube(page);
+  const before = await snapshot(page),
+    a = await screenOf(page, { x: 100, y: 0, z: 100 });
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.keyboard.type("2");
+  await page.mouse.up();
+  const after = await snapshot(page);
+  for (const e of Object.values(before.entities)) {
+    if (e.kind !== "vertex") continue;
+    const v = after.entities[e.id];
+    if (v.kind !== "vertex") throw new Error("Missing scaled vertex");
+    expect(v.position.x).toBeCloseTo(e.position.x * 2, 5);
+    expect(v.position.y).toBeCloseTo(100 + (e.position.y - 100) * 2, 5);
+    expect(v.position.z).toBeCloseTo(e.position.z * 2, 5);
+  }
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  for (const cancel of ["Escape", "blur"] as const) {
+    const b = await screenOf(page, { x: 150, y: 50, z: 50 }),
+      start = await screenOf(page, { x: 100, y: 50, z: 50 });
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.up();
+    await page.mouse.move(b.x, b.y);
+    if (cancel === "Escape") await page.keyboard.press("Escape");
+    else await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+    expect((await snapshot(page)).entities).toEqual(before.entities);
+    expect(
+      await page.evaluate(() => window.__gabarito.controller.status().active),
+    ).toBe(false);
+    await expect(page.locator(".scale-handle")).toHaveCount(26);
+  }
+});
+test("Scale supports flat bounds, hides occluded handles and follows camera changes", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await page.keyboard.press("f");
+  await page.getByRole("button", { name: /^Select/ }).click();
+  await clickWorld(page, { x: 50, y: 50, z: 0 });
+  await page.keyboard.press("s");
+  await expect(page.locator(".scale-handle")).toHaveCount(8);
+  const a = await screenOf(page, { x: 100, y: 0, z: 0 });
+  await page.mouse.click(a.x, a.y);
+  await type(page, "2");
+  expect(
+    Object.values((await snapshot(page)).entities)
+      .filter((e) => e.kind === "vertex")
+      .every((v) => v.position.z === 0),
+  ).toBe(true);
+  const grip = page.locator('[data-scale-handle="1,-1,0"]'),
+    old = await grip.boundingBox();
+  await page.mouse.wheel(0, -200);
+  await expect.poll(async () => (await grip.boundingBox())?.x).not.toBe(old?.x);
+  await page.evaluate(() => window.__gabarito.store.select([]));
+  await expect(page.locator(".scale-handle")).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText("Select geometry");
+});
+
+test("Scale edge grips distort two dimensions and changing tools during drag does not send a stray click", async ({
+  page,
+}) => {
+  await selectedCube(page);
+  const before = await snapshot(page),
+    a = await screenOf(page, { x: 100, y: 0, z: 50 }),
+    b = await screenOf(page, { x: 115, y: -10, z: 50 });
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y);
+  await page.mouse.up();
+  const after = await snapshot(page);
+  for (const e of Object.values(before.entities)) {
+    if (e.kind !== "vertex") continue;
+    const v = after.entities[e.id];
+    if (v.kind !== "vertex") throw new Error("Missing distorted vertex");
+    expect(v.position.x).toBeCloseTo(e.position.x * 1.15, 4);
+    expect(v.position.y).toBeCloseTo(100 + (e.position.y - 100) * 1.1, 4);
+    expect(v.position.z).toBeCloseTo(e.position.z, 5);
+  }
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y);
+  await page.keyboard.press("l");
+  await page.mouse.up();
+  expect((await snapshot(page)).entities).toEqual(before.entities);
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().active),
+  ).toBe(false);
+  await expect(page.locator(".scale-handle")).toHaveCount(0);
 });

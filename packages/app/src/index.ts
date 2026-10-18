@@ -56,6 +56,7 @@ export async function boot({ root }: { root: HTMLElement }): Promise<void> {
         return () => {
           unsubscribe();
           detachInput();
+          controller.dispose();
           viewport.dispose();
         };
       },

@@ -28,3 +28,8 @@ Push/pull now uses the same click-versus-drag discriminator as tape. Each press 
 a first stationary release leaves the operation armed, so uncaptured pointer movement previews the
 next click. Native clicks stay suppressed to prevent duplicate commits. Blur also cancels an armed
 push/pull between clicks, when there is no captured pointer.
+
+Scale participates in captured primary gestures, click-mode movement and blur/pointer cancellation.
+Native clicks belonging to captured gestures stay suppressed even if the tool changes before
+release; the next intentional press starts normally. App unmount also disposes controller store
+subscriptions before destroying the viewport.

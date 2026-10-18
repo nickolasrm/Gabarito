@@ -7,16 +7,19 @@ export function attachInput(
   frame: () => void,
 ): () => void {
   let dragPointer: number | null = null;
+  let suppressClick = false;
   const local = (event: MouseEvent) => {
     const box = canvas.getBoundingClientRect();
     return { x: event.clientX - box.left, y: event.clientY - box.top };
   };
   const down = (event: PointerEvent) => {
+    if (event.button === 0) suppressClick = false;
     if (
       event.button !== 0 ||
-      !["pushpull", "tape"].includes(controller.status().tool)
+      !["pushpull", "tape", "scale"].includes(controller.status().tool)
     )
       return;
+    suppressClick = true;
     canvas.focus();
     controller.setSnapping(!event.altKey);
     const { x, y } = local(event);
@@ -31,7 +34,7 @@ export function attachInput(
     if (
       event.buttons === 0 ||
       (event.pointerId === dragPointer &&
-        ["pushpull", "tape"].includes(controller.status().tool))
+        ["pushpull", "tape", "scale"].includes(controller.status().tool))
     ) {
       controller.setSnapping(!event.altKey);
       const { x, y } = local(event);
@@ -56,7 +59,7 @@ export function attachInput(
       releaseCapture();
       controller.cancel();
     } else if (
-      ["tape", "pushpull"].includes(controller.status().tool) &&
+      ["tape", "pushpull", "scale"].includes(controller.status().tool) &&
       controller.status().active
     ) {
       controller.cancel();
@@ -67,9 +70,13 @@ export function attachInput(
   };
   const leave = () => controller.leave();
   const click = (event: MouseEvent) => {
+    if (event.button === 0 && suppressClick) {
+      suppressClick = false;
+      return;
+    }
     if (
       event.button !== 0 ||
-      ["pushpull", "tape"].includes(controller.status().tool)
+      ["pushpull", "tape", "scale"].includes(controller.status().tool)
     )
       return;
     canvas.focus();

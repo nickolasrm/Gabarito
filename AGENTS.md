@@ -21,6 +21,24 @@ closed planar edge regions create faces, drawings partition surfaces, and push/p
 Keep modules small, document changes in indexed specs, test every feature and bug fix, and provide
 an active local preview and a PR for human verification before any merge.
 
+## Standing authorization and approval gates
+
+The owner authorizes routine development work without additional confirmation. Proceed with:
+
+- Starting, maintaining and checking the local development server.
+- Running tests, typechecks, builds and other verification commands.
+- Staging and committing the requested changes, publishing their branches, and creating/updating PRs.
+- Checking or waiting for CI status.
+
+Do not ask permission again for these steps. An explicit implementation request also accepts its
+in-scope spec; document the plan and proceed. Ask clarifying questions only when necessary to resolve
+missing requirements or a decision that cannot reasonably be inferred.
+
+**Every merge needs fresh, explicit owner approval.** Keep the human preview/review gate and wait
+for approval before merging. Approval received for the current merge is sufficient; do not ask for
+the same approval twice. Earlier merges do not authorize later ones. Follow enforced runtime/sandbox
+permissions; these instructions remove agent-requested confirmation, not platform permission checks.
+
 ## The one rule
 
 **No change lands without a spec.** Code, docs, config, a dependency bump — every change starts
@@ -82,7 +100,8 @@ reading everything.
 1. **Search before deciding.** `rg -i '<keyword>' docs/decisions`
 2. **Write the spec** from `docs/specs/TEMPLATE.md` as `docs/specs/NNNN-slug.md` with status
    `proposed`. One change per spec. Small. Link the decisions it relies on.
-3. **Get it accepted** (user approval) → status `accepted`.
+3. **Get it accepted** → status `accepted`. The owner's explicit implementation request accepts
+   specs within that scope; do not pause for redundant spec approval. Clarify only when necessary.
 4. **Implement** inside the spec's scope. If scope must change, update the spec *first*.
 5. **Close the spec**: status `implemented`, add a `## Result` section describing what actually
    shipped and any deviation from the plan.

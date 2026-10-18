@@ -30,6 +30,6 @@ is a contract change with a spec — never a domain concept inside `core`.
 
 ## What is not a feature
 
-Built-in tools (select, line, rectangle, push/pull, move, rotate) are **not** plugins. They ship in
+Built-in tools (select, line, rectangle, push/pull, move, rotate, scale, tape measure) are **not** plugins. They ship in
 `packages/tools` as part of the modeler, because every user needs them and the plugin machinery would
 only add indirection. A domain gets plugin status when it is optional.
