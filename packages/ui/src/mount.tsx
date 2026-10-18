@@ -164,10 +164,10 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
               {status.message ||
                 (status.active
                   ? status.tool === "pushpull"
-                    ? "Drag or type a distance; release to finish"
+                    ? "Move or type a distance; click or release to finish"
                     : "Choose destination or enter dimensions"
                   : status.tool === "pushpull"
-                    ? "Hold a face to start"
+                    ? "Click or drag a face to start"
                     : "Choose a starting point")}
             </span>
           </div>

@@ -60,13 +60,15 @@ export function createController(store: Store, view: ToolView): Controller {
     inferenceLines: Segment[] = [],
     inferenceLabel = "";
   let rulerDirection: Vec3 | null = null;
-  let tapePress: { x: number; y: number; active: boolean } | null = null;
+  let gesturePress: { x: number; y: number; active: boolean } | null = null;
   const listeners = new Set<() => void>();
   const emit = () => {
     for (const fn of listeners) fn();
   };
   const cancel = () => {
-    tapePress = null;
+    axis = null;
+    axisSign = 1;
+    gesturePress = null;
     rulerDirection = null;
     inferenceLines = [];
     inferenceLabel = "";
@@ -130,7 +132,7 @@ export function createController(store: Store, view: ToolView): Controller {
     if (tool === "line") view.preview([[start, current], ...inferenceLines]);
     else if (tool === "tape")
       view.preview(
-        [[start, current]],
+        [[start, current], ...inferenceLines],
         near(start, current)
           ? []
           : [
@@ -208,7 +210,7 @@ export function createController(store: Store, view: ToolView): Controller {
         : `${(distance / UNITS[unitId]).toFixed(2)} ${unitId}`;
     view.cursorHint(
       tool === "tape"
-        ? measurement
+        ? [measurement, inferenceLabel].filter(Boolean).join(" · ")
         : [
             inferenceLabel,
             ratio || (tool === "pushpull" && inferenceLabel ? measurement : ""),
@@ -232,6 +234,8 @@ export function createController(store: Store, view: ToolView): Controller {
       else {
         start = end;
         current = end;
+        axis = null;
+        axisSign = 1;
         typed = "";
         inferenceLines = [];
         inferenceLabel = "";
@@ -406,10 +410,17 @@ export function createController(store: Store, view: ToolView): Controller {
     }
     if (
       snapping &&
-      (tool === "line" || tool === "rectangle") &&
+      (!axis || tool === "rectangle") &&
+      (tool === "line" || tool === "rectangle" || tool === "tape") &&
       (!hit || hit.kind === "face")
     ) {
-      const inferred = snapOnFace(store.getState(), drawingPlane, end, view);
+      const m = store.getState(),
+        target = hit ? m.entities[hit.id] : null;
+      const support =
+        tool === "tape" && target?.kind === "face"
+          ? facePlane(m, target)
+          : drawingPlane;
+      const inferred = snapOnFace(m, support, end, view);
       const proportion =
         start && tool === "rectangle"
           ? snapProportion(start, end, drawingPlane, view)
@@ -453,8 +464,8 @@ export function createController(store: Store, view: ToolView): Controller {
       !inferenceLabel &&
       start &&
       !axis &&
-      tool === "line" &&
-      (!hit || hit.kind === "face")
+      (tool === "line" || tool === "tape") &&
+      (!hit || (tool === "line" && hit.kind === "face"))
     ) {
       for (const a of ["x", "y", "z"] as Axis[]) {
         const p = axisPoint(ray, start, axisVector(a)),
@@ -588,34 +599,27 @@ export function createController(store: Store, view: ToolView): Controller {
     submit,
     pointer,
     press(x, y) {
-      if (tool === "tape") {
-        tapePress = { x, y, active: !!start };
-        pointer(x, y, !start);
-        return;
-      }
-      if (tool !== "pushpull") return;
-      cancel();
-      pointer(x, y, true);
+      if (tool !== "tape" && tool !== "pushpull") return;
+      gesturePress = { x, y, active: !!start };
+      pointer(x, y, !start);
     },
     release(x, y) {
-      if (tool === "tape") {
-        const pressed = tapePress;
-        tapePress = null;
-        if (!pressed || !start) return;
-        pointer(x, y);
-        if (pressed.active || Math.hypot(x - pressed.x, y - pressed.y) > 3) {
-          if (typed) submit();
-          else finish(current);
-        }
-        return;
-      }
-      if (tool !== "pushpull" || !start) return;
+      if (tool !== "tape" && tool !== "pushpull") return;
+      const pressed = gesturePress;
+      gesturePress = null;
+      if (!pressed || !start) return;
       pointer(x, y);
+      if (
+        !pressed.active &&
+        !typed &&
+        Math.hypot(x - pressed.x, y - pressed.y) <= 3
+      )
+        return;
       if (typed) submit();
       else if (length(sub(current, start)) <= EPS) cancel();
       else finish(current);
-      // Release always ends the gesture, including invalid input or a refused operation.
-      if (start) {
+      // Release always ends a completed push/pull gesture, including invalid input or a refused operation.
+      if (tool === "pushpull" && start) {
         const error = message;
         cancel();
         message = error;
@@ -639,6 +643,7 @@ export function createController(store: Store, view: ToolView): Controller {
         else {
           tool = "select";
           axis = null;
+          axisSign = 1;
           emit();
         }
         return true;

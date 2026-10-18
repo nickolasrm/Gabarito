@@ -23,3 +23,8 @@ cancels tape measurements in either mode, including between clicks.
 Alt down/up immediately updates `controller.setSnapping`, even without pointer movement. Pointer
 modifier state also synchronizes before press/move/release/click. Blur restores snapping and clears
 feedback, so missed key releases cannot leave snapping disabled. Explicit locks and typing survive.
+
+Push/pull now uses the same click-versus-drag discriminator as tape. Each press captures its pointer;
+a first stationary release leaves the operation armed, so uncaptured pointer movement previews the
+next click. Native clicks stay suppressed to prevent duplicate commits. Blur also cancels an armed
+push/pull between clicks, when there is no captured pointer.
