@@ -384,3 +384,13 @@ main:not([data-tool="select"]) .viewport canvas {
 }
 .scale-handle.active { background: #ffbd69; box-shadow: 0 0 0 2px #fff0c9; }
 .scale-handle[hidden] { display: none; }
+
+.tool-option { display: flex; align-items: center; gap: 10px; color: #acbbc5; }
+.tool-option input {
+  width: 72px;
+  padding: 5px 8px;
+  background: #17212a;
+  color: #dce4e8;
+  border: 1px solid #425461;
+  border-radius: 4px;
+}

@@ -8,7 +8,9 @@ export type Tool =
   | "pushpull"
   | "rotate"
   | "tape"
-  | "scale";
+  | "scale"
+  | "circle"
+  | "offset";
 export const TOOLS: { id: Tool; label: string; key: string; hint: string }[] = [
   {
     id: "select",
@@ -27,6 +29,18 @@ export const TOOLS: { id: Tool; label: string; key: string; hint: string }[] = [
     label: "Rectangle",
     key: "R",
     hint: "Click a corner, then the opposite corner. Or type width,depth and Enter.",
+  },
+  {
+    id: "circle",
+    label: "Circle",
+    key: "C",
+    hint: "Click a center, then a perimeter point. Type a positive radius and Enter for an exact size. Segments control the polygon approximation.",
+  },
+  {
+    id: "offset",
+    label: "Offset",
+    key: "O",
+    hint: "Click a face, move to the inset boundary and click again. Or type the perpendicular distance from its edges and Enter. Esc cancels.",
   },
   {
     id: "tape",
@@ -89,6 +103,7 @@ export interface Status {
   measurement: string;
   plane: string;
   snapping: boolean;
+  circleSegments: number;
 }
 export interface Controller {
   dispose(): void;
@@ -96,6 +111,7 @@ export interface Controller {
   subscribe(fn: () => void): () => void;
   setTool(t: Tool): void;
   setUnit(u: Unit): void;
+  setCircleSegments(count: number): void;
   setSnapping(enabled: boolean): void;
   setTyped(s: string): void;
   submit(): void;

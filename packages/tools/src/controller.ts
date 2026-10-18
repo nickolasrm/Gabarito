@@ -1,3 +1,4 @@
+import { createOffsetTool } from "./offset-tool";
 import { createScaleTool } from "./scale-tool";
 import { snapOnFace, midpointEdge } from "./face-snap";
 import { snapAlongAxis } from "./axis-snap";
@@ -5,6 +6,8 @@ import { rectangleRatio, snapProportion } from "./proportions";
 import {
   V,
   EPS,
+  circlePoints,
+  DEFAULT_CIRCLE_SEGMENTS,
   add,
   sub,
   mul,
@@ -54,6 +57,7 @@ export function createController(store: Store, view: ToolView): Controller {
     message = "",
     measurement = "",
     unitId: Unit = "mm";
+  let circleSegments = DEFAULT_CIRCLE_SEGMENTS;
   let planeLabel = "Ground";
   let lastX = 0,
     lastY = 0;
@@ -67,8 +71,22 @@ export function createController(store: Store, view: ToolView): Controller {
     for (const fn of listeners) fn();
   };
   const scaleTool = createScaleTool(store, view, emit);
+  const offsetTool = createOffsetTool(
+    store,
+    view,
+    emit,
+    () => unitId,
+    () => snapping,
+  );
+  const activateToolViews = () => {
+    scaleTool.enable(false);
+    offsetTool.enable(false);
+    if (tool === "scale") scaleTool.enable(true);
+    if (tool === "offset") offsetTool.enable(true);
+  };
   const unsubscribe = store.subscribe(() => {
     if (tool === "scale") scaleTool.refresh();
+    if (tool === "offset") offsetTool.refresh();
   });
   const cancel = () => {
     axis = null;
@@ -89,6 +107,7 @@ export function createController(store: Store, view: ToolView): Controller {
     view.cursorHint("", lastX, lastY);
     view.feedback(null);
     scaleTool.cancel();
+    offsetTool.cancel();
     emit();
   };
   const direction = (): Vec3 =>
@@ -167,6 +186,25 @@ export function createController(store: Store, view: ToolView): Controller {
       const lines = polygonSegments(corners);
       if (ratio) lines.push([start, current]);
       view.preview([...lines, ...inferenceLines]);
+    } else if (tool === "circle") {
+      const radius = length(sub(current, start));
+      view.preview(
+        radius > EPS
+          ? [
+              ...polygonSegments(
+                circlePoints(
+                  start,
+                  drawingPlane,
+                  radius,
+                  circleSegments,
+                  sub(current, start),
+                ),
+              ),
+              [start, current],
+              ...inferenceLines,
+            ]
+          : [],
+      );
     } else if (tool === "pushpull") {
       const f = faces(store.getState()).find((f) => f.id === faceId);
       if (!f) return;
@@ -232,8 +270,13 @@ export function createController(store: Store, view: ToolView): Controller {
         ? `${(Math.round((rotatedAngle(current) * 1800) / Math.PI) / 10).toFixed(1)}°`
         : `${(distance / UNITS[unitId]).toFixed(2)} ${unitId}`;
     view.cursorHint(
-      tool === "tape" || tool === "rotate"
-        ? [measurement, inferenceLabel].filter(Boolean).join(" · ")
+      tool === "tape" || tool === "rotate" || tool === "circle"
+        ? [
+            tool === "circle" ? `Radius ${measurement}` : measurement,
+            inferenceLabel,
+          ]
+            .filter(Boolean)
+            .join(" · ")
         : [
             inferenceLabel,
             ratio ||
@@ -299,6 +342,25 @@ export function createController(store: Store, view: ToolView): Controller {
         segments: polygonSegments(corners),
         fillLoop: corners,
       };
+    } else if (tool === "circle") {
+      try {
+        const points = circlePoints(
+          start,
+          drawingPlane,
+          number ?? length(sub(end, start)),
+          circleSegments,
+          sub(end, start),
+        );
+        command = {
+          type: "draw",
+          segments: polygonSegments(points),
+          fillLoop: points,
+        };
+      } catch (e) {
+        message = e instanceof Error ? e.message : String(e);
+        emit();
+        return false;
+      }
     } else if (tool === "move")
       command = {
         type: "move",
@@ -330,6 +392,10 @@ export function createController(store: Store, view: ToolView): Controller {
       scaleTool.submit();
       return;
     }
+    if (tool === "offset") {
+      offsetTool.submit();
+      return;
+    }
     if (!start) {
       message = "Click a starting point first";
       emit();
@@ -350,6 +416,9 @@ export function createController(store: Store, view: ToolView): Controller {
             ),
           ),
         );
+      } else if (tool === "circle") {
+        const [radius] = parseDimensions(typed, unitId);
+        finish(current, radius);
       } else if (tool === "rotate") {
         if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(typed.trim()))
           throw new Error("Enter an angle in degrees");
@@ -381,6 +450,11 @@ export function createController(store: Store, view: ToolView): Controller {
     lastY = y;
     if (tool === "scale") {
       scaleTool.pointer(x, y, click);
+      emit();
+      return;
+    }
+    if (tool === "offset") {
+      offsetTool.pointer(x, y, click);
       emit();
       return;
     }
@@ -421,6 +495,25 @@ export function createController(store: Store, view: ToolView): Controller {
       planeLabel = inferred.label;
       if (start) drawingPlane = { ...drawingPlane, origin: start };
     }
+    if (tool === "circle") {
+      if (axis) {
+        drawingPlane = plane(
+          start ?? hit?.point ?? V(),
+          axis === "z" ? V(0, -1, 0) : V(0, 0, 1),
+        );
+        planeLabel = `Axis ${axis.toUpperCase()}`;
+      } else if (!start) {
+        const inferred = inferRectanglePlane(
+          store.getState(),
+          hit,
+          null,
+          ray,
+          defaultDrawingPlane(hit?.point),
+        );
+        drawingPlane = inferred.frame;
+        planeLabel = inferred.label;
+      }
+    }
     if (tool === "rotate" && !reference) {
       const inferred = axis
         ? { frame: rotationPlane(), label: `Axis ${axis.toUpperCase()}` }
@@ -442,10 +535,17 @@ export function createController(store: Store, view: ToolView): Controller {
     let end =
       hit &&
       (hit.kind !== "face" || tool === "tape" || tool === "rotate") &&
-      (tool !== "rectangle" || onPlane(hit.point, drawingPlane))
+      ((tool !== "rectangle" && tool !== "circle") ||
+        onPlane(hit.point, drawingPlane))
         ? hit.point
         : intersectPlane(ray, drawingPlane);
-    if (start && axis && tool !== "rectangle" && tool !== "rotate")
+    if (
+      start &&
+      axis &&
+      tool !== "rectangle" &&
+      tool !== "rotate" &&
+      tool !== "circle"
+    )
       end = axisPoint(ray, start, mul(axisVector(axis), axisSign));
     else if (start && tool === "pushpull")
       end = axisPoint(ray, start, direction());
@@ -463,11 +563,15 @@ export function createController(store: Store, view: ToolView): Controller {
     }
     if (
       snapping &&
-      (!axis || tool === "rectangle" || tool === "rotate") &&
+      (!axis ||
+        tool === "rectangle" ||
+        tool === "rotate" ||
+        tool === "circle") &&
       (tool === "line" ||
         tool === "rectangle" ||
         tool === "tape" ||
-        tool === "rotate") &&
+        tool === "rotate" ||
+        tool === "circle") &&
       (!hit || hit.kind === "face")
     ) {
       const m = store.getState(),
@@ -626,6 +730,7 @@ export function createController(store: Store, view: ToolView): Controller {
     dispose() {
       unsubscribe();
       scaleTool.enable(false);
+      offsetTool.enable(false);
       listeners.clear();
     },
     status: () => ({
@@ -638,6 +743,8 @@ export function createController(store: Store, view: ToolView): Controller {
       measurement,
       plane: planeLabel,
       snapping,
+      circleSegments,
+      ...(tool === "offset" ? { ...offsetTool.status(), axis: "Free" } : {}),
       ...(tool === "scale" ? { ...scaleTool.status(), axis: "Free" } : {}),
     }),
     subscribe(fn) {
@@ -649,14 +756,26 @@ export function createController(store: Store, view: ToolView): Controller {
     setTool(t) {
       cancel();
       tool = t;
-      scaleTool.enable(t === "scale");
+      activateToolViews();
       axis = null;
       axisSign = 1;
       emit();
     },
+    setCircleSegments(count) {
+      if (!Number.isInteger(count) || count < 3 || count > 256) {
+        message = "Circle segments must be an integer from 3 to 256";
+        emit();
+        return;
+      }
+      circleSegments = count;
+      message = "";
+      if (tool === "circle") updatePreview();
+      emit();
+    },
     setUnit(u) {
       unitId = u;
-      if (tool !== "scale") updatePreview();
+      if (tool === "offset") offsetTool.redraw();
+      else if (tool !== "scale") updatePreview();
       emit();
     },
     setSnapping(enabled) {
@@ -666,6 +785,10 @@ export function createController(store: Store, view: ToolView): Controller {
       emit();
     },
     setTyped(s) {
+      if (tool === "offset") {
+        offsetTool.setTyped(s);
+        return;
+      }
       if (tool === "scale") {
         scaleTool.setTyped(s);
         return;
@@ -726,10 +849,15 @@ export function createController(store: Store, view: ToolView): Controller {
         return true;
       }
       if (key === "Escape") {
-        if (start || (tool === "scale" && scaleTool.status().active)) cancel();
+        if (
+          start ||
+          (tool === "scale" && scaleTool.status().active) ||
+          (tool === "offset" && offsetTool.status().active)
+        )
+          cancel();
         else {
           tool = "select";
-          scaleTool.enable(false);
+          activateToolViews();
           axis = null;
           axisSign = 1;
           emit();
@@ -743,13 +871,25 @@ export function createController(store: Store, view: ToolView): Controller {
       if (
         key === "Delete" ||
         (key === "Backspace" &&
-          !(tool === "scale" ? scaleTool.status().typed : typed))
+          !(tool === "scale"
+            ? scaleTool.status().typed
+            : tool === "offset"
+              ? offsetTool.status().typed
+              : typed))
       ) {
-        if (!start && !(tool === "scale" && scaleTool.status().active))
+        if (
+          !start &&
+          !(tool === "scale" && scaleTool.status().active) &&
+          !(tool === "offset" && offsetTool.status().active)
+        )
           run({ type: "delete", ids: store.getState().selection });
         return true;
       }
       if (key === "Backspace") {
+        if (tool === "offset") {
+          offsetTool.setTyped(offsetTool.status().typed.slice(0, -1));
+          return true;
+        }
         if (tool === "scale") {
           scaleTool.setTyped(scaleTool.status().typed.slice(0, -1));
           return true;
@@ -765,7 +905,7 @@ export function createController(store: Store, view: ToolView): Controller {
         ArrowLeft: "y",
       };
       if (mapping[key]) {
-        if (tool === "scale") return true;
+        if (tool === "scale" || tool === "offset") return true;
         const next = mapping[key],
           sign = key === "ArrowDown" ? -1 : 1;
         axis = axis === next && axisSign === sign ? null : next;
@@ -779,10 +919,16 @@ export function createController(store: Store, view: ToolView): Controller {
         return true;
       }
       if (
-        (start || (tool === "scale" && scaleTool.status().active)) &&
-        (/^[0-9.,;+\-]$/.test(key) || (typed && /^[a-z]$/i.test(key)))
+        (start ||
+          (tool === "scale" && scaleTool.status().active) ||
+          (tool === "offset" && offsetTool.status().active)) &&
+        (/^[0-9.,;+\-]$/.test(key) ||
+          ((typed || (tool === "offset" && offsetTool.status().typed)) &&
+            /^[a-z]$/i.test(key)))
       ) {
-        if (tool === "scale")
+        if (tool === "offset")
+          offsetTool.setTyped(offsetTool.status().typed + key);
+        else if (tool === "scale")
           scaleTool.setTyped(scaleTool.status().typed + key);
         else typed += key;
         emit();
@@ -797,7 +943,7 @@ export function createController(store: Store, view: ToolView): Controller {
         if (next) {
           cancel();
           tool = next.id;
-          scaleTool.enable(tool === "scale");
+          activateToolViews();
           axis = null;
           emit();
           return true;

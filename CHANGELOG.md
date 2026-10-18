@@ -1,5 +1,16 @@
 # Changelog
 
+## Circle and inward Offset — 2026-10-18
+
+- Circle (`C`) uses a center and radius, typed units, shared face references and a frozen support
+  plane. It creates ordinary edges/faces with 24 segments by default; a creation setting accepts
+  3–256 segments. Preview and commit share the same points and partition existing surfaces.
+- Offset (`O`) uses an exact perpendicular edge distance to inset face material through the bundled
+  kernel. Concave splits and existing holes are preserved. One atomic command adds shared inner
+  boundaries while retaining the parent surface; collapse and invalid input leave it unchanged.
+- Both tools support cancellation and one-step history. Specs: [0036](docs/specs/0036-circle-tool.md),
+  [0037](docs/specs/0037-offset-tool.md).
+
 ## Routine workflow authorization — 2026-10-18
 
 - `AGENTS.md` records standing authorization for server operations, tests, staging/committing, branch

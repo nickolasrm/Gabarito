@@ -31,3 +31,7 @@ Its status bar also names the supporting plane; the cursor shows the signed angl
 Scale (`S`) adds bounding-box handles through the viewport contract. Guidance explains face/edge
 stretches and proportional corners. Numeric entry is labeled Factor with a unitless multiplier,
 while the cursor names the hovered grip or displays live factors during a resize.
+
+Circle (`C`) labels numeric entry Radius and exposes its creation segment setting (24 by default).
+Offset (`O`) labels numeric entry Offset in document units. Both show the supporting plane and
+named reference hints; offsets display their live perpendicular edge distance beside the cursor.

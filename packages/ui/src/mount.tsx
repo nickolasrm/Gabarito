@@ -1,5 +1,5 @@
 import { createRoot } from "react-dom/client";
-import { useSyncExternalStore, useEffect, useRef } from "react";
+import { useSyncExternalStore, useEffect, useRef, useState } from "react";
 import type { Store, Unit } from "@gabarito/core";
 import { UNITS, vertices, edges, faces, guides } from "@gabarito/core";
 import "./styles.css";
@@ -19,6 +19,7 @@ export interface UiStatus {
   measurement: string;
   plane: string;
   snapping: boolean;
+  circleSegments: number;
 }
 export interface UiApi {
   store: Store;
@@ -28,6 +29,7 @@ export interface UiApi {
   attach(host: HTMLElement): () => void;
   selectTool(tool: string): void;
   setUnit(unit: Unit): void;
+  setCircleSegments(count: number): void;
   setTyped(text: string): void;
   submit(): void;
   undo(): void;
@@ -54,6 +56,13 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
     const host = useRef<HTMLDivElement>(null),
       status = api.status(),
       m = api.store.getState();
+    const [segmentsDraft, setSegmentsDraft] = useState(
+      String(status.circleSegments),
+    );
+    useEffect(
+      () => setSegmentsDraft(String(status.circleSegments)),
+      [status.circleSegments, status.tool],
+    );
     useEffect(() => api.attach(host.current!), []);
     const active = api.tools.find((t) => t.id === status.tool)!;
     return (
@@ -114,6 +123,32 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
             <span className="eyebrow">ACTIVE TOOL</span>
             <h1>{active.label}</h1>
             <p>{active.hint}</p>
+            {status.tool === "circle" && (
+              <label className="tool-option">
+                Segments{" "}
+                <input
+                  aria-label="Circle segments"
+                  type="number"
+                  min="3"
+                  max="256"
+                  value={segmentsDraft}
+                  onChange={(e) => {
+                    const value = e.target.value,
+                      count = Number(value);
+                    setSegmentsDraft(value);
+                    if (Number.isInteger(count) && count >= 3 && count <= 256)
+                      api.setCircleSegments(count);
+                  }}
+                  onBlur={() => {
+                    const count = Number(segmentsDraft);
+                    if (!Number.isInteger(count) || count < 3 || count > 256) {
+                      setSegmentsDraft(String(status.circleSegments));
+                      api.setCircleSegments(count);
+                    }
+                  }}
+                />
+              </label>
+            )}
             <div className="rule" />
             <span className="eyebrow">MODEL</span>
             <dl>
@@ -155,7 +190,10 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
             {!status.snapping && (
               <span className="axis">Snapping off · Alt</span>
             )}
-            {(status.tool === "rectangle" || status.tool === "rotate") && (
+            {(status.tool === "rectangle" ||
+              status.tool === "rotate" ||
+              status.tool === "circle" ||
+              status.tool === "offset") && (
               <span className="axis" title="Drawing plane">
                 {status.plane}
               </span>
@@ -165,16 +203,24 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
                 (status.active
                   ? status.tool === "pushpull"
                     ? "Move or type a distance; click or release to finish"
-                    : status.tool === "scale"
-                      ? "Drag or click to scale; enter a positive factor"
-                      : status.tool === "rotate"
-                        ? "Choose B, then rotate and click; or enter degrees"
-                        : "Choose destination or enter dimensions"
+                    : status.tool === "circle"
+                      ? "Choose a perimeter point or enter a radius"
+                      : status.tool === "offset"
+                        ? "Choose the inset boundary or enter its distance"
+                        : status.tool === "scale"
+                          ? "Drag or click to scale; enter a positive factor"
+                          : status.tool === "rotate"
+                            ? "Choose B, then rotate and click; or enter degrees"
+                            : "Choose destination or enter dimensions"
                   : status.tool === "pushpull"
                     ? "Click or drag a face to start"
-                    : status.tool === "scale"
-                      ? "Drag a scale handle"
-                      : "Choose a starting point")}
+                    : status.tool === "circle"
+                      ? "Choose a perimeter point or enter a radius"
+                      : status.tool === "offset"
+                        ? "Choose the inset boundary or enter its distance"
+                        : status.tool === "scale"
+                          ? "Drag a scale handle"
+                          : "Choose a starting point")}
             </span>
           </div>
           <form
@@ -188,7 +234,11 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
                 ? "Angle"
                 : status.tool === "scale"
                   ? "Factor"
-                  : "Dimensions"}
+                  : status.tool === "circle"
+                    ? "Radius"
+                    : status.tool === "offset"
+                      ? "Offset"
+                      : "Dimensions"}
             </label>
             <input
               id="dimensions"

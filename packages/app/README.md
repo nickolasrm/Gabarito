@@ -33,3 +33,6 @@ Scale participates in captured primary gestures, click-mode movement and blur/po
 Native clicks belonging to captured gestures stay suppressed even if the tool changes before
 release; the next intentional press starts normally. App unmount also disposes controller store
 subscriptions before destroying the viewport.
+
+Circle and Offset use ordinary click input. Window blur also cancels their pending operations.
+App exposes Circle's creation segment setting through the controller; it adds no geometry state.

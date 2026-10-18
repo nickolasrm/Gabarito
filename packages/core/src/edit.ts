@@ -2,6 +2,7 @@ import { scaleSelection } from "./scale";
 import { erase } from "./erase";
 import {
   EPS,
+  insetContours,
   sub,
   unit,
   add,
@@ -36,7 +37,8 @@ export type Command =
   | { type: "move"; ids: string[]; delta: Vec3 }
   | { type: "rotate"; ids: string[]; center: Vec3; axis: Vec3; angle: number }
   | { type: "scale"; ids: string[]; anchor: Vec3; factors: Vec3 }
-  | { type: "pushpull"; face: string; distance: number; direction?: Vec3 };
+  | { type: "pushpull"; face: string; distance: number; direction?: Vec3 }
+  | { type: "offset"; face: string; distance: number };
 function component(m: Model, seed: Face): Face[] {
   const byEdge = new Map<string, Face[]>();
   for (const f of faces(m))
@@ -242,6 +244,18 @@ export function apply(m: Model, c: Command): void {
               ? add(e.position, c.delta)
               : rotate(e.position, c.center, c.axis, c.angle);
       }
+      break;
+    }
+    case "offset": {
+      const face = m.entities[c.face];
+      if (face?.kind !== "face") throw new Error("Choose a face to offset");
+      const contours = insetContours(surface(m, face), c.distance);
+      draw(
+        m,
+        contours.flatMap((loop) =>
+          loop.map((p, i) => [p, loop[(i + 1) % loop.length]] as Segment),
+        ),
+      );
       break;
     }
     case "scale":

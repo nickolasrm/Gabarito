@@ -4,7 +4,7 @@
 `types.ts` exports `ToolView`, `Controller`, `Status` and the editing and measuring tools in `TOOLS`.
 Camera navigation belongs to scene.
 
-Public calls: `setTool`, `pointer`, `key`, `setTyped`, `submit`, `setUnit`, `cancel`, `status`,
+Public calls: `setTool`, `pointer`, `key`, `setTyped`, `submit`, `setUnit`, `setCircleSegments`, `cancel`, `status`,
 `subscribe`, `press`, `release`, `leave`, `setSnapping`, `dispose`. A view supplies visible picking, projection/rays, transient
 preview segments and `feedback(hit)` for the eligible hover/snap target. `pointer` accepts a native
 click count; app routes held gestures through `press` and `release`.
@@ -105,3 +105,18 @@ Selection/history changes discard stale previews and rebuild idle bounds. `dispo
 controller's store subscription and overlays; app calls it on unmount. Preview and command share
 geometry's scale formula. Core rejects invalid factors or topology atomically. No mirroring or
 zero-factor collapse is supported. `scale.test.ts` covers state, grips, exact history and constraints.
+
+Circle (`C`) reuses supporting-plane and face-reference inference for its center, then freezes that
+plane while choosing a radius. Explicit arrows retain the rectangle tool's plane semantics. Exact
+on-plane primitives win; off-plane targets project into the frozen plane. Typed input is a positive
+radius in display units. Preview shows its loop and radius line; completion sends one draw/fillLoop
+command using geometry's circle helper. `setCircleSegments(3–256)` and `Status.circleSegments` expose
+the creation-only setting, default 24. Existing circles are unchanged by later setting changes.
+
+Offset (`O`) lives in `offset-tool.ts`. First click chooses a visible face; subsequent movement uses
+the minimum distance from a material point to its boundaries. Primitive and shared face-reference
+snaps apply before measuring, with Alt bypass. Typed distances retain priority. Its source plane
+and revision stay fixed; changed documents cancel the pending operation. All inset loops preview
+without changing the store, and completion sends one core offset command. Collapse/outside/parallel
+input cannot commit stale distances. Both tools support Escape, tool changes, blur and exact history;
+Offset clears its subscription state through the controller lifecycle shared with Scale.

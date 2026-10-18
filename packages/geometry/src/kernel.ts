@@ -281,3 +281,31 @@ export function mergeCoplanar(surfaces: Surface[]): Surface[] {
   }
   return result;
 }
+
+/** Erode face material; returns every inset contour, including expanded hole boundaries. */
+export function insetContours(surface: Surface, distance: number): Vec3[][] {
+  if (!kernel) throw new Error("Geometry engine is not initialized");
+  if (!Number.isFinite(distance) || distance <= EPS)
+    throw new Error("Enter an offset greater than the geometry tolerance");
+  const frame = canonicalPlane(surface.outer[0], normal(surface.outer));
+  const polygons = [surface.outer, ...surface.holes].map((loop, i) => {
+    const p = loop.map((p) => project(p, frame));
+    return area2(p) > 0 === (i === 0) ? p : p.reverse();
+  });
+  const section = new kernel.CrossSection(polygons, "Positive");
+  try {
+    const inset = section.offset(-distance, "Miter", 1e6);
+    try {
+      const contours = inset
+        .toPolygons()
+        .filter((l) => l.length >= 3 && Math.abs(area2(l)) > EPS * EPS);
+      if (!contours.length)
+        throw new Error("Offset is too large for this face");
+      return contours.map((loop) => loop.map((p) => unproject(p, frame)));
+    } finally {
+      inset.delete();
+    }
+  } finally {
+    section.delete();
+  }
+}

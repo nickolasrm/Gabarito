@@ -45,3 +45,9 @@ anchor with independent positive X/Y/Z factors. Selected rulers transform their 
 unselected entities keep their coordinates. `scale.ts` validates the factors and anchor, and the
 existing transaction validation rejects nonplanar/invalid results before publishing. History restores
 exact snapshots. Finite positive factors are accepted when resulting geometry stays valid.
+
+`{ type: "offset", face, distance }` resolves an existing face and adds all its inset contours through
+ordinary shared drawing topology. The source material remains: borders and inner regions become
+separate faces, ready for selection or extrusion. Existing erased holes stay erased. Kernel erosion
+handles concave splits and holes; invalid distances, collapse or invalid topology reject the atomic
+transaction without a history entry. Circle tools also use the existing draw/fillLoop command.

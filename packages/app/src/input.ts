@@ -59,7 +59,9 @@ export function attachInput(
       releaseCapture();
       controller.cancel();
     } else if (
-      ["tape", "pushpull", "scale"].includes(controller.status().tool) &&
+      ["tape", "pushpull", "scale", "offset", "circle"].includes(
+        controller.status().tool,
+      ) &&
       controller.status().active
     ) {
       controller.cancel();
