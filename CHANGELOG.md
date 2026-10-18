@@ -1,5 +1,18 @@
 # Changelog
 
+## Measurements and construction references — 2026-10-18
+
+- Added Tape Measure (`T`) with click/click and drag/release input, live cursor distances in selected
+  units, and undoable infinite rulers. Edge sources create parallel rulers; face/vertex sources
+  follow the measured direction through the destination.
+- User rulers support selection, deletion and transforms without becoming model geometry. Axes
+  extend in both directions as undeletable snap references, with a shared virtual origin vertex.
+- Added exact midpoint snapping and labels, visible face-boundary midpoint hints, and virtual
+  ruler intersections. References use the same camera-depth and occlusion rules as geometry.
+- Rectangle previews show temporary diagonals and labels for squares and integer aspect ratios;
+  actual dimensions and document edges remain unchanged.
+- Spec: [0026](docs/specs/0026-measurements-and-references.md).
+
 ## Coplanar divider deletion — 2026-10-18
 
 - Deleting a shared coplanar edge merges its faces, preserving the parent surface and other holes.

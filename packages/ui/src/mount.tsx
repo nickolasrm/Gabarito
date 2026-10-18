@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { useSyncExternalStore, useEffect, useRef } from "react";
 import type { Store, Unit } from "@gabarito/core";
-import { UNITS, vertices, edges, faces } from "@gabarito/core";
+import { UNITS, vertices, edges, faces, guides } from "@gabarito/core";
 import "./styles.css";
 export interface ToolButton {
   id: string;
@@ -122,6 +122,8 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
               <dd>{edges(m).length}</dd>
               <dt>Faces</dt>
               <dd>{faces(m).length}</dd>
+              <dt>Rulers</dt>
+              <dd>{guides(m).length}</dd>
               <dt>Selected</dt>
               <dd>{m.selection.length}</dd>
             </dl>

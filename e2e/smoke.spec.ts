@@ -75,6 +75,7 @@ test("boots with all seven tools and creates exact typed geometry with undo/redo
     "Select",
     "Line",
     "Rectangle",
+    "Tape Measure",
     "Move",
     "Push/Pull",
     "Rotate",
@@ -387,8 +388,8 @@ test("vertex and edge markers show the actual snap position and clear on leave",
   const e = await screenOf(page, { x: 50, y: 0, z: 0 });
   await page.mouse.move(e.x, e.y);
   await expect(marker).toBeVisible();
-  await expect(marker).toHaveAttribute("data-kind", "edge");
-  await expect(marker).toHaveText("Edge");
+  await expect(marker).toHaveAttribute("data-kind", "midpoint");
+  await expect(marker).toHaveText("Midpoint");
   expect(await snapshot(page)).toEqual(before);
   await page.mouse.move(10, 10);
   await expect(marker).toBeHidden();
@@ -519,3 +520,138 @@ test("deleting a filled recess divider preserves the front surface", async ({
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   expect((await snapshot(page)).entities).toEqual(after.entities);
 });
+
+test("tape click/click measures a midpoint and creates an undoable parallel ruler", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await page.getByRole("button", { name: /^Tape Measure/ }).click();
+  const source = await screenOf(page, { x: 50, y: 0, z: 0 });
+  await page.mouse.move(source.x, source.y);
+  await expect(page.locator(".snap-label")).toHaveText("Midpoint");
+  await page.mouse.click(source.x, source.y);
+  expect(await count(page, "guide")).toBe(0);
+  const end = await screenOf(page, { x: 50, y: 50, z: 0 });
+  await page.mouse.move(end.x, end.y);
+  await expect(page.locator(".cursor-hint")).toHaveText("50.00 mm");
+  await page.getByLabel("Display and input units").selectOption("cm");
+  await expect(page.locator(".cursor-hint")).toHaveText("5.00 cm");
+  await page.mouse.click(end.x, end.y);
+  expect(await count(page, "guide")).toBe(1);
+  const m = await snapshot(page),
+    guide = Object.values(m.entities).find((e) => e.kind === "guide")!;
+  if (guide.kind !== "guide") throw new Error("Expected ruler");
+  expect(Math.abs(guide.direction.x)).toBeCloseTo(1);
+  expect(guide.origin.y).toBeCloseTo(50);
+  expect(await count(page, "edge")).toBe(4);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect(await count(page, "guide")).toBe(0);
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  expect((await snapshot(page)).entities).toEqual(m.entities);
+  // Draw directly along the virtual ruler, beyond the original face.
+  await page.getByRole("button", { name: /^Line/ }).click();
+  await clickWorld(page, { x: 150, y: 50, z: 0 });
+  await clickWorld(page, { x: 200, y: 50, z: 0 });
+  expect(await count(page, "guide")).toBe(1);
+  expect(await count(page, "edge")).toBe(5);
+});
+
+test("tape drag from a face commits only on release; cancelled gestures add no ruler", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await page.keyboard.press("t");
+  const a = await screenOf(page, { x: 30, y: 30, z: 0 }),
+    b = await screenOf(page, { x: 60, y: 70, z: 0 });
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y);
+  await expect(page.locator(".cursor-hint")).toHaveText("50.00 mm");
+  expect(await count(page, "guide")).toBe(0);
+  await page.mouse.up();
+  expect(await count(page, "guide")).toBe(1);
+  const g = Object.values((await snapshot(page)).entities).find(
+    (e) => e.kind === "guide",
+  )!;
+  if (g.kind !== "guide") throw new Error("Expected ruler");
+  expect(g.direction.x).toBeCloseTo(0.6);
+  expect(g.direction.y).toBeCloseTo(0.8);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y);
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  expect(await count(page, "guide")).toBe(1);
+  await expect(page.locator(".cursor-hint")).toBeHidden();
+});
+
+test("world axes and origin snap without becoming deletable geometry", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: /^Line/ }).click();
+  const origin = await screenOf(page, { x: 0, y: 0, z: 0 });
+  await page.mouse.move(origin.x, origin.y);
+  await expect(page.locator(".snap-label")).toHaveText("Origin");
+  const z = await screenOf(page, { x: 0, y: 0, z: 100 });
+  await page.mouse.move(z.x, z.y);
+  await expect(page.locator(".snap-label")).toHaveText("Z axis");
+  await page.mouse.click(origin.x, origin.y);
+  await page.mouse.click(z.x, z.y);
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Space");
+  await clickWorld(page, { x: 100, y: 0, z: 0 });
+  expect((await snapshot(page)).selection).toHaveLength(0);
+  await page.keyboard.press("Delete");
+  expect(await count(page, "guide")).toBe(0);
+  expect(await count(page, "edge")).toBe(1);
+});
+
+test("rectangle proportions show a temporary diagonal hint and keep only four real edges", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: /^Rectangle/ }).click();
+  await clickWorld(page, { x: 0, y: 0, z: 0 });
+  const square = await screenOf(page, { x: 100, y: 100, z: 0 });
+  await page.mouse.move(square.x, square.y);
+  await expect(page.locator(".cursor-hint")).toHaveText("Square · 1:1");
+  const ratio = await screenOf(page, { x: 200, y: 100, z: 0 });
+  await page.mouse.move(ratio.x, ratio.y);
+  await expect(page.locator(".cursor-hint")).toHaveText("2:1");
+  await page.mouse.click(ratio.x, ratio.y);
+  expect(await count(page, "edge")).toBe(4);
+  await expect(page.locator(".cursor-hint")).toBeHidden();
+});
+
+for (const mode of ["click", "drag"] as const) {
+  for (const event of ["blur", "pointercancel"] as const) {
+    test(`tape ${mode} cancellation on ${event} creates no ruler`, async ({
+      page,
+    }) => {
+      await rectangle(page);
+      await page.keyboard.press("t");
+      const a = await screenOf(page, { x: 30, y: 30, z: 0 }),
+        b = await screenOf(page, { x: 60, y: 70, z: 0 });
+      await page.mouse.move(a.x, a.y);
+      await page.mouse.down();
+      if (mode === "click") await page.mouse.up();
+      await page.mouse.move(b.x, b.y);
+      await expect(page.locator(".cursor-hint")).toBeVisible();
+      if (event === "blur")
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+      else
+        await page
+          .locator("canvas")
+          .dispatchEvent("pointercancel", {
+            pointerId: 1,
+            pointerType: "mouse",
+            button: 0,
+          });
+      if (mode === "drag") await page.mouse.up();
+      expect(await count(page, "guide")).toBe(0);
+      expect(
+        await page.evaluate(() => window.__gabarito.controller.status().active),
+      ).toBe(false);
+      await expect(page.locator(".cursor-hint")).toBeHidden();
+    });
+  }
+}

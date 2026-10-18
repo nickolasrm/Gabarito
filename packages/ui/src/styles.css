@@ -346,3 +346,27 @@ main:not([data-tool="select"]) .viewport canvas {
   font-size: 11px;
   white-space: nowrap;
 }
+
+.snap-marker[data-kind="midpoint"]::before {
+  border-color: #e4c9ff;
+  border-radius: 50%;
+}
+.snap-marker[data-kind="guide"]::before {
+  border-color: #d9d797;
+  transform: rotate(45deg);
+}
+.cursor-hint {
+  position: absolute;
+  pointer-events: none;
+  z-index: 5;
+  color: #effffb;
+  background: #153b3f;
+  border: 1px solid #69dfcc;
+  border-radius: 3px;
+  padding: 4px 7px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.cursor-hint[hidden] {
+  display: none;
+}

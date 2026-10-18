@@ -24,11 +24,15 @@ function setup() {
   const store = createStore();
   let hit: ToolHit | null = null;
   let feedback: ToolHit | null = null;
+  let hint = "";
   const view: ToolView = {
     ray: (x, y) => ({ origin: V(x, y, 1000), direction: V(0, 0, -1) }),
     project: (p) => ({ x: p.x, y: p.y, visible: true }),
     pick: () => hit,
     preview: () => {},
+    cursorHint: (text) => {
+      hint = text;
+    },
     feedback: (h) => {
       feedback = h;
     },
@@ -39,6 +43,7 @@ function setup() {
     controller,
     view,
     feedback: () => feedback,
+    hint: () => hint,
     hit: (h: ToolHit | null) => {
       hit = h;
     },
@@ -417,7 +422,7 @@ for (const bare of [false, true])
     c.pointer(0, 0, true);
     hit({ id: b.id, kind: "vertex", point: b.position });
     c.pointer(1, 1);
-    expect(preview).toHaveLength(4);
+    expect(preview).toHaveLength(5);
     for (const p of inner)
       expect(preview.flat().some((q) => near(p, q))).toBe(true);
     expect(
@@ -476,4 +481,156 @@ it("keeps an isolated starting vertex and hides an unsupported off-plane target"
   c.pointer(100, 100);
   expect(preview.flat().every((p) => Math.abs(p.z - 10) < 1e-5)).toBe(true);
   expect(feedback()).toBeNull();
+});
+
+it("tape measures click/click, shows selected units and creates an edge-parallel ruler only on completion", () => {
+  const { store, controller: c, hit, hint } = setup();
+  store.execute({ type: "draw", segments: [[V(0, 10), V(100, 10)]] });
+  const edge = edges(store.getState())[0];
+  c.setTool("tape");
+  hit({ id: edge.id, kind: "edge", point: V(50, 10), snap: "midpoint" });
+  c.press(50, 10);
+  c.release(50, 10);
+  expect(c.status().active).toBe(true);
+  hit(null);
+  c.pointer(50, 60);
+  expect(hint()).toBe("50.00 mm");
+  c.setUnit("cm");
+  expect(hint()).toBe("5.00 cm");
+  expect(
+    Object.values(store.getState().entities).filter((e) => e.kind === "guide"),
+  ).toHaveLength(0);
+  c.press(50, 60);
+  c.release(50, 60);
+  const g = Object.values(store.getState().entities).find(
+    (e) => e.kind === "guide",
+  )!;
+  expect(g.kind === "guide" && g.origin).toEqual(V(50, 60));
+  expect(g.kind === "guide" && g.direction).toEqual(V(1));
+  expect(hint()).toBe("");
+  store.undo();
+  expect(store.getState().entities[g.id]).toBeUndefined();
+  store.redo();
+  expect(store.getState().entities[g.id]).toEqual(g);
+});
+it("tape drags from a face to another hovered face with a full 3D measurement", () => {
+  const { store, controller: c, hit, hint } = setup();
+  c.setTool("tape");
+  hit({ id: "face", kind: "face", point: V(10, 10, 10) });
+  c.press(10, 10);
+  hit({ id: "face2", kind: "face", point: V(10, 40, 50) });
+  c.pointer(10, 40);
+  expect(hint()).toBe("50.00 mm");
+  c.release(10, 40);
+  const g = Object.values(store.getState().entities).find(
+    (e) => e.kind === "guide",
+  )!;
+  expect(g.kind === "guide" && g.direction).toEqual(V(0, 0.6, 0.8));
+  expect(c.status().active).toBe(false);
+});
+it("tape accepts vertex and built-in ruler sources, cancels gestures and rejects empty starts", () => {
+  const { store, controller: c, hit, hint } = setup();
+  c.setTool("tape");
+  c.press(10, 10);
+  c.release(10, 10);
+  expect(c.status().active).toBe(false);
+  expect(c.status().message).toMatch(/Choose/);
+  hit({ id: "world:origin", kind: "vertex", point: V() });
+  c.press(0, 0);
+  hit(null);
+  c.pointer(30, 40);
+  expect(hint()).toBe("50.00 mm");
+  c.key("Escape");
+  c.release(30, 40);
+  expect(store.canUndo()).toBe(false);
+  expect(hint()).toBe("");
+  hit({ id: "world:z", kind: "guide", point: V(0, 0, 10) });
+  c.press(0, 0);
+  c.release(0, 0);
+  hit(null);
+  c.pointer(20, 20);
+  c.setTool("line");
+  expect(hint()).toBe("");
+  expect(store.canUndo()).toBe(false);
+});
+it("tape vertex rulers follow the measured direction and zero-length completion is a no-op", () => {
+  const { store, controller: c, hit } = setup();
+  c.setTool("tape");
+  hit({ id: "v", kind: "vertex", point: V(10, 10) });
+  c.pointer(10, 10, true);
+  c.pointer(10, 10, true);
+  expect(store.canUndo()).toBe(false);
+  c.pointer(10, 10, true);
+  hit(null);
+  c.pointer(40, 50, true);
+  const g = Object.values(store.getState().entities).find(
+    (e) => e.kind === "guide",
+  )!;
+  expect(g.kind === "guide" && g.direction).toEqual(V(0.6, 0.8));
+});
+it("rectangle ratio hints add only a transient diagonal and never alter dimensions", () => {
+  const { store, controller: c, view, hint } = setup();
+  let lines: [ReturnType<typeof V>, ReturnType<typeof V>][] = [];
+  view.preview = (p) => {
+    lines = p;
+  };
+  c.setTool("rectangle");
+  c.pointer(10, 10, true);
+  for (const [x, y, label] of [
+    [110, 110, "Square · 1:1"],
+    [210, 110, "2:1"],
+    [110, 310, "1:3"],
+    [410, 110, "4:1"],
+    [165, 110, ""],
+  ] as const) {
+    c.pointer(x, y);
+    expect(hint()).toBe(label);
+    expect(lines).toHaveLength(label ? 5 : 4);
+  }
+  c.pointer(210, 110, true);
+  expect(edges(store.getState())).toHaveLength(4);
+  expect(hint()).toBe("");
+});
+
+it("tape can offset an existing ruler without changing its direction", () => {
+  const { store, controller: c, hit } = setup();
+  store.execute({ type: "guide", origin: V(10, 10), direction: V(1, 1) });
+  const source = Object.values(store.getState().entities).find(
+    (e) => e.kind === "guide",
+  )!;
+  c.setTool("tape");
+  hit({ id: source.id, kind: "guide", point: V(20, 20) });
+  c.press(20, 20);
+  c.release(20, 20);
+  hit(null);
+  c.press(20, 50);
+  c.release(20, 50);
+  const result = Object.values(store.getState().entities).filter(
+    (e) => e.kind === "guide",
+  );
+  expect(result).toHaveLength(2);
+  expect(result[1].kind === "guide" && result[1].direction.x).toBeCloseTo(
+    Math.SQRT1_2,
+  );
+  expect(result[1].kind === "guide" && result[1].direction.y).toBeCloseTo(
+    Math.SQRT1_2,
+  );
+});
+it("moving a selected ruler previews its infinite reference and commits one transform", () => {
+  const { store, controller: c, view } = setup();
+  store.execute({ type: "guide", origin: V(10, 10), direction: V(1) });
+  const id = Object.values(store.getState().entities)[0].id;
+  store.select([id]);
+  let rulers: unknown[] = [];
+  view.preview = (_, refs = []) => {
+    rulers = refs;
+  };
+  c.setTool("move");
+  c.pointer(10, 10, true);
+  c.pointer(20, 30);
+  expect(rulers).toEqual([
+    { id, kind: "guide", origin: V(20, 30), direction: V(1) },
+  ]);
+  c.pointer(20, 30, true);
+  expect(store.getState().entities[id]).toMatchObject({ origin: V(20, 30) });
 });

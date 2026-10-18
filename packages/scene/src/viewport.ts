@@ -1,17 +1,27 @@
+import { clipReference } from "./references";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { V, sub, dot, unit, triangulate } from "@gabarito/geometry";
+import { V, add, mul, sub, dot, unit, triangulate } from "@gabarito/geometry";
 import type { Vec3, Segment, Ray } from "@gabarito/geometry";
-import { vertices, edges, faces, position, surface } from "@gabarito/core";
-import type { Store } from "@gabarito/core";
-import { pick, faceHit } from "./pick";
+import {
+  vertices,
+  edges,
+  faces,
+  position,
+  surface,
+  loops,
+  referenceLines,
+} from "@gabarito/core";
+import type { Store, ReferenceLine } from "@gabarito/core";
+import { pick, faceHit, visible } from "./pick";
 import type { Hit, ScreenPoint } from "./pick";
 export interface Viewport {
   canvas: HTMLCanvasElement;
   ray(x: number, y: number): Ray;
   project(p: Vec3): ScreenPoint;
   pick(x: number, y: number, faceOnly?: boolean): Hit | null;
-  preview(lines: Segment[]): void;
+  preview(lines: Segment[], rulers?: ReferenceLine[]): void;
+  cursorHint(text: string, x: number, y: number): void;
   feedback(hit: Hit | null): void;
   frame(): void;
   dispose(): void;
@@ -51,16 +61,16 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
   const grid = new THREE.GridHelper(2000, 40, 0x46505b, 0x28323d);
   grid.rotateX(Math.PI / 2);
   scene.add(grid);
-  const axes = new THREE.AxesHelper(180);
-  scene.add(axes);
+
   scene.add(new THREE.HemisphereLight(0xffffff, 0x647080, 3));
   const light = new THREE.DirectionalLight(0xffffff, 2);
   light.position.set(1, -2, 5);
   scene.add(light);
   const modelGroup = new THREE.Group(),
     previewGroup = new THREE.Group(),
-    hoverGroup = new THREE.Group();
-  scene.add(modelGroup, previewGroup, hoverGroup);
+    hoverGroup = new THREE.Group(),
+    referenceGroup = new THREE.Group();
+  scene.add(modelGroup, previewGroup, hoverGroup, referenceGroup);
   const marker = document.createElement("div");
   marker.className = "snap-marker";
   marker.hidden = true;
@@ -68,8 +78,21 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
   label.className = "snap-label";
   marker.append(label);
   host.append(marker);
+  const cursorLabel = document.createElement("div");
+  cursorLabel.className = "cursor-hint";
+  cursorLabel.hidden = true;
+  host.append(cursorLabel);
+  const cursorHint = (text: string, x: number, y: number) => {
+    cursorLabel.textContent = text;
+    cursorLabel.hidden = !text;
+    cursorLabel.style.left = `${x + 18}px`;
+    cursorLabel.style.top = `${y + 20}px`;
+  };
   let hoverId = "";
-  const clearFeedback = () => feedback(null);
+  const clearFeedback = () => {
+    feedback(null);
+    cursorHint("", 0, 0);
+  };
   controls.addEventListener("start", clearFeedback);
   const disposeGroup = (group: THREE.Group) => {
     for (const child of [...group.children]) {
@@ -94,8 +117,44 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
       new THREE.LineBasicMaterial({ color, depthTest }),
     );
   };
+  const drawReferences = () => {
+    disposeGroup(referenceGroup);
+    camera.updateMatrixWorld();
+    const frustum = new THREE.Frustum().setFromProjectionMatrix(
+      new THREE.Matrix4().multiplyMatrices(
+        camera.projectionMatrix,
+        camera.matrixWorldInverse,
+      ),
+    );
+    for (const line of referenceLines(store.getState())) {
+      const clipped = clipReference(line, frustum.planes);
+      if (!clipped) continue;
+      const axis = line.id.startsWith("world:"),
+        selected = store.getState().selection.includes(line.id);
+      const color = selected
+        ? 0xffbd69
+        : axis
+          ? ({ "world:x": 0xff635c, "world:y": 0x74bb60, "world:z": 0x5b9ef3 }[
+              line.id
+            ] ?? 0xffffff)
+          : 0xb5b680;
+      const object = lineObject([clipped], color);
+      if (!axis) {
+        (object.material as THREE.Material).dispose();
+        object.material = new THREE.LineDashedMaterial({
+          color,
+          dashSize: 5,
+          gapSize: 4,
+        });
+        object.computeLineDistances();
+      }
+      referenceGroup.add(object);
+    }
+  };
+  controls.addEventListener("change", drawReferences);
   const rebuild = () => {
     feedback(null);
+    drawReferences();
     disposeGroup(modelGroup);
     const m = store.getState(),
       selected = new Set(m.selection),
@@ -168,6 +227,7 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
+    drawReferences();
   });
   observer.observe(host);
   const asVec = (p: THREE.Vector3): Vec3 => V(p.x, p.y, p.z);
@@ -220,6 +280,33 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
           ),
         );
       if (entity?.kind === "face") {
+        const m = store.getState(),
+          points = loops(entity)
+            .flatMap((l) =>
+              l.map((id, i) =>
+                mul(
+                  add(position(m, id), position(m, l[(i + 1) % l.length])),
+                  0.5,
+                ),
+              ),
+            )
+            .filter((p) =>
+              visible(m, { origin: asVec(camera.position), project, ray }, p),
+            );
+        const dots = new THREE.BufferGeometry().setFromPoints(
+          points.map((p) => new THREE.Vector3(p.x, p.y, p.z)),
+        );
+        hoverGroup.add(
+          new THREE.Points(
+            dots,
+            new THREE.PointsMaterial({
+              color: 0xe4c9ff,
+              size: 7,
+              sizeAttenuation: false,
+              depthTest: false,
+            }),
+          ),
+        );
         const rendered = modelGroup.children.find(
           (child) => child.userData.entityId === entity.id,
         ) as THREE.Mesh | undefined;
@@ -242,11 +329,24 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
     const p = project(hit.point);
     if (!p.visible) return;
     marker.hidden = false;
-    marker.dataset.kind = hit.kind;
+    marker.dataset.kind = hit.snap ?? hit.kind;
     marker.dataset.entityId = hit.id;
     marker.style.left = `${p.x}px`;
     marker.style.top = `${p.y}px`;
-    label.textContent = hit.kind === "vertex" ? "Vertex" : "Edge";
+    label.textContent =
+      hit.snap === "midpoint"
+        ? "Midpoint"
+        : hit.snap === "intersection"
+          ? "Intersection"
+          : hit.snap === "origin"
+            ? "Origin"
+            : hit.kind === "vertex"
+              ? "Vertex"
+              : hit.kind === "guide"
+                ? hit.id.startsWith("world:")
+                  ? `${hit.id.slice(-1).toUpperCase()} axis`
+                  : "Ruler"
+                : "Edge";
   }
   let active = true;
   const render = () => {
@@ -268,9 +368,20 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
         : pick(m, { origin: asVec(camera.position), project, ray }, x, y);
     },
     feedback,
-    preview(segments) {
+    cursorHint,
+    preview(segments, rulers = []) {
       disposeGroup(previewGroup);
-      previewGroup.add(lineObject(segments, 0x69dfcc, false));
+      const frustum = new THREE.Frustum().setFromProjectionMatrix(
+        new THREE.Matrix4().multiplyMatrices(
+          camera.projectionMatrix,
+          camera.matrixWorldInverse,
+        ),
+      );
+      const clipped = rulers.flatMap((r) => {
+        const segment = clipReference(r, frustum.planes);
+        return segment ? [segment] : [];
+      });
+      previewGroup.add(lineObject([...segments, ...clipped], 0x69dfcc, false));
     },
     frame() {
       feedback(null);
@@ -304,6 +415,7 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
       unsubscribe();
       observer.disconnect();
       controls.removeEventListener("start", clearFeedback);
+      controls.removeEventListener("change", drawReferences);
       controls.dispose();
       canvas.removeEventListener("pointerdown", navigation, true);
       canvas.removeEventListener("contextmenu", noMenu);
@@ -311,10 +423,11 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
       disposeGroup(previewGroup);
       disposeGroup(hoverGroup);
       marker.remove();
+      cursorLabel.remove();
+      disposeGroup(referenceGroup);
       grid.geometry.dispose();
       (grid.material as THREE.Material).dispose();
-      axes.geometry.dispose();
-      (axes.material as THREE.Material[]).forEach((m) => m.dispose());
+
       renderer.dispose();
       canvas.remove();
     },

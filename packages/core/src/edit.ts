@@ -1,6 +1,8 @@
 import { erase } from "./erase";
 import {
   EPS,
+  sub,
+  unit,
   add,
   mul,
   dot,
@@ -12,6 +14,7 @@ import {
 } from "@gabarito/geometry";
 import type { Vec3, Segment } from "@gabarito/geometry";
 import {
+  alloc,
   draw,
   conformEdges,
   position,
@@ -26,6 +29,7 @@ import {
 } from "./model";
 import type { Model, Face } from "./model";
 export type Command =
+  | { type: "guide"; origin: Vec3; direction: Vec3 }
   | { type: "draw"; segments: Segment[]; fillLoop?: Vec3[] }
   | { type: "delete"; ids: string[] }
   | { type: "move"; ids: string[]; delta: Vec3 }
@@ -185,6 +189,16 @@ function extrude(
 }
 export function apply(m: Model, c: Command): void {
   switch (c.type) {
+    case "guide": {
+      const id = alloc(m, "g");
+      m.entities[id] = {
+        id,
+        kind: "guide",
+        origin: { ...c.origin },
+        direction: { ...c.direction },
+      };
+      break;
+    }
     case "draw":
       draw(m, c.segments, c.fillLoop);
       break;
@@ -194,13 +208,30 @@ export function apply(m: Model, c: Command): void {
     case "move":
     case "rotate": {
       const ids = selectedVertices(m, c.ids);
-      if (!ids.size) throw new Error("Select geometry to transform");
+      const rulers = c.ids
+        .map((id) => m.entities[id])
+        .filter((e) => e?.kind === "guide");
+      if (!ids.size && !rulers.length)
+        throw new Error("Select geometry to transform");
       if (
         c.type === "rotate" &&
         (!Number.isFinite(c.angle) ||
           Math.hypot(c.axis.x, c.axis.y, c.axis.z) < EPS)
       )
         throw new Error("Enter a finite angle and a valid axis");
+      for (const g of rulers) {
+        if (c.type === "move") g.origin = add(g.origin, c.delta);
+        else {
+          const end = rotate(
+            add(g.origin, g.direction),
+            c.center,
+            c.axis,
+            c.angle,
+          );
+          g.origin = rotate(g.origin, c.center, c.axis, c.angle);
+          g.direction = unit(sub(end, g.origin));
+        }
+      }
       for (const id of ids) {
         const e = m.entities[id];
         if (e.kind === "vertex")

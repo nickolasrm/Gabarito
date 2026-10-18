@@ -22,3 +22,16 @@ world position; faces get a transient tint. The controller supplies the same eli
 uses for inference. Feedback never changes selection or geometry and is cleared on model changes,
 resize, framing and camera navigation. Single face selection tints only that face; selected vertex
 markers appear only when vertex IDs are explicitly selected.
+
+`pick` includes exact edge midpoints, editable infinite rulers, world axes, world origin and virtual
+ruler/ruler or ruler/edge intersections. Real vertices take priority, then midpoint/intersection
+points, real edges and rulers. All candidates pass the same forward-depth and occlusion checks.
+`Hit.snap` names `midpoint`, `intersection` or `origin`; guide hits use `kind: "guide"`.
+Face hover shows visible midpoint dots on outer and hole boundaries; a targeted midpoint gets a
+labeled circle. `cursorHint(text, x, y)` positions measurement/proportion text beside the pointer.
+
+`references.ts` computes virtual intersections and clips mathematical infinite lines against camera
+frustum halfspaces. User guides render dashed, world axes render colored in both directions, and
+neither enters model triangulation. References update with the camera; model framing still uses
+real vertices. Guide transform previews use the same clipping path. No finite document edge stands
+in for a ruler.

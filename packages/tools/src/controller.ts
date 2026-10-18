@@ -1,3 +1,4 @@
+import { rectangleRatio } from "./proportions";
 import {
   V,
   EPS,
@@ -21,6 +22,9 @@ import {
 import type { Vec3, Axis, Segment } from "@gabarito/geometry";
 import {
   parseDimensions,
+  UNITS,
+  referenceLines,
+  guides,
   position,
   faces,
   edges,
@@ -50,11 +54,15 @@ export function createController(store: Store, view: ToolView): Controller {
   let planeLabel = "Ground";
   let lastX = 0,
     lastY = 0;
+  let rulerDirection: Vec3 | null = null;
+  let tapePress: { x: number; y: number; active: boolean } | null = null;
   const listeners = new Set<() => void>();
   const emit = () => {
     for (const fn of listeners) fn();
   };
   const cancel = () => {
+    tapePress = null;
+    rulerDirection = null;
     start = null;
     first = null;
     reference = null;
@@ -63,6 +71,7 @@ export function createController(store: Store, view: ToolView): Controller {
     message = "";
     measurement = "";
     view.preview([]);
+    view.cursorHint("", lastX, lastY);
     view.feedback(null);
     emit();
   };
@@ -109,10 +118,16 @@ export function createController(store: Store, view: ToolView): Controller {
       view.preview([]);
       return;
     }
-    if (tool === "line") view.preview([[start, current]]);
-    else if (tool === "rectangle")
-      view.preview(polygonSegments(rectangle(current)));
-    else if (tool === "pushpull") {
+    let ratio = "";
+    if (tool === "line" || tool === "tape") view.preview([[start, current]]);
+    else if (tool === "rectangle") {
+      const corners = rectangle(current),
+        [width, height] = project(current, { ...drawingPlane, origin: start });
+      ratio = rectangleRatio(width, height);
+      const lines = polygonSegments(corners);
+      if (ratio) lines.push([start, current]);
+      view.preview(lines);
+    } else if (tool === "pushpull") {
       const f = faces(store.getState()).find((f) => f.id === faceId);
       if (!f) return;
       const d = mul(direction(), dot(sub(current, start), direction()));
@@ -151,13 +166,24 @@ export function createController(store: Store, view: ToolView): Controller {
                 selected.has(id) ? transform(position(m, id)) : position(m, id),
               ) as Segment,
           ),
+        guides(m)
+          .filter((g) => m.selection.includes(g.id))
+          .map((g) => ({
+            ...g,
+            origin: transform(g.origin),
+            direction: sub(
+              transform(add(g.origin, g.direction)),
+              transform(g.origin),
+            ),
+          })),
       );
     }
     const distance = length(sub(current, start));
     measurement =
       tool === "rotate"
         ? `${((rotatedAngle(current) * 180) / Math.PI).toFixed(1)}°`
-        : `${distance.toFixed(2)} mm`;
+        : `${(distance / UNITS[unitId]).toFixed(2)} ${unitId}`;
+    view.cursorHint(tool === "tape" ? measurement : ratio, lastX, lastY);
   };
   const finish = (end: Vec3, number?: number): boolean => {
     if (!start) return false;
@@ -176,6 +202,22 @@ export function createController(store: Store, view: ToolView): Controller {
         view.preview([]);
         emit();
       }
+      return true;
+    }
+    if (tool === "tape") {
+      if (near(start, end)) {
+        cancel();
+        return true;
+      }
+      if (
+        !run({
+          type: "guide",
+          origin: end,
+          direction: unit(rulerDirection ?? sub(end, start)),
+        })
+      )
+        return false;
+      cancel();
       return true;
     }
     let command: Command;
@@ -279,7 +321,7 @@ export function createController(store: Store, view: ToolView): Controller {
       if (axis && tool === "rectangle")
         drawingPlane = plane(V(), axis === "z" ? V(0, -1, 0) : V(0, 0, 1));
     }
-    if (tool === "rectangle") {
+    if (tool === "rectangle" || (tool === "tape" && !start)) {
       const inferred = axis
         ? {
             frame: plane(start ?? V(), axis === "z" ? V(0, -1, 0) : V(0, 0, 1)),
@@ -300,7 +342,7 @@ export function createController(store: Store, view: ToolView): Controller {
     }
     let end =
       hit &&
-      hit.kind !== "face" &&
+      (hit.kind !== "face" || tool === "tape") &&
       (tool !== "rectangle" || onPlane(hit.point, drawingPlane))
         ? hit.point
         : intersectPlane(ray, drawingPlane);
@@ -316,10 +358,18 @@ export function createController(store: Store, view: ToolView): Controller {
       end = intersectPlane(ray, rotationPlane);
     }
     if (!end) {
+      view.cursorHint("", x, y);
       view.feedback(null);
       return;
     }
-    if (start && !axis && tool === "line" && hit?.kind !== "vertex") {
+    if (
+      start &&
+      !axis &&
+      tool === "line" &&
+      hit?.kind !== "vertex" &&
+      hit?.kind !== "guide" &&
+      !hit?.snap
+    ) {
       for (const a of ["x", "y", "z"] as Axis[]) {
         const p = axisPoint(ray, start, axisVector(a)),
           s = view.project(p);
@@ -352,6 +402,25 @@ export function createController(store: Store, view: ToolView): Controller {
             : targets,
         );
       } else if (!start) {
+        if (tool === "tape") {
+          if (!hit) {
+            message = "Choose a vertex, edge, face or ruler";
+            emit();
+            return;
+          }
+          const m = store.getState(),
+            source = m.entities[hit.id];
+          rulerDirection =
+            source?.kind === "edge"
+              ? sub(
+                  position(m, source.vertices[1]),
+                  position(m, source.vertices[0]),
+                )
+              : hit.kind === "guide"
+                ? (referenceLines(m).find((g) => g.id === hit.id)?.direction ??
+                  null)
+                : null;
+        }
         if (tool === "pushpull" && hit?.kind !== "face") {
           message = "Choose a face";
           emit();
@@ -410,6 +479,7 @@ export function createController(store: Store, view: ToolView): Controller {
     },
     setUnit(u) {
       unitId = u;
+      updatePreview();
       emit();
     },
     setTyped(s) {
@@ -419,11 +489,27 @@ export function createController(store: Store, view: ToolView): Controller {
     submit,
     pointer,
     press(x, y) {
+      if (tool === "tape") {
+        tapePress = { x, y, active: !!start };
+        pointer(x, y, !start);
+        return;
+      }
       if (tool !== "pushpull") return;
       cancel();
       pointer(x, y, true);
     },
     release(x, y) {
+      if (tool === "tape") {
+        const pressed = tapePress;
+        tapePress = null;
+        if (!pressed || !start) return;
+        pointer(x, y);
+        if (pressed.active || Math.hypot(x - pressed.x, y - pressed.y) > 3) {
+          if (typed) submit();
+          else finish(current);
+        }
+        return;
+      }
       if (tool !== "pushpull" || !start) return;
       pointer(x, y);
       if (typed) submit();
@@ -438,6 +524,7 @@ export function createController(store: Store, view: ToolView): Controller {
       }
     },
     leave() {
+      view.cursorHint("", lastX, lastY);
       view.feedback(null);
     },
     cancel,

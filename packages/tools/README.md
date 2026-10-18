@@ -1,8 +1,8 @@
 # tools
 
 `createController(store, view)` is a headless interaction state machine. No Three.js or scene import.
-`types.ts` exports `ToolView`, `Controller`, `Status` and the six editing tools in `TOOLS`.
-The seventh interaction feature, camera navigation, belongs to scene.
+`types.ts` exports `ToolView`, `Controller`, `Status` and the seven editing and measuring tools in `TOOLS`.
+Camera navigation, belongs to scene.
 
 Public calls: `setTool`, `pointer`, `key`, `setTyped`, `submit`, `setUnit`, `cancel`, `status`,
 `subscribe`, `press`, `release`, `leave`. A view supplies visible picking, projection/rays, transient
@@ -28,3 +28,16 @@ corners. Its basis follows supporting edges, and the status bar names the active
 axis locks freeze inference. With no support, the first point anchors a plane parallel to ground;
 o unsupported off-plane target is shown as snapped. Preview and commit share the same four corners.
 Rectangle commands include `fillLoop`, allowing an explicitly retraced opening to regain a face.
+
+Tape Measure (`T`) supports click/click and press/drag/release. It measures between actual hovered
+3D positions, falling back to the origin's support plane over empty space. The cursor label uses
+selected display units. Completion emits one guide command through the destination: parallel to
+a source edge/ruler, or along the measured direction for face/vertex origins. Zero-length completion
+is a no-op. Click mode needs a second press/release; drag mode finishes after a three-pixel movement.
+`cursorHint(text, x, y)` displays transient measurements/proportions without mutating selection.
+`preview(segments, rulers?)` also supports infinite ruler previews during transforms.
+
+`proportions.ts` recognizes squares and integer aspect ratios, in either orientation, within 0.02
+of the ratio. The rectangle preview adds a diagonal and cursor hint only; actual corner positions
+and typed dimensions remain unchanged. Midpoints, virtual intersections, origin and rulers share
+the ordinary visible snap-hit contract (`snap` distinguishes named point references).

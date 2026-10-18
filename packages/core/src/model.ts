@@ -34,7 +34,13 @@ export interface Face {
   outer: string[];
   holes: string[][];
 }
-export type Entity = Vertex | Edge | Face;
+export interface Guide {
+  id: string;
+  kind: "guide";
+  origin: Vec3;
+  direction: Vec3;
+}
+export type Entity = Vertex | Edge | Face | Guide;
 export interface Model {
   entities: Record<string, Entity>;
   selection: string[];
@@ -282,6 +288,14 @@ export function meshOfModel(m: Model, fs = faces(m)): Mesh {
   return { points, triangles };
 }
 export function validate(m: Model): void {
+  for (const e of Object.values(m.entities))
+    if (
+      e.kind === "guide" &&
+      (!finite(e.origin) || !finite(e.direction) || length(e.direction) < EPS)
+    )
+      throw new Error(
+        "A ruler needs a finite origin and nonzero finite direction",
+      );
   const keys = new Set<string>();
   for (const v of vertices(m))
     if (!finite(v.position)) throw new Error("Coordinates must be finite");

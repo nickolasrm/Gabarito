@@ -1,7 +1,7 @@
 import type { Vec3, Ray, Segment } from "@gabarito/geometry";
-import type { Unit } from "@gabarito/core";
+import type { Unit, ReferenceLine } from "@gabarito/core";
 export type Tool =
-  "select" | "line" | "rectangle" | "move" | "pushpull" | "rotate";
+  "select" | "line" | "rectangle" | "move" | "pushpull" | "rotate" | "tape";
 export const TOOLS: { id: Tool; label: string; key: string; hint: string }[] = [
   {
     id: "select",
@@ -20,6 +20,12 @@ export const TOOLS: { id: Tool; label: string; key: string; hint: string }[] = [
     label: "Rectangle",
     key: "R",
     hint: "Click a corner, then the opposite corner. Or type width,depth and Enter.",
+  },
+  {
+    id: "tape",
+    label: "Tape Measure",
+    key: "T",
+    hint: "Click a reference, then a destination, or drag and release. Read the distance at the cursor. Completion places an infinite construction ruler. Esc cancels.",
   },
   {
     id: "move",
@@ -42,14 +48,16 @@ export const TOOLS: { id: Tool; label: string; key: string; hint: string }[] = [
 ];
 export interface ToolHit {
   id: string;
-  kind: "vertex" | "edge" | "face";
+  kind: "vertex" | "edge" | "face" | "guide";
+  snap?: "midpoint" | "intersection" | "origin";
   point: Vec3;
 }
 export interface ToolView {
   ray(x: number, y: number): Ray;
   project(p: Vec3): { x: number; y: number; visible: boolean };
   pick(x: number, y: number, faceOnly?: boolean): ToolHit | null;
-  preview(lines: Segment[]): void;
+  preview(lines: Segment[], rulers?: ReferenceLine[]): void;
+  cursorHint(text: string, x: number, y: number): void;
   feedback(hit: ToolHit | null): void;
 }
 export interface Status {

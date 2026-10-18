@@ -12,7 +12,11 @@ export function attachInput(
     return { x: event.clientX - box.left, y: event.clientY - box.top };
   };
   const down = (event: PointerEvent) => {
-    if (event.button !== 0 || controller.status().tool !== "pushpull") return;
+    if (
+      event.button !== 0 ||
+      !["pushpull", "tape"].includes(controller.status().tool)
+    )
+      return;
     canvas.focus();
     const { x, y } = local(event);
     controller.press(x, y);
@@ -26,7 +30,7 @@ export function attachInput(
     if (
       event.buttons === 0 ||
       (event.pointerId === dragPointer &&
-        controller.status().tool === "pushpull")
+        ["pushpull", "tape"].includes(controller.status().tool))
     ) {
       const { x, y } = local(event);
       controller.pointer(x, y);
@@ -48,6 +52,11 @@ export function attachInput(
     if (dragPointer !== null) {
       releaseCapture();
       controller.cancel();
+    } else if (
+      controller.status().tool === "tape" &&
+      controller.status().active
+    ) {
+      controller.cancel();
     }
   };
   const lost = (event: PointerEvent) => {
@@ -55,7 +64,11 @@ export function attachInput(
   };
   const leave = () => controller.leave();
   const click = (event: MouseEvent) => {
-    if (event.button !== 0 || controller.status().tool === "pushpull") return;
+    if (
+      event.button !== 0 ||
+      ["pushpull", "tape"].includes(controller.status().tool)
+    )
+      return;
     canvas.focus();
     const { x, y } = local(event);
     controller.pointer(x, y, true, event.shiftKey, event.detail);

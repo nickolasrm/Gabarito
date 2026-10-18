@@ -49,6 +49,8 @@ and by decision records, so a rejected spec keeps its number forever.
 
 | [0025](./0025-erase-coplanar-dividers.md) | Preserve surfaces when deleting coplanar dividers | implemented | core | 0027 |
 
+| [0026](./0026-measurements-and-references.md) | Add tape measurements and construction references | implemented | core, tools, scene, app, ui | 0012, 0014, 0020, 0027 |
+
 Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 
 ## Writing one
