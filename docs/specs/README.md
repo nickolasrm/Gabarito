@@ -61,6 +61,7 @@ and by decision records, so a rejected spec keeps its number forever.
 | [0032](./0032-rotate-anchor-orientation.md) | Orient rotation from an anchor and zero-angle reference | implemented | tools, ui | 0012, 0018, 0020 |
 | [0033](./0033-rotate-face-reference-hints.md) | Show shared face-reference hints during rotation | implemented | tools | 0012, 0018, 0020 |
 | [0034](./0034-scale-selection.md) | Scale selections with a bounding box and draggable handles | implemented | geometry, core, tools, scene, app, ui | 0006, 0012, 0018 |
+| [0035](./0035-standing-workflow-authorization.md) | Record standing authorization for routine development work | implemented | docs | 0009, 0017 |
 
 Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 

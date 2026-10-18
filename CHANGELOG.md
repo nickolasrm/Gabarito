@@ -1,5 +1,12 @@
 # Changelog
 
+## Routine workflow authorization — 2026-10-18
+
+- `AGENTS.md` records standing authorization for server operations, tests, staging/committing, branch
+  publication, PR creation/updates and CI checks. In-scope implementation specs need no redundant
+  confirmation. Every merge still requires fresh explicit owner approval and passing checks.
+- Spec: [0035](docs/specs/0035-standing-workflow-authorization.md).
+
 ## Scale selection — 2026-10-18
 
 - Added Scale (`S`) with a tight bounding box and draggable corner, edge and face handles. Face
