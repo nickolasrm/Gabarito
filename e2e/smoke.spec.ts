@@ -75,6 +75,7 @@ test("boots with all seven tools and creates exact typed geometry with undo/redo
     "Select",
     "Line",
     "Rectangle",
+    "Tape Measure",
     "Move",
     "Push/Pull",
     "Rotate",
@@ -387,8 +388,8 @@ test("vertex and edge markers show the actual snap position and clear on leave",
   const e = await screenOf(page, { x: 50, y: 0, z: 0 });
   await page.mouse.move(e.x, e.y);
   await expect(marker).toBeVisible();
-  await expect(marker).toHaveAttribute("data-kind", "edge");
-  await expect(marker).toHaveText("Edge");
+  await expect(marker).toHaveAttribute("data-kind", "midpoint");
+  await expect(marker).toHaveText("Midpoint");
   expect(await snapshot(page)).toEqual(before);
   await page.mouse.move(10, 10);
   await expect(marker).toBeHidden();
@@ -519,3 +520,288 @@ test("deleting a filled recess divider preserves the front surface", async ({
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   expect((await snapshot(page)).entities).toEqual(after.entities);
 });
+
+test("tape click/click measures a midpoint and creates an undoable parallel ruler", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await page.getByRole("button", { name: /^Tape Measure/ }).click();
+  const source = await screenOf(page, { x: 50, y: 0, z: 0 });
+  await page.mouse.move(source.x, source.y);
+  await expect(page.locator(".snap-label")).toHaveText("Midpoint");
+  await page.mouse.click(source.x, source.y);
+  expect(await count(page, "guide")).toBe(0);
+  const end = await screenOf(page, { x: 50, y: 50, z: 0 });
+  await page.mouse.move(end.x, end.y);
+  await expect(page.locator(".cursor-hint")).toHaveText("50.00 mm");
+  await page.getByLabel("Display and input units").selectOption("cm");
+  await expect(page.locator(".cursor-hint")).toHaveText("5.00 cm");
+  await page.mouse.click(end.x, end.y);
+  expect(await count(page, "guide")).toBe(1);
+  const m = await snapshot(page),
+    guide = Object.values(m.entities).find((e) => e.kind === "guide")!;
+  if (guide.kind !== "guide") throw new Error("Expected ruler");
+  expect(Math.abs(guide.direction.x)).toBeCloseTo(1);
+  expect(guide.origin.y).toBeCloseTo(50);
+  expect(await count(page, "edge")).toBe(4);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect(await count(page, "guide")).toBe(0);
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  expect((await snapshot(page)).entities).toEqual(m.entities);
+  // Draw directly along the virtual ruler, beyond the original face.
+  await page.getByRole("button", { name: /^Line/ }).click();
+  await clickWorld(page, { x: 150, y: 50, z: 0 });
+  await clickWorld(page, { x: 200, y: 50, z: 0 });
+  expect(await count(page, "guide")).toBe(1);
+  expect(await count(page, "edge")).toBe(5);
+});
+
+test("tape drag from a face commits only on release; cancelled gestures add no ruler", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await page.keyboard.press("t");
+  const a = await screenOf(page, { x: 30, y: 30, z: 0 }),
+    b = await screenOf(page, { x: 60, y: 70, z: 0 });
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y);
+  await expect(page.locator(".cursor-hint")).toHaveText("50.00 mm");
+  expect(await count(page, "guide")).toBe(0);
+  await page.mouse.up();
+  expect(await count(page, "guide")).toBe(1);
+  const g = Object.values((await snapshot(page)).entities).find(
+    (e) => e.kind === "guide",
+  )!;
+  if (g.kind !== "guide") throw new Error("Expected ruler");
+  expect(g.direction.x).toBeCloseTo(0.6);
+  expect(g.direction.y).toBeCloseTo(0.8);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y);
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  expect(await count(page, "guide")).toBe(1);
+  await expect(page.locator(".cursor-hint")).toBeHidden();
+});
+
+test("world axes and origin snap without becoming deletable geometry", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: /^Line/ }).click();
+  const origin = await screenOf(page, { x: 0, y: 0, z: 0 });
+  await page.mouse.move(origin.x, origin.y);
+  await expect(page.locator(".snap-label")).toHaveText("Origin");
+  const z = await screenOf(page, { x: 0, y: 0, z: 100 });
+  await page.mouse.move(z.x, z.y);
+  await expect(page.locator(".snap-label")).toHaveText("Z axis");
+  await page.mouse.click(origin.x, origin.y);
+  await page.mouse.click(z.x, z.y);
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Space");
+  await clickWorld(page, { x: 100, y: 0, z: 0 });
+  expect((await snapshot(page)).selection).toHaveLength(0);
+  await page.keyboard.press("Delete");
+  expect(await count(page, "guide")).toBe(0);
+  expect(await count(page, "edge")).toBe(1);
+});
+
+test("rectangle proportions show a temporary diagonal hint and keep only four real edges", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: /^Rectangle/ }).click();
+  await clickWorld(page, { x: 0, y: 0, z: 0 });
+  const square = await screenOf(page, { x: 100, y: 100, z: 0 });
+  await page.mouse.move(square.x, square.y);
+  await expect(page.locator(".cursor-hint")).toHaveText("Square · 1:1");
+  const ratio = await screenOf(page, { x: 200, y: 100, z: 0 });
+  await page.mouse.move(ratio.x, ratio.y);
+  await expect(page.locator(".cursor-hint")).toHaveText("2:1");
+  await page.mouse.click(ratio.x, ratio.y);
+  expect(await count(page, "edge")).toBe(4);
+  await expect(page.locator(".cursor-hint")).toBeHidden();
+});
+
+for (const mode of ["click", "drag"] as const) {
+  for (const event of ["blur", "pointercancel"] as const) {
+    test(`tape ${mode} cancellation on ${event} creates no ruler`, async ({
+      page,
+    }) => {
+      await rectangle(page);
+      await page.keyboard.press("t");
+      const a = await screenOf(page, { x: 30, y: 30, z: 0 }),
+        b = await screenOf(page, { x: 60, y: 70, z: 0 });
+      await page.mouse.move(a.x, a.y);
+      await page.mouse.down();
+      if (mode === "click") await page.mouse.up();
+      await page.mouse.move(b.x, b.y);
+      await expect(page.locator(".cursor-hint")).toBeVisible();
+      if (event === "blur")
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+      else
+        await page.locator("canvas").dispatchEvent("pointercancel", {
+          pointerId: 1,
+          pointerType: "mouse",
+          button: 0,
+        });
+      if (mode === "drag") await page.mouse.up();
+      expect(await count(page, "guide")).toBe(0);
+      expect(
+        await page.evaluate(() => window.__gabarito.controller.status().active),
+      ).toBe(false);
+      await expect(page.locator(".cursor-hint")).toBeHidden();
+    });
+  }
+}
+
+for (const bypass of [false, true]) {
+  test(`face midpoint alignment commits ${bypass ? "raw coordinates with Alt" : "an exact midline"}`, async ({
+    page,
+  }) => {
+    await rectangle(page);
+    await page.keyboard.press("f");
+    await page.getByRole("button", { name: /^Rectangle/ }).click();
+    await clickWorld(page, { x: 30, y: 30, z: 0 });
+    const p = await screenOf(page, { x: 40, y: 49, z: 0 });
+    await page.mouse.move(p.x, p.y);
+    await expect(page.locator(".cursor-hint")).toContainText(
+      "Midpoint alignment",
+    );
+    if (bypass) {
+      await page.keyboard.down("Alt");
+      await expect(
+        page.getByText("Snapping off · Alt", { exact: true }),
+      ).toBeVisible();
+      await expect(page.locator(".snap-marker")).toBeHidden();
+    }
+    await page.mouse.click(p.x, p.y);
+    if (bypass) await page.keyboard.up("Alt");
+    const points = Object.values((await snapshot(page)).entities)
+      .filter((e) => e.kind === "vertex")
+      .map((v) => v.position);
+    expect(
+      points.some(
+        (p) =>
+          Math.abs(p.x - 40) < 0.5 &&
+          Math.abs(p.y - (bypass ? 49 : 50)) < (bypass ? 0.5 : 0.00001),
+      ),
+    ).toBe(true);
+  });
+}
+for (const [x, y, ratio] of [
+  [100, 98, 1],
+  [200, 98, 2],
+] as const) {
+  test(`rectangle proximity snapping commits exact ${ratio}:1 dimensions`, async ({
+    page,
+  }) => {
+    await page.getByRole("button", { name: /^Rectangle/ }).click();
+    await clickWorld(page, { x: 0, y: 0, z: 0 });
+    const p = await screenOf(page, { x, y, z: 0 });
+    await page.mouse.move(p.x, p.y);
+    await expect(page.locator(".cursor-hint")).toContainText(
+      ratio === 1 ? "1:1" : "2:1",
+    );
+    await page.keyboard.down("Alt");
+    await expect(page.locator(".cursor-hint")).toBeHidden();
+    await page.keyboard.up("Alt");
+    await expect(page.locator(".cursor-hint")).toBeVisible();
+    await page.mouse.click(p.x, p.y);
+    const points = Object.values((await snapshot(page)).entities)
+      .filter((e) => e.kind === "vertex")
+      .map((v) => v.position);
+    expect(
+      Math.max(...points.map((p) => p.x)) / Math.max(...points.map((p) => p.y)),
+    ).toBeCloseTo(ratio, 6);
+    expect(await count(page, "edge")).toBe(4);
+  });
+}
+
+test("line drawing snaps to a face diagonal and Alt resets after blur", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await page.keyboard.press("f");
+  await page.getByRole("button", { name: /^Line/ }).click();
+  await clickWorld(page, { x: 10, y: 15, z: 0 });
+  const p = await screenOf(page, { x: 25, y: 26, z: 0 });
+  await page.mouse.move(p.x, p.y);
+  await expect(page.locator(".snap-label")).toHaveText("Face diagonal");
+  await page.keyboard.down("Alt");
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().snapping),
+  ).toBe(false);
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().snapping),
+  ).toBe(true);
+  await page.keyboard.up("Alt");
+  await page.mouse.move(p.x + 1, p.y);
+  await page.mouse.move(p.x, p.y);
+  await page.mouse.click(p.x, p.y);
+  const points = Object.values((await snapshot(page)).entities)
+    .filter((e) => e.kind === "vertex")
+    .map((v) => v.position);
+  expect(
+    points.some((p) => p.x > 20 && p.x < 30 && Math.abs(p.x - p.y) < 0.00001),
+  ).toBe(true);
+});
+
+for (const kind of ["vertex", "edge", "face"] as const) {
+  test(`push/pull matches a visible ${kind} depth`, async ({ page }) => {
+    await rectangle(page);
+    await page.evaluate((kind) => {
+      const { store } = window.__gabarito;
+      const V = (x: number, y: number, z: number) => ({ x, y, z });
+      if (kind === "face") {
+        const p = [
+          V(110, 40, 25),
+          V(150, 40, 25),
+          V(150, 90, 25),
+          V(110, 90, 25),
+        ];
+        store.execute({
+          type: "draw",
+          segments: p.map((a, i) => [a, p[(i + 1) % 4]]),
+        });
+      } else
+        store.execute({
+          type: "draw",
+          segments: [[V(150, 0, 25), V(170, 0, 25)]],
+        });
+    }, kind);
+    await page.getByRole("button", { name: /^Push\/Pull/ }).click();
+    const a = await screenOf(page, {
+      x: kind === "face" ? 90 : 50,
+      y: 50,
+      z: 0,
+    });
+    const b = await screenOf(
+      page,
+      kind === "face"
+        ? { x: 130, y: 63.25, z: 25 }
+        : { x: kind === "vertex" ? 150 : 160, y: 0, z: 25 },
+    );
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    await page.mouse.move(b.x, b.y);
+    await expect(page.locator(".cursor-hint")).toContainText(
+      `${kind[0].toUpperCase() + kind.slice(1)} level`,
+    );
+    await page.mouse.up();
+    const m = await snapshot(page);
+    const cap = Object.values(m.entities).find(
+      (e) =>
+        e.kind === "face" &&
+        e.outer.every((id) => {
+          const v = m.entities[id];
+          return (
+            v.kind === "vertex" &&
+            Math.abs(v.position.z - 25) < 0.00001 &&
+            v.position.x <= 100.00001
+          );
+        }),
+    );
+    expect(cap).toBeDefined();
+  });
+}

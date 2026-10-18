@@ -31,7 +31,7 @@ function rectangle(z: number) {
 it("never selects vertices or edges behind the camera", () => {
   const s = rectangle(1100);
   expect(pick(s.getState(), view, -1000, -1000)).toBeNull();
-  expect(pick(s.getState(), view, 0, 1000)).toBeNull();
+  expect(pick(s.getState(), view, 0, 1000)?.id).toBe("world:y");
 });
 it("rejects a hidden vertex even one unit behind a large foreground face", () => {
   const s = rectangle(100),
@@ -80,4 +80,58 @@ it("checks occlusion at the candidate position, not at the pointer ray", () => {
   m.entities.hidden = { id: "hidden", kind: "vertex", position: p };
   const screen = view.project(p);
   expect(pick(m, view, screen.x + 7, screen.y)?.id).not.toBe("hidden");
+});
+
+it("snaps exactly to a visible edge midpoint near the pointer", () => {
+  const s = rectangle(100),
+    p = view.project(V(0, -100, 100));
+  const hit = pick(s.getState(), view, p.x + 4, p.y + 1);
+  expect(hit?.snap).toBe("midpoint");
+  expect(hit?.point).toEqual(V(0, -100, 100));
+});
+it("snaps to infinite rulers beyond their origin and to virtual crossings without creating topology", () => {
+  const s = createStore();
+  s.execute({ type: "guide", origin: V(10, 20), direction: V(1) });
+  s.execute({ type: "guide", origin: V(35, 20), direction: V(0, 1) });
+  expect(pick(s.getState(), view, 10000, 20)?.kind).toBe("guide");
+  const hit = pick(s.getState(), view, 35, 20);
+  expect(hit?.snap).toBe("intersection");
+  expect(hit?.point).toEqual(V(35, 20));
+  expect(vertices(s.getState())).toHaveLength(0);
+  expect(edges(s.getState())).toHaveLength(0);
+});
+it("world origin and all three world axes remain snap references in an empty document", () => {
+  const s = createStore();
+  expect(pick(s.getState(), view, 0, 0)?.snap).toBe("origin");
+  expect(pick(s.getState(), view, -100, 0)?.id).toBe("world:x");
+  expect(pick(s.getState(), view, 0, -100)?.id).toBe("world:y");
+  const side: PickView = {
+    origin: V(0, -1000, 0),
+    project: (p) => ({
+      x: p.x,
+      y: p.z,
+      depth: p.y + 1000,
+      visible: p.y > -1000,
+    }),
+    ray: (x, y) => ({ origin: V(x, -1000, y), direction: V(0, 1, 0) }),
+  };
+  expect(pick(s.getState(), side, 0, 100)?.id).toBe("world:z");
+  expect(pick(s.getState(), side, 0, 100)?.point).toEqual(V(0, 0, 100));
+});
+it("reference and midpoint snaps respect foreground occlusion", () => {
+  const s = rectangle(100);
+  s.execute({ type: "guide", origin: V(0, 20, 99), direction: V(1) });
+  s.execute({ type: "draw", segments: [[V(-10, 30, 99), V(10, 30, 99)]] });
+  expect(pick(s.getState(), view, 0, 20)?.kind).toBe("face");
+  expect(pick(s.getState(), view, 0, 30)?.kind).toBe("face");
+});
+
+it("a coincident ruler intersection never steals an edge midpoint's identity", () => {
+  const s = rectangle(100);
+  s.execute({ type: "guide", origin: V(1e-8, -100, 100), direction: V(0, 1) });
+  const p = view.project(V(1e-8, -100, 100)),
+    hit = pick(s.getState(), view, p.x, p.y);
+  expect(hit?.snap).toBe("midpoint");
+  expect(hit?.kind).toBe("edge");
+  expect(hit?.sourceEdge).toBe(hit?.id);
 });

@@ -1,11 +1,11 @@
 # tools
 
 `createController(store, view)` is a headless interaction state machine. No Three.js or scene import.
-`types.ts` exports `ToolView`, `Controller`, `Status` and the six editing tools in `TOOLS`.
-The seventh interaction feature, camera navigation, belongs to scene.
+`types.ts` exports `ToolView`, `Controller`, `Status` and the seven editing and measuring tools in `TOOLS`.
+Camera navigation belongs to scene.
 
 Public calls: `setTool`, `pointer`, `key`, `setTyped`, `submit`, `setUnit`, `cancel`, `status`,
-`subscribe`, `press`, `release`, `leave`. A view supplies visible picking, projection/rays, transient
+`subscribe`, `press`, `release`, `leave`, `setSnapping`. A view supplies visible picking, projection/rays, transient
 preview segments and `feedback(hit)` for the eligible hover/snap target. `pointer` accepts a native
 click count; app routes held gestures through `press` and `release`.
 
@@ -28,3 +28,32 @@ corners. Its basis follows supporting edges, and the status bar names the active
 axis locks freeze inference. With no support, the first point anchors a plane parallel to ground;
 o unsupported off-plane target is shown as snapped. Preview and commit share the same four corners.
 Rectangle commands include `fillLoop`, allowing an explicitly retraced opening to regain a face.
+
+Tape Measure (`T`) supports click/click and press/drag/release. It measures between actual hovered
+3D positions, falling back to the origin's support plane over empty space. The cursor label uses
+selected display units. Completion emits one guide command through the destination: parallel to
+a source edge/ruler, or along the measured direction for face/vertex origins. Zero-length completion
+is a no-op. Click mode needs a second press/release; drag mode finishes after a three-pixel movement.
+`cursorHint(text, x, y)` displays transient measurements/proportions without mutating selection.
+`preview(segments, rulers?)` also supports infinite ruler previews during transforms.
+
+`proportions.ts` snaps rectangle endpoints to exact squares/integer aspect ratios within eight
+screen pixels. Visible explicit geometry wins; face layout references win over approximate ratios,
+while an already exact ratio remains exact. Preview and commit share the result; typed dimensions
+override proximity. The diagonal stays transient. Tape previews include the prospective infinite
+ruler as well as the finite measurement segment; neither writes document state before completion.
+
+`face-snap.ts` infers perpendicular alignment lines from visible boundary midpoints and diagonals
+of quadrilateral faces, including rotated planes and collinear boundary splits. Holes exclude false
+material targets. Intersections can lock both coordinates. Feedback includes the named source and
+reference line. `midpointEdge` resolves source provenance, so virtual midpoint hits still produce
+edge-parallel rulers. Hits carry `sourceEdge` when needed.
+
+`extrusion-snap.ts` matches a hovered vertex/edge elevation or a nearby crossing face plane along
+the existing extrusion axis. Face and zero-level snaps require proximity; the active face and
+parallel face planes are excluded. Feedback names the level and connects it to the extrusion axis.
+
+`ToolView.visible(point)` applies scene occlusion to inferred reference points. `setSnapping(false)`
+bypasses feature picking, face/proportion/automatic-axis inference and push/pull references; it
+preserves the support plane, explicit locks and typed dimensions. `Status.snapping` exposes this
+state. App maps Alt down/up to this method and resets it on blur.

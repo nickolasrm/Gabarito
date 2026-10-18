@@ -1,5 +1,7 @@
+import { referenceIntersections } from "./references";
 import {
   EPS,
+  near,
   add,
   sub,
   mul,
@@ -8,9 +10,17 @@ import {
   length,
   unit,
   triangulate,
+  axisPoint,
 } from "@gabarito/geometry";
 import type { Vec3, Ray } from "@gabarito/geometry";
-import { vertices, edges, faces, position, surface } from "@gabarito/core";
+import {
+  vertices,
+  edges,
+  faces,
+  position,
+  surface,
+  referenceLines,
+} from "@gabarito/core";
 import type { Model } from "@gabarito/core";
 export interface ScreenPoint {
   x: number;
@@ -25,7 +35,9 @@ export interface PickView {
 }
 export interface Hit {
   id: string;
-  kind: "vertex" | "edge" | "face";
+  kind: "vertex" | "edge" | "face" | "guide";
+  snap?: "midpoint" | "intersection" | "origin" | "alignment" | "diagonal";
+  sourceEdge?: string;
   point: Vec3;
 }
 function triangleHit(ray: Ray, a: Vec3, b: Vec3, c: Vec3): number | null {
@@ -106,6 +118,22 @@ export function pick(
       pb = view.project(b);
     // Segments crossing the near plane are not snap targets; never project their hidden endpoint.
     if (!pa.visible || !pb.visible) continue;
+    const midpoint = mul(add(a, b), 0.5),
+      pm = view.project(midpoint),
+      midpointPixels = Math.hypot(pm.x - x, pm.y - y);
+    if (midpointPixels <= tolerance && visible(m, view, midpoint))
+      candidates.push({
+        hit: {
+          id: e.id,
+          kind: "edge",
+          point: midpoint,
+          snap: "midpoint",
+          sourceEdge: e.id,
+        },
+        pixels: midpointPixels,
+        priority: 1,
+        depth: pm.depth,
+      });
     const dx = pb.x - pa.x,
       dy = pb.y - pa.y,
       size = dx * dx + dy * dy;
@@ -120,8 +148,43 @@ export function pick(
       candidates.push({
         hit: { id: e.id, kind: "edge", point },
         pixels,
-        priority: 1,
+        priority: 2,
         depth: view.project(point).depth,
+      });
+  }
+  for (const [i, point] of referenceIntersections(m).entries()) {
+    // Coincident virtual intersections must not replace an edge midpoint's provenance.
+    if (
+      candidates.some(
+        (c) => c.hit.snap === "midpoint" && near(c.hit.point, point),
+      )
+    )
+      continue;
+    const p = view.project(point),
+      pixels = Math.hypot(p.x - x, p.y - y);
+    if (pixels <= tolerance && visible(m, view, point))
+      candidates.push({
+        hit: {
+          id: i === 0 ? "world:origin" : `intersection:${i}`,
+          kind: "vertex",
+          point,
+          snap: i === 0 ? "origin" : "intersection",
+        },
+        pixels,
+        priority: 1,
+        depth: p.depth,
+      });
+  }
+  for (const line of referenceLines(m)) {
+    const point = axisPoint(view.ray(x, y), line.origin, line.direction),
+      p = view.project(point),
+      pixels = Math.hypot(p.x - x, p.y - y);
+    if (pixels <= tolerance && visible(m, view, point))
+      candidates.push({
+        hit: { id: line.id, kind: "guide", point },
+        pixels,
+        priority: 3,
+        depth: p.depth,
       });
   }
   candidates.sort(

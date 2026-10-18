@@ -32,3 +32,10 @@ A draw command may include `fillLoop`: an explicitly requested closed contour. I
 region only when its rebuilt outer boundary matches that contour, including collinear split points.
 Other deleted regions remain suppressed. `Model.erased` stores boundary loops so `conformEdges`
 updates deletion markers alongside face loops when an edge is split; their signatures stay valid.
+
+`Guide` entities store an infinite non-geometric line as `origin` and nonzero `direction`.
+`{ type: "guide", origin, direction }` creates one undoable ruler; ordinary delete/move/rotate
+commands also work on guides. Validation rejects nonfinite origins/directions and zero directions.
+Geometry queries, face rebuilding and solid operations exclude guides by kind. `guides(model)`
+queries editable rulers; `referenceLines(model)` adds the built-in `WORLD_AXES`. World axes and
+`world:origin` are references outside the entity map, so selection/deletion cannot modify them.

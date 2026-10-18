@@ -12,8 +12,13 @@ export function attachInput(
     return { x: event.clientX - box.left, y: event.clientY - box.top };
   };
   const down = (event: PointerEvent) => {
-    if (event.button !== 0 || controller.status().tool !== "pushpull") return;
+    if (
+      event.button !== 0 ||
+      !["pushpull", "tape"].includes(controller.status().tool)
+    )
+      return;
     canvas.focus();
+    controller.setSnapping(!event.altKey);
     const { x, y } = local(event);
     controller.press(x, y);
     if (controller.status().active) {
@@ -26,8 +31,9 @@ export function attachInput(
     if (
       event.buttons === 0 ||
       (event.pointerId === dragPointer &&
-        controller.status().tool === "pushpull")
+        ["pushpull", "tape"].includes(controller.status().tool))
     ) {
+      controller.setSnapping(!event.altKey);
       const { x, y } = local(event);
       controller.pointer(x, y);
     }
@@ -42,11 +48,17 @@ export function attachInput(
     if (event.button !== 0 || event.pointerId !== dragPointer) return;
     const { x, y } = local(event);
     releaseCapture();
+    controller.setSnapping(!event.altKey);
     controller.release(x, y);
   };
   const abort = () => {
     if (dragPointer !== null) {
       releaseCapture();
+      controller.cancel();
+    } else if (
+      controller.status().tool === "tape" &&
+      controller.status().active
+    ) {
       controller.cancel();
     }
   };
@@ -55,12 +67,22 @@ export function attachInput(
   };
   const leave = () => controller.leave();
   const click = (event: MouseEvent) => {
-    if (event.button !== 0 || controller.status().tool === "pushpull") return;
+    if (
+      event.button !== 0 ||
+      ["pushpull", "tape"].includes(controller.status().tool)
+    )
+      return;
     canvas.focus();
+    controller.setSnapping(!event.altKey);
     const { x, y } = local(event);
     controller.pointer(x, y, true, event.shiftKey, event.detail);
   };
   const key = (event: KeyboardEvent) => {
+    if (event.key === "Alt") {
+      controller.setSnapping(false);
+      event.preventDefault();
+      return;
+    }
     const element = event.target as HTMLElement;
     if (element.closest("input,select,textarea") || event.altKey) return;
     if (
@@ -78,6 +100,17 @@ export function attachInput(
     )
       event.preventDefault();
   };
+  const keyup = (event: KeyboardEvent) => {
+    if (event.key === "Alt") {
+      controller.setSnapping(true);
+      event.preventDefault();
+    }
+  };
+  const blur = () => {
+    abort();
+    controller.setSnapping(true);
+    controller.leave();
+  };
   canvas.addEventListener("pointerdown", down);
   canvas.addEventListener("pointermove", move);
   canvas.addEventListener("pointerup", up);
@@ -86,7 +119,8 @@ export function attachInput(
   canvas.addEventListener("pointerleave", leave);
   canvas.addEventListener("click", click);
   window.addEventListener("keydown", key);
-  window.addEventListener("blur", abort);
+  window.addEventListener("keyup", keyup);
+  window.addEventListener("blur", blur);
   return () => {
     abort();
     canvas.removeEventListener("pointerdown", down);
@@ -97,6 +131,7 @@ export function attachInput(
     canvas.removeEventListener("pointerleave", leave);
     canvas.removeEventListener("click", click);
     window.removeEventListener("keydown", key);
-    window.removeEventListener("blur", abort);
+    window.removeEventListener("keyup", keyup);
+    window.removeEventListener("blur", blur);
   };
 }

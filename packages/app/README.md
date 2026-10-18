@@ -15,3 +15,11 @@ Run `npm run dev -- --port 5173 --strictPort` for human review. Automated browse
 Push/pull captures the primary pointer from press to release, including outside-canvas release.
 Pointer cancel, lost capture and window blur abort it. Native click counts drive face/boundary/
 connected selection. A release-generated click never starts a second push/pull operation.
+
+Tape Measure also captures primary presses and suppresses native completion clicks. The controller
+chooses click/click versus drag/release; app delivers both lifecycles without double commits. Blur
+cancels tape measurements in either mode, including between clicks.
+
+Alt down/up immediately updates `controller.setSnapping`, even without pointer movement. Pointer
+modifier state also synchronizes before press/move/release/click. Blur restores snapping and clears
+feedback, so missed key releases cannot leave snapping disabled. Explicit locks and typing survive.

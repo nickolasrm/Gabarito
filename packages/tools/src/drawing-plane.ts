@@ -13,7 +13,14 @@ import {
   planeKey,
 } from "@gabarito/geometry";
 import type { Vec3, Plane, Ray } from "@gabarito/geometry";
-import { faces, edges, loops, position, facePlane } from "@gabarito/core";
+import {
+  faces,
+  edges,
+  loops,
+  position,
+  facePlane,
+  referenceLines,
+} from "@gabarito/core";
 import type { Model } from "@gabarito/core";
 import type { ToolHit } from "./types";
 export interface DrawingPlane {
@@ -40,6 +47,8 @@ export function inferRectanglePlane(
   const directions = incident.map((e) =>
     sub(position(model, e.vertices[1]), position(model, e.vertices[0])),
   );
+  const ruler = referenceLines(model).find((g) => g.id === hit.id);
+  if (ruler) directions.push(ruler.direction);
   const edgeScore = (d: Vec3) =>
     diagonal && length(diagonal) > EPS
       ? Math.abs(Math.abs(dot(unit(d), unit(diagonal))) - Math.SQRT1_2)
@@ -99,6 +108,10 @@ export function inferRectanglePlane(
       // A ground-level edge alone must not tilt a ground drawing.
       if (Math.abs(a.z) < EPS && Math.abs(b.z) < EPS) continue;
       const n = cross(sub(b, a), diagonal);
+      if (length(n) > EPS) edgePlanes.push(plane(anchor!, n));
+    }
+    if (ruler) {
+      const n = cross(ruler.direction, diagonal);
       if (length(n) > EPS) edgePlanes.push(plane(anchor!, n));
     }
   } else

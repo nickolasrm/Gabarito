@@ -1,5 +1,30 @@
 # Changelog
 
+## Measurement snapping completion — 2026-10-18
+
+- Midpoints keep their source-edge identity even at coincident ruler intersections. Tape previews
+  show the prospective infinite dashed ruler; completion alone creates its entity.
+- Rectangle proportions now snap actual dimensions. Face midpoint alignments and diagonals provide
+  exact drawing references with visible inference lines, including rotated faces and face centers.
+- Hold Alt to bypass snapping; release restores it immediately. Support planes, explicit axis locks
+  and typed dimensions remain active. Blur resets the modifier state.
+- Push/pull matches visible vertex/edge levels and nearby crossing face planes. Distant starting-level
+  edges cannot reset a free extrusion. Reference targets and connecting lines remain visible.
+- Spec: [0027](docs/specs/0027-complete-measurement-snapping.md).
+
+## Measurements and construction references — 2026-10-18
+
+- Added Tape Measure (`T`) with click/click and drag/release input, live cursor distances in selected
+  units, and undoable infinite rulers. Edge sources create parallel rulers; face/vertex sources
+  follow the measured direction through the destination.
+- User rulers support selection, deletion and transforms without becoming model geometry. Axes
+  extend in both directions as undeletable snap references, with a shared virtual origin vertex.
+- Added exact midpoint snapping and labels, visible face-boundary midpoint hints, and virtual
+  ruler intersections. References use the same camera-depth and occlusion rules as geometry.
+- Rectangle previews show temporary diagonals and labels for squares and integer aspect ratios;
+  actual dimensions and document edges remain unchanged.
+- Spec: [0026](docs/specs/0026-measurements-and-references.md).
+
 ## Coplanar divider deletion — 2026-10-18
 
 - Deleting a shared coplanar edge merges its faces, preserving the parent surface and other holes.
