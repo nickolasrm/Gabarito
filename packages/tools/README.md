@@ -13,9 +13,10 @@ click count; app routes held gestures through `press` and `release`.
   triple-click connected geometry. Shift-single toggles; Shift-multiple adds.
 - Line chains edges until a planar face closes. Rectangle infers its plane from the aimed face or boundary, including rotated openings.
 - Move transforms selected shared vertices. Rotate accepts pivot/reference/angle or typed degrees.
-- Push/pull starts on primary press, previews while held, and commits once on release. Signed input
-  and arrow locks remain available while held; Enter can commit early. Stationary clicks do nothing.
-  Release always ends the gesture, including failures. Escape or pointer cancellation discards it.
+- Push/pull supports click/move/click and press/drag/release together. A stationary first release
+  arms click mode without editing; a drag release or second click commits once. Signed input and
+  arrow locks work in both modes; Enter can commit early. Zero-depth completion is a no-op.
+  Escape, tool changes, blur and pointer cancellation discard pending operations.
 - Numeric entry is live while an operation is active. Enter commits; Escape cancels.
 - Arrow Up pins Z, Right pins X, Left pins Y. Repeating the key releases it. Down pins negative Z.
 
@@ -49,11 +50,25 @@ material targets. Intersections can lock both coordinates. Feedback includes the
 reference line. `midpointEdge` resolves source provenance, so virtual midpoint hits still produce
 edge-parallel rulers. Hits carry `sourceEdge` when needed.
 
-`extrusion-snap.ts` matches a hovered vertex/edge elevation or a nearby crossing face plane along
-the existing extrusion axis. Face and zero-level snaps require proximity; the active face and
-parallel face planes are excluded. Feedback names the level and connects it to the extrusion axis.
+`axis-snap.ts` is the shared constrained reference resolver for Push/Pull and axis-pinned Move.
+Vertex/edge/ruler references contribute their coordinate along the active axis. A hovered face
+contributes the axis/plane intersection, even when the unconstrained depth is far from that plane.
+Only zero-level snaps require proximity, preventing accidental resets during free dragging. The
+active extrusion face, selected Move entities, invisible targets and parallel planes are excluded.
+Feedback shows the aimed target, connecting line, level label and distance. Preview and commit use
+the same point; Alt and exact typed values retain priority.
 
 `ToolView.visible(point)` applies scene occlusion to inferred reference points. `setSnapping(false)`
 bypasses feature picking, face/proportion/automatic-axis inference and push/pull references; it
 preserves the support plane, explicit locks and typed dimensions. `Status.snapping` exposes this
 state. App maps Alt down/up to this method and resets it on blur.
+
+Tape participates in the same face midpoint/diagonal/intersection resolver as Line and Rectangle,
+using the hovered target face's plane when measuring across different surfaces. Cursor labels show
+the distance plus inference name; finite inference lines accompany the prospective infinite ruler.
+Automatic axis inference also applies to tape over empty space. Explicit pins take priority over
+face inference, while explicit geometry priority and Alt bypass remain shared.
+
+The gesture discriminator is shared by tape and push/pull. Completion and cancellation clear both
+axis and sign. Each committed line segment clears its own pin while retaining the polygon chain;
+this prevents the next segment or tool use from inheriting an earlier lock.

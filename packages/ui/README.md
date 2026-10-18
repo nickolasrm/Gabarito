@@ -21,3 +21,6 @@ rectangle aspect hints. These transient overlays have no pointer events and do n
 
 `UiStatus.snapping` adds a visible `Snapping off · Alt` indicator while bypass is held; tool guidance
 explains the modifier. Cursor hints also name face alignments and extrusion reference levels.
+
+Push/Pull guidance describes both click/move/click and hold/drag/release. Active status text supports
+both gestures without a separate mode selector. Tape labels include active face-inference names.

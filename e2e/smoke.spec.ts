@@ -298,13 +298,22 @@ test("release outside the canvas finishes the captured extrusion", async ({
     await page.evaluate(() => window.__gabarito.controller.status().active),
   ).toBe(false);
 });
-test("a stationary push/pull click is a no-op", async ({ page }) => {
+test("a stationary push/pull click arms click-mode without changing geometry", async ({
+  page,
+}) => {
   await rectangle(page);
   const before = await snapshot(page);
   await page.getByRole("button", { name: /^Push\/Pull/ }).click();
   await clickWorld(page, { x: 50, y: 50, z: 0 });
   expect(await snapshot(page)).toEqual(before);
-  await expect(page.getByRole("status")).toHaveText("Hold a face to start");
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().active),
+  ).toBe(true);
+  await clickWorld(page, { x: 50, y: 50, z: 0 });
+  expect(await snapshot(page)).toEqual(before);
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().active),
+  ).toBe(false);
 });
 test("typed dimensions and axis locks work during a held extrusion", async ({
   page,
@@ -533,9 +542,9 @@ test("tape click/click measures a midpoint and creates an undoable parallel rule
   expect(await count(page, "guide")).toBe(0);
   const end = await screenOf(page, { x: 50, y: 50, z: 0 });
   await page.mouse.move(end.x, end.y);
-  await expect(page.locator(".cursor-hint")).toHaveText("50.00 mm");
+  await expect(page.locator(".cursor-hint")).toContainText("50.00 mm");
   await page.getByLabel("Display and input units").selectOption("cm");
-  await expect(page.locator(".cursor-hint")).toHaveText("5.00 cm");
+  await expect(page.locator(".cursor-hint")).toContainText("5.00 cm");
   await page.mouse.click(end.x, end.y);
   expect(await count(page, "guide")).toBe(1);
   const m = await snapshot(page),
@@ -565,10 +574,12 @@ test("tape drag from a face commits only on release; cancelled gestures add no r
     b = await screenOf(page, { x: 60, y: 70, z: 0 });
   await page.mouse.move(a.x, a.y);
   await page.mouse.down();
+  await page.keyboard.down("Alt");
   await page.mouse.move(b.x, b.y);
-  await expect(page.locator(".cursor-hint")).toHaveText("50.00 mm");
+  await expect(page.locator(".cursor-hint")).toContainText("50.00 mm");
   expect(await count(page, "guide")).toBe(0);
   await page.mouse.up();
+  await page.keyboard.up("Alt");
   expect(await count(page, "guide")).toBe(1);
   const g = Object.values((await snapshot(page)).entities).find(
     (e) => e.kind === "guide",
@@ -803,5 +814,254 @@ for (const kind of ["vertex", "edge", "face"] as const) {
         }),
     );
     expect(cap).toBeDefined();
+  });
+}
+
+for (const gesture of ["click", "drag"] as const) {
+  for (const target of ["midline", "diagonal"] as const) {
+    test(`tape ${gesture} snaps its committed ruler to a face ${target}`, async ({
+      page,
+    }) => {
+      await rectangle(page);
+      await page.keyboard.press("f");
+      await page.keyboard.press("t");
+      const before = await snapshot(page),
+        a = await screenOf(page, { x: 30, y: 30, z: 0 });
+      const b = await screenOf(
+        page,
+        target === "midline" ? { x: 40, y: 49, z: 0 } : { x: 25, y: 26, z: 0 },
+      );
+      await page.mouse.move(a.x, a.y);
+      await page.mouse.down();
+      if (gesture === "click") await page.mouse.up();
+      await page.mouse.move(b.x, b.y);
+      await expect(page.locator(".cursor-hint")).toContainText(
+        target === "midline" ? "Midpoint alignment" : "Face diagonal",
+      );
+      expect(await count(page, "guide")).toBe(0);
+      if (gesture === "click") await page.mouse.down();
+      await page.mouse.up();
+      const after = await snapshot(page),
+        guide = Object.values(after.entities).find((e) => e.kind === "guide")!;
+      if (guide.kind !== "guide") throw new Error("Expected ruler");
+      if (target === "midline") {
+        expect(guide.origin.y).toBeCloseTo(50, 6);
+        expect(guide.origin.x).toBeCloseTo(40, 0);
+      } else expect(guide.origin.x).toBeCloseTo(guide.origin.y, 6);
+      await page.getByRole("button", { name: "Undo", exact: true }).click();
+      expect((await snapshot(page)).entities).toEqual(before.entities);
+      await page.getByRole("button", { name: "Redo", exact: true }).click();
+      expect((await snapshot(page)).entities).toEqual(after.entities);
+    });
+  }
+}
+
+test("push/pull click/move/click previews without holding and commits once with exact history", async ({
+  page,
+}) => {
+  await rectangle(page);
+  const before = await snapshot(page);
+  await page.getByRole("button", { name: /^Push\/Pull/ }).click();
+  await clickWorld(page, { x: 50, y: 50, z: 0 });
+  const target = await screenOf(page, { x: 50, y: 50, z: 40 });
+  await page.mouse.move(target.x, target.y);
+  expect((await snapshot(page)).entities).toEqual(before.entities);
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().active),
+  ).toBe(true);
+  await page.mouse.click(target.x, target.y);
+  expect(await count(page, "face")).toBe(6);
+  const after = await snapshot(page);
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().active),
+  ).toBe(false);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect((await snapshot(page)).entities).toEqual(before.entities);
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  expect((await snapshot(page)).entities).toEqual(after.entities);
+});
+
+test("click-mode push/pull accepts typed dimensions and clears its axis pin", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await page.getByRole("button", { name: /^Push\/Pull/ }).click();
+  await clickWorld(page, { x: 50, y: 50, z: 0 });
+  await page.keyboard.press("ArrowUp");
+  await type(page, "25");
+  expect(await count(page, "face")).toBe(6);
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().axis),
+  ).toBe("Free");
+  const m = await snapshot(page);
+  expect(
+    Math.max(
+      ...Object.values(m.entities)
+        .filter((e) => e.kind === "vertex")
+        .map((v) => v.position.z),
+    ),
+  ).toBeCloseTo(25);
+});
+
+for (const event of ["Escape", "blur"] as const) {
+  test(`pending click-mode push/pull cancels on ${event}`, async ({ page }) => {
+    await rectangle(page);
+    const before = await snapshot(page);
+    await page.getByRole("button", { name: /^Push\/Pull/ }).click();
+    await clickWorld(page, { x: 50, y: 50, z: 0 });
+    const p = await screenOf(page, { x: 50, y: 50, z: 30 });
+    await page.mouse.move(p.x, p.y);
+    if (event === "Escape") await page.keyboard.press("Escape");
+    else await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+    expect((await snapshot(page)).entities).toEqual(before.entities);
+    expect(
+      await page.evaluate(() => window.__gabarito.controller.status().active),
+    ).toBe(false);
+  });
+}
+
+test("line axis pins reset after each segment, Escape and tool changes", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: /^Line/ }).click();
+  await clickWorld(page, { x: 0, y: 0, z: 0 });
+  await page.keyboard.press("ArrowRight");
+  await type(page, "100");
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().axis),
+  ).toBe("Free");
+  await clickWorld(page, { x: 100, y: 100, z: 0 });
+  const m = await snapshot(page);
+  expect(
+    Object.values(m.entities).some(
+      (e) => e.kind === "vertex" && Math.abs(e.position.y - 100) < 0.5,
+    ),
+  ).toBe(true);
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Escape");
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().axis),
+  ).toBe("Free");
+  await page.keyboard.press("ArrowLeft");
+  await page.getByRole("button", { name: /^Tape Measure/ }).click();
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().axis),
+  ).toBe("Free");
+});
+
+async function addConstrainedReference(
+  page: Page,
+  kind: "vertex" | "edge" | "face",
+) {
+  await page.evaluate((kind) => {
+    const { store } = window.__gabarito;
+    const p = [
+      { x: 100, y: -150, z: 80 },
+      { x: 200, y: -150, z: 80 },
+      { x: 200, y: -50, z: 80 },
+      { x: 100, y: -50, z: 80 },
+    ];
+    store.execute({
+      type: "draw",
+      segments:
+        kind === "face"
+          ? p.map((a, i) => [a, p[(i + 1) % 4]])
+          : [
+              [
+                { x: 140, y: -180, z: 80 },
+                { x: 160, y: -180, z: 80 },
+              ],
+            ],
+    });
+  }, kind);
+  return kind === "face"
+    ? { x: 150, y: -100, z: 80 }
+    : { x: kind === "vertex" ? 140 : 150, y: -180, z: 80 };
+}
+for (const gesture of ["click", "drag"] as const) {
+  test(`push/pull ${gesture} aligns to an explicitly aimed face far from free depth`, async ({
+    page,
+  }) => {
+    await rectangle(page);
+    const ref = await addConstrainedReference(page, "face"),
+      before = await snapshot(page);
+    await page.getByRole("button", { name: /^Push\/Pull/ }).click();
+    const a = await screenOf(page, { x: 50, y: 80, z: 0 }),
+      b = await screenOf(page, ref);
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    if (gesture === "click") await page.mouse.up();
+    await page.mouse.move(b.x, b.y);
+    await expect(page.locator(".cursor-hint")).toContainText("Face level");
+    if (gesture === "click") await page.mouse.down();
+    await page.mouse.up();
+    const after = await snapshot(page);
+    expect(
+      Object.values(after.entities).some(
+        (e) =>
+          e.kind === "face" &&
+          e.outer.every((id) => {
+            const v = after.entities[id];
+            return (
+              v.kind === "vertex" &&
+              Math.abs(v.position.z - 80) < 0.00001 &&
+              v.position.y >= 0
+            );
+          }),
+      ),
+    ).toBe(true);
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    expect((await snapshot(page)).entities).toEqual(before.entities);
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    expect((await snapshot(page)).entities).toEqual(after.entities);
+  });
+}
+for (const [kind, axis, key] of [
+  ["vertex", "x", "ArrowRight"],
+  ["edge", "y", "ArrowLeft"],
+  ["face", "z", "ArrowUp"],
+] as const) {
+  test(`Move pinned to ${axis.toUpperCase()} matches a hovered ${kind} reference`, async ({
+    page,
+  }) => {
+    await rectangle(page);
+    const initial = await snapshot(page),
+      source = Object.values(initial.entities).find((e) => e.kind === "face")!;
+    if (source.kind !== "face") throw new Error("Expected source face");
+    const ref = await addConstrainedReference(page, kind),
+      before = await snapshot(page);
+    await page.evaluate(
+      (id) => window.__gabarito.store.select([id]),
+      source.id,
+    );
+    await page.getByRole("button", { name: /^Move/ }).click();
+    await clickWorld(page, { x: 0, y: 0, z: 0 });
+    await page.keyboard.press(key);
+    const b = await screenOf(page, ref);
+    await page.mouse.move(b.x, b.y);
+    await expect(page.locator(".cursor-hint")).toContainText(
+      `${kind[0].toUpperCase() + kind.slice(1)} level`,
+    );
+    if (kind !== "face")
+      await expect(page.locator(".snap-marker")).toBeVisible();
+    await page.mouse.click(b.x, b.y);
+    const after = await snapshot(page),
+      delta = ref[axis];
+    for (const id of source.outer) {
+      const v = after.entities[id],
+        old = before.entities[id];
+      if (v.kind !== "vertex" || old.kind !== "vertex")
+        throw new Error("Expected source vertex");
+      for (const coordinate of ["x", "y", "z"] as const)
+        expect(v.position[coordinate]).toBeCloseTo(
+          old.position[coordinate] + (coordinate === axis ? delta : 0),
+          5,
+        );
+    }
+    expect(
+      await page.evaluate(() => window.__gabarito.controller.status().axis),
+    ).toBe("Free");
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    expect((await snapshot(page)).entities).toEqual(before.entities);
   });
 }

@@ -102,6 +102,9 @@ it.each([
   expect(Math.max(...ps.map((p) => p[axis]))).toBe(10);
   for (const a of ["x", "y", "z"] as const)
     if (a !== axis) expect(ps.every((p) => p[a] === 0)).toBe(true);
+  expect(c.status().axis).toBe("Free");
+  c.key(key);
+  expect(c.status().axis).toBe(axis.toUpperCase());
   c.key(key);
   expect(c.status().axis).toBe("Free");
 });
@@ -194,11 +197,15 @@ it("previews while held, commits on release once and creates one undo entry", ()
   store.undo();
   expect(faces(store.getState())).toHaveLength(0);
 });
-it("treats a stationary press/release as a no-op", () => {
+it("arms click-mode on a stationary press/release and zero-depth completion is a no-op", () => {
   const { store, controller: c, hit } = drawn();
   hit({ id: faces(store.getState())[0].id, kind: "face", point: V(50, 50) });
   c.setTool("pushpull");
   const before = structuredClone(store.getState());
+  c.press(50, 50);
+  c.release(50, 50);
+  expect(store.getState()).toEqual(before);
+  expect(c.status().active).toBe(true);
   c.press(50, 50);
   c.release(50, 50);
   expect(store.getState()).toEqual(before);
@@ -755,4 +762,197 @@ it("Alt bypasses automatic axis inference while explicit locks still apply", () 
   expect(
     vertices(store.getState()).some((v) => near(v.position, V(20, 1))),
   ).toBe(true);
+});
+
+for (const gesture of ["click", "drag"] as const) {
+  it(`tape ${gesture} uses shared face snaps in preview, commit and history, with Alt bypass`, () => {
+    for (const [raw, expected] of [
+      [V(40, 49), V(40, 50)],
+      [V(25, 26), V(25.5, 25.5)],
+      [V(49, 51), V(50, 50)],
+    ])
+      for (const bypass of [false, true]) {
+        const { store, controller: c, hit, view, hint } = setup();
+        const p = [V(), V(100), V(100, 100), V(0, 100)];
+        store.execute({
+          type: "draw",
+          segments: p.map((a, i) => [a, p[(i + 1) % 4]]),
+        });
+        const face = faces(store.getState())[0],
+          before = structuredClone(store.getState().entities);
+        let preview: [ReturnType<typeof V>, ReturnType<typeof V>][] = [],
+          rulers: { origin: ReturnType<typeof V> }[] = [];
+        view.preview = (lines, refs = []) => {
+          preview = lines;
+          rulers = refs;
+        };
+        c.setTool("tape");
+        hit({ id: face.id, kind: "face", point: V(30, 30) });
+        c.press(30, 30);
+        if (gesture === "click") c.release(30, 30);
+        if (bypass) c.setSnapping(false);
+        hit({ id: face.id, kind: "face", point: raw });
+        c.pointer(raw.x, raw.y);
+        const target = bypass ? raw : expected;
+        expect(preview.some((l) => near(l[1], target))).toBe(true);
+        expect(near(rulers[0].origin, target)).toBe(true);
+        if (!bypass) expect(hint()).toMatch(/alignment|diagonal|intersection/i);
+        expect(store.getState().entities).toEqual(before);
+        if (gesture === "click") c.press(raw.x, raw.y);
+        c.release(raw.x, raw.y);
+        const g = Object.values(store.getState().entities).find(
+          (e) => e.kind === "guide",
+        )!;
+        expect(g.kind === "guide" && near(g.origin, target)).toBe(true);
+        store.undo();
+        expect(store.getState().entities).toEqual(before);
+        store.redo();
+        expect(store.getState().entities[g.id]).toEqual(g);
+      }
+  });
+}
+it("tape infers on the target face plane when measuring across faces", () => {
+  const { store, controller: c, hit } = setup();
+  for (const [x, z] of [
+    [0, 0],
+    [200, 20],
+  ]) {
+    const p = [V(x, 0, z), V(x + 100, 0, z), V(x + 100, 100, z), V(x, 100, z)];
+    store.execute({
+      type: "draw",
+      segments: p.map((a, i) => [a, p[(i + 1) % 4]]),
+    });
+  }
+  const fs = faces(store.getState());
+  c.setTool("tape");
+  hit({ id: fs[0].id, kind: "face", point: V(30, 30) });
+  c.press(30, 30);
+  c.release(30, 30);
+  hit({ id: fs[1].id, kind: "face", point: V(240, 49, 20) });
+  c.press(240, 49);
+  c.release(240, 49);
+  expect(
+    Object.values(store.getState().entities).find((e) => e.kind === "guide"),
+  ).toMatchObject({ origin: V(240, 50, 20) });
+});
+it("push/pull supports click/move/click with snaps, one-step undo and no late-release duplicate", () => {
+  const { store, controller: c, hit, view } = drawn();
+  const before = structuredClone(store.getState().entities),
+    id = faces(store.getState())[0].id;
+  const eye = V(50, -500, 500);
+  view.ray = (x, y) => ({
+    origin: eye,
+    direction: unit(sub(V(x, 50, y), eye)),
+  });
+  hit({ id, kind: "face", point: V(50, 50) });
+  c.setTool("pushpull");
+  c.press(50, 0);
+  c.release(50, 0);
+  expect(c.status().active).toBe(true);
+  expect(store.getState().entities).toEqual(before);
+  hit({ id: "target", kind: "vertex", point: V(100, 100, 30) });
+  c.pointer(50, 28);
+  c.press(50, 28);
+  c.release(50, 28);
+  expect(
+    Math.max(...vertices(store.getState()).map((v) => v.position.z)),
+  ).toBeCloseTo(30);
+  const after = structuredClone(store.getState().entities);
+  c.release(50, 28);
+  expect(store.getState().entities).toEqual(after);
+  store.undo();
+  expect(store.getState().entities).toEqual(before);
+  store.redo();
+  expect(store.getState().entities).toEqual(after);
+});
+it("click-mode push/pull accepts typed input and Escape cancels a pending click operation", () => {
+  const { store, controller: c, hit } = drawn();
+  hit({ id: faces(store.getState())[0].id, kind: "face", point: V(50, 50) });
+  c.setTool("pushpull");
+  const before = structuredClone(store.getState().entities);
+  c.press(50, 50);
+  c.release(50, 50);
+  c.key("Escape");
+  c.release(50, 50);
+  expect(store.getState().entities).toEqual(before);
+  expect(c.status().active).toBe(false);
+  c.press(50, 50);
+  c.release(50, 50);
+  c.setTyped("15");
+  c.submit();
+  expect(
+    Math.max(...vertices(store.getState()).map((v) => v.position.z)),
+  ).toBeCloseTo(15);
+});
+it("axis pins clear after committed segments, tool completion, Escape and tool changes", () => {
+  const { store, controller: c } = setup();
+  c.setTool("line");
+  c.pointer(0, 0, true);
+  c.key("ArrowRight");
+  c.setTyped("10");
+  c.submit();
+  expect(c.status().axis).toBe("Free");
+  c.pointer(10, 20, true);
+  expect(
+    vertices(store.getState()).some((v) => near(v.position, V(10, 20))),
+  ).toBe(true);
+  c.key("ArrowDown");
+  expect(c.status().axis).toContain("−");
+  c.key("Escape");
+  expect(c.status().axis).toBe("Free");
+  c.setTool("rectangle");
+  c.pointer(30, 30, true);
+  c.key("ArrowRight");
+  c.setTyped("20,10");
+  c.submit();
+  expect(c.status().axis).toBe("Free");
+  expect(c.status().plane).toBe("Ground");
+  c.key("ArrowUp");
+  c.setTool("tape");
+  expect(c.status().axis).toBe("Free");
+});
+
+it("face inference cannot move a pinned line or tape endpoint off its axis", () => {
+  for (const tool of ["line", "tape"] as const) {
+    const { store, controller: c, hit, view } = setup();
+    const p = [V(), V(100), V(100, 100), V(0, 100)];
+    store.execute({
+      type: "draw",
+      segments: p.map((a, i) => [a, p[(i + 1) % 4]]),
+    });
+    const id = faces(store.getState())[0].id;
+    let preview: [ReturnType<typeof V>, ReturnType<typeof V>][] = [];
+    view.preview = (lines) => {
+      preview = lines;
+    };
+    c.setTool(tool);
+    hit({ id, kind: "face", point: V(10, 10) });
+    if (tool === "tape") {
+      c.press(10, 10);
+      c.release(10, 10);
+    } else c.pointer(10, 10, true);
+    c.key("ArrowRight");
+    hit({ id, kind: "face", point: V(20, 20) });
+    c.pointer(20, 20);
+    expect(preview[0][1]).toEqual(V(20, 10));
+    expect(c.status().axis).toBe("X");
+  }
+});
+
+it("tape shares automatic axis inference over empty space and Alt bypasses it", () => {
+  for (const bypass of [false, true]) {
+    const { store, controller: c, hit } = setup();
+    c.setTool("tape");
+    hit({ id: "world:origin", kind: "vertex", point: V() });
+    c.press(0, 0);
+    c.release(0, 0);
+    hit(null);
+    if (bypass) c.setSnapping(false);
+    c.pointer(30, 1);
+    c.press(30, 1);
+    c.release(30, 1);
+    expect(
+      Object.values(store.getState().entities).find((e) => e.kind === "guide"),
+    ).toMatchObject({ origin: V(30, bypass ? 1 : 0) });
+  }
 });

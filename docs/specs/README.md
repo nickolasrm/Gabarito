@@ -53,6 +53,12 @@ and by decision records, so a rejected spec keeps its number forever.
 
 | [0027](./0027-complete-measurement-snapping.md) | Complete measurement previews and constrained snapping | implemented | tools, scene, app, ui | 0012, 0014, 0018, 0020, 0027 |
 
+| [0028](./0028-tape-measure-inference.md) | Apply shared face snapping to Tape Measure | implemented | tools | 0012, 0014, 0020 |
+| [0029](./0029-dual-pushpull-gestures.md) | Support click and drag Push/Pull gestures together | implemented | tools, app, ui | 0012, 0027 |
+| [0030](./0030-reset-axis-pins.md) | Clear axis pins when a tool operation ends | implemented | tools | 0012, 0018 |
+
+| [0031](./0031-constrained-reference-snapping.md) | Align constrained edits to explicitly hovered references | implemented | tools | 0012, 0018, 0027 |
+
 Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 
 ## Writing one

@@ -1,5 +1,26 @@
 # Changelog
 
+## Constrained reference snapping — 2026-10-18
+
+- Push/Pull aligns to an explicitly hovered face plane even when the free depth is far from it.
+  The zero-level guard still prevents accidental resets to the starting plane.
+- Axis-pinned Move now shares the reference resolver: vertex, edge and ruler coordinates or a face
+  plane determine the pinned coordinate while the other two stay fixed. Feedback shows the target,
+  connector and level. Alt bypass, typed dimensions and history keep their existing behavior.
+- Spec: [0031](docs/specs/0031-constrained-reference-snapping.md).
+
+## Tool inference and input lifecycle fixes — 2026-10-18
+
+- Tape Measure now uses shared face midpoint, diagonal and intersection snapping, with inference
+  lines and named feedback. It resolves the hovered face's plane when measuring across surfaces,
+  and shares Line's automatic axis inference over empty space. Alt still bypasses inference.
+- Push/Pull supports both click/move/click and hold/drag/release without a mode switch. Both preserve
+  snapping, numeric input and one-step undo/redo; cancellation also works between clicks.
+- Axis pins, their signs and cached plane labels reset after completion, Escape and tool changes. Line segments reset
+  their pins individually while retaining the chain; active explicit pins override face inference.
+- Specs: [0028](docs/specs/0028-tape-measure-inference.md),
+  [0029](docs/specs/0029-dual-pushpull-gestures.md), [0030](docs/specs/0030-reset-axis-pins.md).
+
 ## Measurement snapping completion — 2026-10-18
 
 - Midpoints keep their source-edge identity even at coincident ruler intersections. Tape previews

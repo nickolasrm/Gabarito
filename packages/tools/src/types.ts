@@ -37,7 +37,7 @@ export const TOOLS: { id: Tool; label: string; key: string; hint: string }[] = [
     id: "pushpull",
     label: "Push/Pull",
     key: "P",
-    hint: "Hold a face, drag, then release. Type a signed distance while holding for an exact size. Negative cuts inward.",
+    hint: "Click a face, move, then click again; or hold, drag and release. Type a signed distance for an exact size. Negative cuts inward.",
   },
   {
     id: "rotate",

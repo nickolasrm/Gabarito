@@ -5,17 +5,17 @@ import type { Model } from "@gabarito/core";
 import type { ToolHit, ToolView } from "./types";
 import type { Inference } from "./face-snap";
 
-export function snapExtrusion(
+export function snapAlongAxis(
   m: Model,
   start: Vec3,
   free: Vec3,
   direction: Vec3,
-  activeFace: string,
+  excludedId: string,
   hit: ToolHit | null,
   view: ToolView,
   tolerance = 8,
 ): Inference | null {
-  if (!hit || hit.id === activeFace || !view.visible(hit.point)) return null;
+  if (!hit || hit.id === excludedId || !view.visible(hit.point)) return null;
   let distance = dot(sub(hit.point, start), direction);
   if (hit.kind === "face") {
     const f = m.entities[hit.id];
@@ -31,7 +31,7 @@ export function snapExtrusion(
     q = view.project(free);
   if (
     !p.visible ||
-    ((hit.kind === "face" || Math.abs(distance) < EPS) &&
+    (Math.abs(distance) < EPS &&
       (!q.visible || Math.hypot(p.x - q.x, p.y - q.y) > tolerance))
   )
     return null;
