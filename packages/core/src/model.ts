@@ -15,6 +15,7 @@ import {
   project,
   inside,
   triangulate,
+  closestOnSegment,
 } from "@gabarito/geometry";
 import type { Vec3, Plane, Surface, Segment, Mesh } from "@gabarito/geometry";
 export interface Vertex {
@@ -37,7 +38,7 @@ export type Entity = Vertex | Edge | Face;
 export interface Model {
   entities: Record<string, Entity>;
   selection: string[];
-  erased: string[];
+  erased: Pick<Face, "outer" | "holes">[];
   nextId: number;
   revision: number;
 }
@@ -59,7 +60,10 @@ export const position = (m: Model, id: string): Vec3 => {
   if (e?.kind !== "vertex") throw new Error("Missing vertex");
   return e.position;
 };
-export const loops = (f: Face): string[][] => [f.outer, ...f.holes];
+export const loops = (f: Pick<Face, "outer" | "holes">): string[][] => [
+  f.outer,
+  ...f.holes,
+];
 export const surface = (m: Model, f: Face): Surface => ({
   outer: f.outer.map((id) => position(m, id)),
   holes: f.holes.map((l) => l.map((id) => position(m, id))),
@@ -129,7 +133,23 @@ function candidatePlanes(m: Model): Plane[] {
       }
   return [...planes.values()];
 }
-export function rebuildFaces(m: Model, only?: Plane[]): void {
+function sameBoundary(a: Vec3[], b: Vec3[]): boolean {
+  const contains = (p: Vec3, loop: Vec3[]) =>
+    loop.some((start, i) =>
+      near(p, closestOnSegment(p, start, loop[(i + 1) % loop.length])),
+    );
+  return (
+    a.length >= 3 &&
+    b.length >= 3 &&
+    a.every((p) => contains(p, b)) &&
+    b.every((p) => contains(p, a))
+  );
+}
+export function rebuildFaces(
+  m: Model,
+  only?: Plane[],
+  fillLoop?: Vec3[],
+): void {
   for (const f of only ?? candidatePlanes(m)) {
     const old = faces(m).filter((face) =>
       loops(face)
@@ -151,7 +171,17 @@ export function rebuildFaces(m: Model, only?: Plane[]): void {
       const outer = region.outer.map((i) => points[i].id),
         holes = region.holes.map((l) => l.map((i) => points[i].id));
       const key = faceKey({ outer, holes });
-      if (m.erased.includes(key)) continue;
+      if (m.erased.some((erased) => faceKey(erased) === key)) {
+        if (
+          !fillLoop ||
+          !sameBoundary(
+            region.outer.map((i) => points[i].position),
+            fillLoop,
+          )
+        )
+          continue;
+        m.erased = m.erased.filter((erased) => faceKey(erased) !== key);
+      }
       const previous = oldByKey.get(key),
         id = previous?.id ?? alloc(m, "f");
       let result: Face = { id, kind: "face", outer, holes };
@@ -186,8 +216,9 @@ export function conformEdges(m: Model, additions: Segment[] = []): void {
     ids = split.points.map((p) => weld(m, p));
   const desired = new Set(split.edges.map(([a, b]) => edgeKey(ids[a], ids[b])));
   // Update old face loops before replacing subdivided edges, including adjacent non-drawing planes.
-  for (const face of faces(m))
+  for (const face of [...faces(m), ...m.erased])
     for (const loop of loops(face)) {
+      if (!loop.every((id) => m.entities[id]?.kind === "vertex")) continue;
       const updated: string[] = [];
       for (let i = 0; i < loop.length; i++) {
         const a = position(m, loop[i]),
@@ -215,7 +246,7 @@ export function conformEdges(m: Model, additions: Segment[] = []): void {
     if (!desired.has(edgeKey(...e.vertices))) delete m.entities[e.id];
   for (const [a, b] of split.edges) addEdge(m, ids[a], ids[b]);
 }
-export function draw(m: Model, segments: Segment[]): void {
+export function draw(m: Model, segments: Segment[], fillLoop?: Vec3[]): void {
   for (const [a, b] of segments)
     if (!finite(a) || !finite(b) || near(a, b))
       throw new Error("Draw a nonzero finite edge");
@@ -223,7 +254,7 @@ export function draw(m: Model, segments: Segment[]): void {
   const planes = candidatePlanes(m).filter((f) =>
     segments.some((s) => s.every((p) => onPlane(p, f))),
   );
-  rebuildFaces(m, planes);
+  rebuildFaces(m, planes, fillLoop);
   m.selection = m.selection.filter((id) => !!m.entities[id]);
 }
 export function selectedVertices(m: Model, ids: string[]): Set<string> {

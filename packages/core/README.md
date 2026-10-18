@@ -24,3 +24,8 @@ See [spec 0022](../../docs/specs/0022-open-sheet-pushpull.md).
 
 `npm test` checks region area, holes, welded intersections, solid volume and closedness, repeated
 edits, rollback and history. See [spec 0021](../../docs/specs/0021-rewrite-modeler.md).
+
+A draw command may include `fillLoop`: an explicitly requested closed contour. It clears a deleted
+region only when its rebuilt outer boundary matches that contour, including collinear split points.
+Other deleted regions remain suppressed. `Model.erased` stores boundary loops so `conformEdges`
+updates deletion markers alongside face loops when an edge is split; their signatures stay valid.

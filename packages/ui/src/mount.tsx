@@ -17,6 +17,7 @@ export interface UiStatus {
   message: string;
   unit: Unit;
   measurement: string;
+  plane: string;
 }
 export interface UiApi {
   store: Store;
@@ -148,6 +149,11 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
           <div className="status">
             <strong>{active.label}</strong>
             <span className="axis">{status.axis}</span>
+            {status.tool === "rectangle" && (
+              <span className="axis" title="Drawing plane">
+                {status.plane}
+              </span>
+            )}
             <span role="status" className={status.message ? "error" : ""}>
               {status.message ||
                 (status.active

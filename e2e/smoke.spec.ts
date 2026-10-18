@@ -434,3 +434,49 @@ test("single, double and triple face clicks expand selection in three stages", a
   await page.mouse.click(p.x, p.y, { clickCount: 3 });
   expect((await snapshot(page)).selection).toHaveLength(26);
 });
+test("rectangle fills a vertical recess mouth as one face without a diagonal edge", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await push(page, { x: 50, y: 50, z: 0 }, "100");
+  await page.getByRole("button", { name: /^Rectangle/ }).click();
+  await clickWorld(page, { x: 20, y: 0, z: 20 });
+  await clickWorld(page, { x: 80, y: 0, z: 80 });
+  await push(page, { x: 50, y: 0, z: 50 }, "-20");
+  const before = await snapshot(page),
+    beforeCount = Object.values(before.entities).filter(
+      (e) => e.kind === "face",
+    ).length;
+  await page.getByRole("button", { name: /^Rectangle/ }).click();
+  await clickWorld(page, { x: 20, y: 0, z: 80 });
+  const b = await screenOf(page, { x: 80, y: 0, z: 20 });
+  await page.mouse.move(b.x, b.y);
+  await expect(page.getByTitle("Drawing plane")).toHaveText("Boundary");
+  await page.mouse.click(b.x, b.y);
+  await expect(page.getByRole("status")).not.toContainText("nonzero");
+  expect(await count(page, "face")).toBe(beforeCount + 1);
+  const after = await snapshot(page),
+    added = Object.values(after.entities).filter(
+      (e) => e.kind === "face" && !before.entities[e.id],
+    );
+  expect(added).toHaveLength(1);
+  const face = added[0];
+  if (face.kind !== "face") throw new Error("Expected a face");
+  expect(face.outer).toHaveLength(4);
+  expect(face.holes).toHaveLength(0);
+  expect(
+    face.outer.every((id) => {
+      const v = after.entities[id];
+      return v.kind === "vertex" && Math.abs(v.position.y) < 0.001;
+    }),
+  ).toBe(true);
+  expect(
+    Object.values(after.entities).filter((e) => e.kind === "edge"),
+  ).toHaveLength(
+    Object.values(before.entities).filter((e) => e.kind === "edge").length,
+  );
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect((await snapshot(page)).entities).toEqual(before.entities);
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  expect((await snapshot(page)).entities).toEqual(after.entities);
+});

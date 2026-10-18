@@ -550,3 +550,58 @@ describe("transactions", () => {
       expect(() => parseDimensions(text, "mm")).toThrow();
   });
 });
+it("explicitly fills a deleted contour without healing an unrelated deleted face", () => {
+  const s = createStore();
+  rectangle(s);
+  rectangle(s, 200, 0, 100, 100);
+  const deleted = faces(s.getState()).map((f) => f.id);
+  s.execute({ type: "delete", ids: deleted });
+  const erased = [...s.getState().erased],
+    ps = [V(), V(100), V(100, 100), V(0, 100)];
+  // Retracing existing edges alone must not heal manually removed faces.
+  s.execute({
+    type: "draw",
+    segments: ps.map((p, i) => [p, ps[(i + 1) % ps.length]]),
+  });
+  expect(faces(s.getState())).toHaveLength(0);
+  const command = {
+    type: "draw" as const,
+    segments: ps.map((p, i) => [p, ps[(i + 1) % ps.length]] as [Vec3, Vec3]),
+    fillLoop: ps,
+  };
+  s.execute(command);
+  expect(faces(s.getState())).toHaveLength(1);
+  expect(s.getState().erased).toHaveLength(1);
+  s.undo();
+  expect(s.getState().erased).toEqual(erased);
+  expect(faces(s.getState())).toHaveLength(0);
+  s.redo();
+  expect(faces(s.getState())).toHaveLength(1);
+});
+
+it("fills a contour with split boundary edges and preserves its neighboring hole", () => {
+  const s = createStore();
+  rectangle(s, 0, 0, 200, 200);
+  rectangle(s, 20, 20, 50, 50);
+  rectangle(s, 100, 100, 50, 50);
+  s.execute({
+    type: "delete",
+    ids: faces(s.getState())
+      .filter((f) => !f.holes.length)
+      .map((f) => f.id),
+  });
+  s.execute({ type: "draw", segments: [[V(20, 45), V(20, 45, 10)]] });
+  expect(faces(s.getState())).toHaveLength(1);
+  expect(s.getState().erased).toHaveLength(2);
+  const ps = [V(20, 20), V(70, 20), V(70, 70), V(20, 70)];
+  s.execute({
+    type: "draw",
+    segments: ps.map((p, i) => [p, ps[(i + 1) % 4]]),
+    fillLoop: ps,
+  });
+  expect(faces(s.getState()).filter((f) => !f.holes.length)).toHaveLength(1);
+  expect(faces(s.getState()).find((f) => !f.holes.length)!.outer).toHaveLength(
+    5,
+  );
+  expect(area(s)).toBeCloseTo(40000 - 2500);
+});

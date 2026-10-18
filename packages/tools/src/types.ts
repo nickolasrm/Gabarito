@@ -60,6 +60,7 @@ export interface Status {
   message: string;
   unit: Unit;
   measurement: string;
+  plane: string;
 }
 export interface Controller {
   status(): Status;

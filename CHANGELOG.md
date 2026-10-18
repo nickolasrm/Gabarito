@@ -1,5 +1,14 @@
 # Changelog
 
+## Rectangle opening repair — 2026-10-18
+
+- Rectangles infer their plane and edge alignment from snapped boundary targets, including vertical
+  and rotated openings. Preview and commit share four planar corners; the active plane is shown.
+- Explicitly tracing an opening restores one face without a diagonal document edge. Deleted regions
+  track split boundary loops, so unrelated drawing continues to leave holes and deletions intact.
+- Added vertical recess/fill browser coverage and headless plane/restoration/history regressions.
+- Spec: [0024](docs/specs/0024-fill-openings-with-rectangle.md).
+
 ## Modeling input and feedback — 2026-10-18
 
 - Modeling tools use precise crosshair cursors. Vertex and edge targets show labeled markers at

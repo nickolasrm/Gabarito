@@ -22,6 +22,7 @@ export async function boot({ root }: { root: HTMLElement }): Promise<void> {
         message: "",
         unit: "mm" as const,
         measurement: "",
+        plane: "Ground",
       };
     const listeners = new Set<() => void>();
     mountUi(root, {

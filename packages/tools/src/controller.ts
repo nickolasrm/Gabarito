@@ -16,6 +16,7 @@ import {
   axisVector,
   rotate,
   near,
+  onPlane,
 } from "@gabarito/geometry";
 import type { Vec3, Axis, Segment } from "@gabarito/geometry";
 import {
@@ -28,6 +29,7 @@ import {
   selectedVertices,
 } from "@gabarito/core";
 import type { Store, Unit, Command } from "@gabarito/core";
+import { inferRectanglePlane, defaultDrawingPlane } from "./drawing-plane";
 import { selectionAt } from "./selection";
 import { TOOLS } from "./types";
 import type { Tool, ToolView, Controller } from "./types";
@@ -45,6 +47,7 @@ export function createController(store: Store, view: ToolView): Controller {
     message = "",
     measurement = "",
     unitId: Unit = "mm";
+  let planeLabel = "Ground";
   let lastX = 0,
     lastY = 0;
   const listeners = new Set<() => void>();
@@ -89,7 +92,7 @@ export function createController(store: Store, view: ToolView): Controller {
     return [
       start!,
       add(start!, mul(drawingPlane.u, x)),
-      end,
+      add(start!, add(mul(drawingPlane.u, x), mul(drawingPlane.v, y))),
       add(start!, mul(drawingPlane.v, y)),
     ];
   };
@@ -176,9 +179,19 @@ export function createController(store: Store, view: ToolView): Controller {
       return true;
     }
     let command: Command;
-    if (tool === "rectangle")
-      command = { type: "draw", segments: polygonSegments(rectangle(end)) };
-    else if (tool === "move")
+    if (tool === "rectangle") {
+      const corners = rectangle(end);
+      if (near(corners[0], corners[1]) || near(corners[0], corners[3])) {
+        message = "Choose an opposite corner with width and height";
+        emit();
+        return false;
+      }
+      command = {
+        type: "draw",
+        segments: polygonSegments(corners),
+        fillLoop: corners,
+      };
+    } else if (tool === "move")
       command = {
         type: "move",
         ids: store.getState().selection,
@@ -266,8 +279,29 @@ export function createController(store: Store, view: ToolView): Controller {
       if (axis && tool === "rectangle")
         drawingPlane = plane(V(), axis === "z" ? V(0, -1, 0) : V(0, 0, 1));
     }
+    if (tool === "rectangle") {
+      const inferred = axis
+        ? {
+            frame: plane(start ?? V(), axis === "z" ? V(0, -1, 0) : V(0, 0, 1)),
+            label: `Axis ${axis.toUpperCase()}`,
+          }
+        : inferRectanglePlane(
+            store.getState(),
+            hit,
+            start,
+            ray,
+            start
+              ? { frame: drawingPlane, label: planeLabel }
+              : defaultDrawingPlane(hit?.point),
+          );
+      drawingPlane = inferred.frame;
+      planeLabel = inferred.label;
+      if (start) drawingPlane = { ...drawingPlane, origin: start };
+    }
     let end =
-      hit && hit.kind !== "face"
+      hit &&
+      hit.kind !== "face" &&
+      (tool !== "rectangle" || onPlane(hit.point, drawingPlane))
         ? hit.point
         : intersectPlane(ray, drawingPlane);
     if (start && axis && tool !== "rectangle" && tool !== "rotate")
@@ -301,9 +335,7 @@ export function createController(store: Store, view: ToolView): Controller {
     }
     current = end;
     view.feedback(
-      hit && (!start || (tool !== "pushpull" && near(end, hit.point)))
-        ? hit
-        : null,
+      hit && (tool === "pushpull" ? !start : near(end, hit.point)) ? hit : null,
     );
     if (click) {
       message = "";
@@ -361,6 +393,7 @@ export function createController(store: Store, view: ToolView): Controller {
       message,
       unit: unitId,
       measurement,
+      plane: planeLabel,
     }),
     subscribe(fn) {
       listeners.add(fn);

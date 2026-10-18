@@ -25,7 +25,7 @@ import {
 } from "./model";
 import type { Model, Face } from "./model";
 export type Command =
-  | { type: "draw"; segments: Segment[] }
+  | { type: "draw"; segments: Segment[]; fillLoop?: Vec3[] }
   | { type: "delete"; ids: string[] }
   | { type: "move"; ids: string[]; delta: Vec3 }
   | { type: "rotate"; ids: string[]; center: Vec3; axis: Vec3; angle: number }
@@ -178,14 +178,14 @@ function extrude(
             faceKey({ outer: hole, holes: [] }),
         )
       )
-        m.erased.push(faceKey({ outer: hole, holes: [] }));
+        m.erased.push({ outer: [...hole], holes: [] });
     }
   m.selection = [];
 }
 export function apply(m: Model, c: Command): void {
   switch (c.type) {
     case "draw":
-      draw(m, c.segments);
+      draw(m, c.segments, c.fillLoop);
       break;
     case "pushpull":
       extrude(m, c.face, c.distance, c.direction);
@@ -230,7 +230,10 @@ export function apply(m: Model, c: Command): void {
             ),
           )
         ) {
-          m.erased.push(faceKey(f));
+          m.erased.push({
+            outer: [...f.outer],
+            holes: f.holes.map((l) => [...l]),
+          });
           remove.add(f.id);
         }
       for (const id of remove) delete m.entities[id];

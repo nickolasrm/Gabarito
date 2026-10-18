@@ -1,5 +1,13 @@
 import { beforeAll, it, expect } from "vitest";
-import { initializeGeometry, V, sub, unit } from "@gabarito/geometry";
+import {
+  initializeGeometry,
+  V,
+  sub,
+  unit,
+  rotate,
+  near,
+  dot,
+} from "@gabarito/geometry";
 import {
   createStore,
   faces,
@@ -331,4 +339,141 @@ it("preserves Shift toggling and adds double-click boundaries to an existing sel
   c.pointer(50, 50, true, true, 2);
   expect(store.getState().selection).toHaveLength(10);
   expect(store.getState().selection).toContain(outside);
+});
+it("fills a deleted vertical opening from snapped opposite vertices with a rectangular preview", () => {
+  const { store, controller: c, view, hit } = setup();
+  const drawLoop = (ps: ReturnType<typeof V>[]) =>
+    store.execute({
+      type: "draw",
+      segments: ps.map((p, i) => [p, ps[(i + 1) % ps.length]]),
+    });
+  drawLoop([V(), V(100), V(100, 0, 100), V(0, 0, 100)]);
+  const inner = [V(20, 0, 20), V(80, 0, 20), V(80, 0, 80), V(20, 0, 80)];
+  drawLoop(inner);
+  store.execute({
+    type: "delete",
+    ids: [faces(store.getState()).find((f) => !f.holes.length)!.id],
+  });
+  let preview: ReturnType<typeof V>[][] = [];
+  view.preview = (ps) => {
+    preview = ps;
+  };
+  const a = vertices(store.getState()).find(
+      (v) => v.position.x === 20 && v.position.z === 80,
+    )!,
+    b = vertices(store.getState()).find(
+      (v) => v.position.x === 80 && v.position.z === 20,
+    )!;
+  c.setTool("rectangle");
+  hit({ id: a.id, kind: "vertex", point: a.position });
+  c.pointer(0, 0, true);
+  hit({ id: b.id, kind: "vertex", point: b.position });
+  c.pointer(1, 1);
+  expect(new Set(preview.flat().map((p) => JSON.stringify(p))).size).toBe(4);
+  expect(preview.flat().every((p) => Math.abs(p.y) < 1e-5)).toBe(true);
+  const before = structuredClone(store.getState().entities);
+  c.pointer(1, 1, true);
+  expect(c.status().message).toBe("");
+  expect(c.status().active).toBe(false);
+  const restored = faces(store.getState()).find((f) => !f.holes.length)!;
+  expect(restored.outer).toHaveLength(4);
+  expect(edges(store.getState())).toHaveLength(8);
+  store.undo();
+  expect(store.getState().entities).toEqual(before);
+  store.redo();
+  expect(faces(store.getState())).toHaveLength(2);
+});
+
+for (const bare of [false, true])
+  it(`draws a rectangle across a rotated ${bare ? "wire opening" : "face opening"}`, () => {
+    const { store, controller: c, view, hit } = setup(),
+      transform = (p: ReturnType<typeof V>) =>
+        rotate(p, V(), V(1, 2, 3), Math.PI / 5);
+    const outer = [V(), V(100), V(100, 0, 100), V(0, 0, 100)].map(transform),
+      inner = [V(20, 0, 20), V(80, 0, 20), V(80, 0, 80), V(20, 0, 80)].map(
+        transform,
+      );
+    for (const ps of [outer, inner])
+      store.execute({
+        type: "draw",
+        segments: ps.map((p, i) => [p, ps[(i + 1) % ps.length]]),
+      });
+    store.execute({
+      type: "delete",
+      ids: faces(store.getState())
+        .filter((f) => bare || !f.holes.length)
+        .map((f) => f.id),
+    });
+    const a = vertices(store.getState()).find((v) =>
+        near(v.position, inner[3]),
+      )!,
+      b = vertices(store.getState()).find((v) => near(v.position, inner[1]))!;
+    let preview: ReturnType<typeof V>[][] = [];
+    view.preview = (ps) => {
+      preview = ps;
+    };
+    c.setTool("rectangle");
+    hit({ id: a.id, kind: "vertex", point: a.position });
+    c.pointer(0, 0, true);
+    hit({ id: b.id, kind: "vertex", point: b.position });
+    c.pointer(1, 1);
+    expect(preview).toHaveLength(4);
+    for (const p of inner)
+      expect(preview.flat().some((q) => near(p, q))).toBe(true);
+    expect(
+      dot(
+        unit(sub(preview[0][1], preview[0][0])),
+        unit(sub(preview[1][1], preview[1][0])),
+      ),
+    ).toBeCloseTo(0);
+    c.pointer(1, 1, true);
+    expect(c.status().message).toBe("");
+    expect(faces(store.getState()).filter((f) => !f.holes.length)).toHaveLength(
+      1,
+    );
+  });
+it("infers a vertical rectangle from edge targets instead of projecting them onto ground", () => {
+  const { store, controller: c, hit } = setup(),
+    ps = [V(), V(100), V(100, 0, 100), V(0, 0, 100)];
+  store.execute({
+    type: "draw",
+    segments: ps.map((p, i) => [p, ps[(i + 1) % ps.length]]),
+  });
+  const bottom = edges(store.getState()).find((e) =>
+      e.vertices.every((id) => position(store.getState(), id).z === 0),
+    )!,
+    top = edges(store.getState()).find((e) =>
+      e.vertices.every((id) => position(store.getState(), id).z === 100),
+    )!;
+  c.setTool("rectangle");
+  hit({ id: bottom.id, kind: "edge", point: V(20) });
+  c.pointer(20, 0, true);
+  hit({ id: top.id, kind: "edge", point: V(80, 0, 100) });
+  c.pointer(80, 100, true);
+  expect(c.status().message).toBe("");
+  expect(faces(store.getState())).toHaveLength(3);
+  expect(
+    vertices(store.getState()).every((v) => Math.abs(v.position.y) < 1e-5),
+  ).toBe(true);
+});
+
+it("keeps an isolated starting vertex and hides an unsupported off-plane target", () => {
+  const { store, controller: c, view, hit, feedback } = setup();
+  store.execute({ type: "draw", segments: [[V(0, 0, 10), V(100, 100, 20)]] });
+  const [a, b] = vertices(store.getState());
+  store.execute({
+    type: "delete",
+    ids: edges(store.getState()).map((e) => e.id),
+  });
+  let preview: ReturnType<typeof V>[][] = [];
+  view.preview = (ps) => {
+    preview = ps;
+  };
+  c.setTool("rectangle");
+  hit({ id: a.id, kind: "vertex", point: a.position });
+  c.pointer(0, 0, true);
+  hit({ id: b.id, kind: "vertex", point: b.position });
+  c.pointer(100, 100);
+  expect(preview.flat().every((p) => Math.abs(p.z - 10) < 1e-5)).toBe(true);
+  expect(feedback()).toBeNull();
 });
