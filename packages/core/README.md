@@ -6,6 +6,9 @@ The authoritative model and reversible editing API. No DOM, Three.js or React.
   planar face reconstruction, `conformEdges` (split shared boundaries without creating faces) and validation. Face loops reference vertex IDs; edges are undirected.
 - `edit.ts`: serializable `Command` union and geometry editing, including shell orientation,
   extrusion/booleans, deletion and shared-vertex transforms.
+- `erase.ts`: deletion merges faces across selected coplanar dividers using polygon union.
+  Unselected sketch edges remain; perimeter, explicit face/vertex and noncoplanar edge deletion
+  retain their removal semantics. Mixed selections never restore a deleted perimeter.
 - `store.ts`: `createStore`, atomic `execute`, `select`, `undo`, `redo`, subscriptions and history.
   Commands run on a copy and publish only after validation. Before/after snapshots are the inverse.
   Entity IDs remain monotonic through undo. Selection itself is not an undo entry.

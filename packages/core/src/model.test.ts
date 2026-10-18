@@ -605,3 +605,91 @@ it("fills a contour with split boundary edges and preserves its neighboring hole
   );
   expect(area(s)).toBeCloseTo(40000 - 2500);
 });
+
+describe("erasing coplanar dividers", () => {
+  function inset() {
+    const s = createStore();
+    rectangle(s);
+    rectangle(s, 20, 20, 60, 60);
+    return s;
+  }
+  function innerEdges(s: Store) {
+    const m = s.getState();
+    return edges(m).filter((e) =>
+      e.vertices.every((id) => {
+        const p = position(m, id);
+        return p.x >= 20 && p.x <= 80 && p.y >= 20 && p.y <= 80;
+      }),
+    );
+  }
+  it("merges an inset into its parent while retaining unselected sketch edges and history", () => {
+    const s = inset(),
+      edge = innerEdges(s)[0],
+      before = s.getState().erased;
+    inverse(s, { type: "delete", ids: [edge.id] });
+    expect(faces(s.getState())).toHaveLength(1);
+    expect(faces(s.getState())[0].holes).toHaveLength(0);
+    expect(area(s)).toBeCloseTo(10000);
+    expect(innerEdges(s)).toHaveLength(3);
+    expect(s.getState().entities[edge.id]).toBeUndefined();
+    expect(s.getState().erased).toEqual(before);
+  });
+  it("unions multiple selected dividers in one transaction and retains an unrelated hole", () => {
+    const s = inset();
+    rectangle(s, 5, 5, 10, 10);
+    const hole = faces(s.getState()).find(
+      (f) =>
+        !f.holes.length &&
+        surface(s.getState(), f).outer.every((p) => p.x <= 15 && p.y <= 15),
+    )!;
+    s.execute({ type: "delete", ids: [hole.id] });
+    s.execute({ type: "delete", ids: innerEdges(s).map((e) => e.id) });
+    expect(faces(s.getState())).toHaveLength(1);
+    expect(faces(s.getState())[0].holes).toHaveLength(1);
+    expect(area(s)).toBeCloseTo(9900);
+  });
+  it("merges faces even when their winding differs", () => {
+    const s = inset(),
+      f = faces(s.getState()).find((f) => !f.holes.length)!;
+    // Exercise valid imported topology with reversed face orientation.
+    f.outer.reverse();
+    s.execute({ type: "delete", ids: [innerEdges(s)[0].id] });
+    expect(area(s)).toBeCloseTo(10000);
+    expect(faces(s.getState())).toHaveLength(1);
+  });
+  it("does not heal an explicitly deleted face or recreate a selected outer edge", () => {
+    for (const explicitFace of [true, false]) {
+      const s = inset(),
+        inner = innerEdges(s)[0];
+      const extra = explicitFace
+        ? faces(s.getState()).find((f) => !f.holes.length)!.id
+        : edges(s.getState()).find((e) => !innerEdges(s).includes(e))!.id;
+      s.execute({ type: "delete", ids: [inner.id, extra] });
+      expect(faces(s.getState())).toHaveLength(0);
+      expect(s.getState().entities[inner.id]).toBeUndefined();
+      if (!explicitFace) expect(s.getState().entities[extra]).toBeUndefined();
+    }
+  });
+  it("still removes faces incident to a noncoplanar crease", () => {
+    const s = cube();
+    inverse(s, { type: "delete", ids: [edges(s.getState())[0].id] });
+    expect(faces(s.getState())).toHaveLength(4);
+  });
+  it("merges across one divider without erasing a neighboring divider", () => {
+    const s = createStore();
+    rectangle(s);
+    s.execute({
+      type: "draw",
+      segments: [
+        [V(30, 0), V(30, 100)],
+        [V(60, 0), V(60, 100)],
+      ],
+    });
+    const divider = edges(s.getState()).find((e) =>
+      e.vertices.every((id) => position(s.getState(), id).x === 30),
+    )!;
+    s.execute({ type: "delete", ids: [divider.id] });
+    expect(faces(s.getState())).toHaveLength(2);
+    expect(area(s)).toBeCloseTo(10000);
+  });
+});

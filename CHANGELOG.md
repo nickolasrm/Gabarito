@@ -1,5 +1,13 @@
 # Changelog
 
+## Coplanar divider deletion — 2026-10-18
+
+- Deleting a shared coplanar edge merges its faces, preserving the parent surface and other holes.
+- Unselected sketch edges remain. Explicit face/vertex and perimeter/crease deletion retain their
+  removal behavior; mixed deletions never recreate a selected perimeter.
+- Added core deletion/history regressions and a filled vertical recess browser regression.
+- Spec: [0025](docs/specs/0025-erase-coplanar-dividers.md).
+
 ## Rectangle opening repair — 2026-10-18
 
 - Rectangles infer their plane and edge alignment from snapped boundary targets, including vertical

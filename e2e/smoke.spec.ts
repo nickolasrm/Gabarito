@@ -480,3 +480,42 @@ test("rectangle fills a vertical recess mouth as one face without a diagonal edg
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   expect((await snapshot(page)).entities).toEqual(after.entities);
 });
+
+test("deleting a filled recess divider preserves the front surface", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await push(page, { x: 50, y: 50, z: 0 }, "100");
+  await page.getByRole("button", { name: /^Rectangle/ }).click();
+  await clickWorld(page, { x: 20, y: 0, z: 20 });
+  await clickWorld(page, { x: 80, y: 0, z: 80 });
+  await push(page, { x: 50, y: 0, z: 50 }, "-20");
+  await page.getByRole("button", { name: /^Rectangle/ }).click();
+  await clickWorld(page, { x: 20, y: 0, z: 80 });
+  await clickWorld(page, { x: 80, y: 0, z: 20 });
+  const before = await snapshot(page);
+  await page.getByRole("button", { name: /^Select/ }).click();
+  await clickWorld(page, { x: 80, y: 0, z: 50 });
+  const selected = (await snapshot(page)).selection;
+  expect(selected).toHaveLength(1);
+  expect(before.entities[selected[0]].kind).toBe("edge");
+  await page.keyboard.press("Delete");
+  const after = await snapshot(page);
+  expect(after.entities[selected[0]]).toBeUndefined();
+  const front = Object.values(after.entities).filter(
+    (e) =>
+      e.kind === "face" &&
+      e.outer.every((id) => {
+        const v = after.entities[id];
+        return v.kind === "vertex" && Math.abs(v.position.y) < 0.001;
+      }),
+  );
+  expect(front).toHaveLength(1);
+  if (front[0].kind !== "face") throw new Error("Expected front face");
+  expect(front[0].holes).toHaveLength(0);
+  expect(front[0].outer).toHaveLength(4);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect((await snapshot(page)).entities).toEqual(before.entities);
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  expect((await snapshot(page)).entities).toEqual(after.entities);
+});
