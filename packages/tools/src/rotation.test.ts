@@ -290,3 +290,22 @@ it("cancels the reference and frozen plane on tool change before starting anothe
   c.pointer(50, 100, true);
   expect(c.status().measurement).toBe("0.0°");
 });
+it("keeps the clicked face point as A when an axis is pinned before the first click", () => {
+  const { store, c, aim, point } = setup(V(0, 0, 80), V(1, 0, 0), V(0, 1, 0));
+  const before = structuredClone(store.getState().entities);
+  c.key("ArrowRight");
+  aim(50, 50);
+  c.pointer(50, 50, true);
+  expect(c.status().active).toBe(true);
+  c.setTyped("90");
+  c.submit();
+  for (const e of Object.values(before)) {
+    if (e.kind !== "vertex") continue;
+    expect(
+      near(
+        position(store.getState(), e.id),
+        rotate(e.position, point(50, 50), V(1, 0, 0), Math.PI / 2),
+      ),
+    ).toBe(true);
+  }
+});

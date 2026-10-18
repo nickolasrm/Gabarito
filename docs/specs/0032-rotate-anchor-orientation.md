@@ -61,14 +61,14 @@ Update `CHANGELOG.md`, the specs index, tools README and UI README if its status
 
 ## Result
 
-Implemented with the existing supporting-plane resolver and core rotation command. A stays fixed;
+Implemented with the existing supporting-plane resolver and core rotation command. A stays fixed, including a face click with an axis already pinned;
 B freezes the supporting plane and zero direction. The preview remains unrotated before B, then
 shows signed degrees and zero/current rays. Exact on-plane targets are retained. Axis changes
 project the reference or clear it if degenerate; parallel pointer rays cannot commit stale input.
 Typed degrees, Alt, cancellation and history retain their existing contracts. No new dependencies
 or transform-kernel changes were needed. Tool instructions and the plane indicator match the flow.
 
-Validation: 134 headless tests (including 12 rotation regressions), 57 Chromium browser tests,
+Validation: 135 headless tests (including 13 rotation regressions), 57 Chromium browser tests,
 typecheck and static production build pass. Browser cases cover cube top/side A/B input, both signs,
 committed positions, exact undo/redo, cancellation after B and subsequent signed typed completion.
 Pixel-based face-interior anchors use a one-degree/one-unit browser tolerance; headless coordinates

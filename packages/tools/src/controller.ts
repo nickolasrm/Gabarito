@@ -426,7 +426,7 @@ export function createController(store: Store, view: ToolView): Controller {
     }
     let end =
       hit &&
-      (hit.kind !== "face" || tool === "tape") &&
+      (hit.kind !== "face" || tool === "tape" || tool === "rotate") &&
       (tool !== "rectangle" || onPlane(hit.point, drawingPlane))
         ? hit.point
         : intersectPlane(ray, drawingPlane);
