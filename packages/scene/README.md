@@ -35,3 +35,8 @@ frustum halfspaces. User guides render dashed, world axes render colored in both
 neither enters model triangulation. References update with the camera; model framing still uses
 real vertices. Guide transform previews use the same clipping path. No finite document edge stands
 in for a ruler.
+
+Midpoint hits retain `sourceEdge`; coincident virtual intersections cannot replace them with a
+vertex hit. `visible(point)` exposes the same camera/occlusion check to headless tool inference.
+Face alignment/diagonal hits show labeled markers. Infinite preview rulers render dashed, while
+finite measurement and inference segments remain solid. Preview objects never enter picking.

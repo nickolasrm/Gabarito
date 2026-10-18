@@ -125,3 +125,13 @@ it("reference and midpoint snaps respect foreground occlusion", () => {
   expect(pick(s.getState(), view, 0, 20)?.kind).toBe("face");
   expect(pick(s.getState(), view, 0, 30)?.kind).toBe("face");
 });
+
+it("a coincident ruler intersection never steals an edge midpoint's identity", () => {
+  const s = rectangle(100);
+  s.execute({ type: "guide", origin: V(1e-8, -100, 100), direction: V(0, 1) });
+  const p = view.project(V(1e-8, -100, 100)),
+    hit = pick(s.getState(), view, p.x, p.y);
+  expect(hit?.snap).toBe("midpoint");
+  expect(hit?.kind).toBe("edge");
+  expect(hit?.sourceEdge).toBe(hit?.id);
+});

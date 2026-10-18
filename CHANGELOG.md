@@ -1,5 +1,17 @@
 # Changelog
 
+## Measurement snapping completion — 2026-10-18
+
+- Midpoints keep their source-edge identity even at coincident ruler intersections. Tape previews
+  show the prospective infinite dashed ruler; completion alone creates its entity.
+- Rectangle proportions now snap actual dimensions. Face midpoint alignments and diagonals provide
+  exact drawing references with visible inference lines, including rotated faces and face centers.
+- Hold Alt to bypass snapping; release restores it immediately. Support planes, explicit axis locks
+  and typed dimensions remain active. Blur resets the modifier state.
+- Push/pull matches visible vertex/edge levels and nearby crossing face planes. Distant starting-level
+  edges cannot reset a free extrusion. Reference targets and connecting lines remain visible.
+- Spec: [0027](docs/specs/0027-complete-measurement-snapping.md).
+
 ## Measurements and construction references — 2026-10-18
 
 - Added Tape Measure (`T`) with click/click and drag/release input, live cursor distances in selected

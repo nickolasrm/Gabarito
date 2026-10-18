@@ -18,3 +18,6 @@ Select. Snap marker styles belong to this shell; scene positions their DOM overl
 The palette includes Tape Measure (`T`); model counts list user rulers separately from edges.
 Midpoint markers use a purple circle. Cursor labels display tape distances in the selected unit and
 rectangle aspect hints. These transient overlays have no pointer events and do not intercept drawing.
+
+`UiStatus.snapping` adds a visible `Snapping off · Alt` indicator while bypass is held; tool guidance
+explains the modifier. Cursor hints also name face alignments and extrusion reference levels.

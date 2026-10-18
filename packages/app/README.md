@@ -19,3 +19,7 @@ connected selection. A release-generated click never starts a second push/pull o
 Tape Measure also captures primary presses and suppresses native completion clicks. The controller
 chooses click/click versus drag/release; app delivers both lifecycles without double commits. Blur
 cancels tape measurements in either mode, including between clicks.
+
+Alt down/up immediately updates `controller.setSnapping`, even without pointer movement. Pointer
+modifier state also synchronizes before press/move/release/click. Blur restores snapping and clears
+feedback, so missed key releases cannot leave snapping disabled. Explicit locks and typing survive.

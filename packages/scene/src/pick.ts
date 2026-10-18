@@ -1,6 +1,7 @@
 import { referenceIntersections } from "./references";
 import {
   EPS,
+  near,
   add,
   sub,
   mul,
@@ -35,7 +36,8 @@ export interface PickView {
 export interface Hit {
   id: string;
   kind: "vertex" | "edge" | "face" | "guide";
-  snap?: "midpoint" | "intersection" | "origin";
+  snap?: "midpoint" | "intersection" | "origin" | "alignment" | "diagonal";
+  sourceEdge?: string;
   point: Vec3;
 }
 function triangleHit(ray: Ray, a: Vec3, b: Vec3, c: Vec3): number | null {
@@ -121,7 +123,13 @@ export function pick(
       midpointPixels = Math.hypot(pm.x - x, pm.y - y);
     if (midpointPixels <= tolerance && visible(m, view, midpoint))
       candidates.push({
-        hit: { id: e.id, kind: "edge", point: midpoint, snap: "midpoint" },
+        hit: {
+          id: e.id,
+          kind: "edge",
+          point: midpoint,
+          snap: "midpoint",
+          sourceEdge: e.id,
+        },
         pixels: midpointPixels,
         priority: 1,
         depth: pm.depth,
@@ -145,6 +153,13 @@ export function pick(
       });
   }
   for (const [i, point] of referenceIntersections(m).entries()) {
+    // Coincident virtual intersections must not replace an edge midpoint's provenance.
+    if (
+      candidates.some(
+        (c) => c.hit.snap === "midpoint" && near(c.hit.point, point),
+      )
+    )
+      continue;
     const p = view.project(point),
       pixels = Math.hypot(p.x - x, p.y - y);
     if (pixels <= tolerance && visible(m, view, point))

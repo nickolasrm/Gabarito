@@ -27,6 +27,7 @@ function setup() {
   let hint = "";
   const view: ToolView = {
     ray: (x, y) => ({ origin: V(x, y, 1000), direction: V(0, 0, -1) }),
+    visible: () => true,
     project: (p) => ({ x: p.x, y: p.y, visible: true }),
     pick: () => hit,
     preview: () => {},
@@ -568,7 +569,7 @@ it("tape vertex rulers follow the measured direction and zero-length completion 
   )!;
   expect(g.kind === "guide" && g.direction).toEqual(V(0.6, 0.8));
 });
-it("rectangle ratio hints add only a transient diagonal and never alter dimensions", () => {
+it("rectangle ratio hints add a transient diagonal without adding document edges", () => {
   const { store, controller: c, view, hint } = setup();
   let lines: [ReturnType<typeof V>, ReturnType<typeof V>][] = [];
   view.preview = (p) => {
@@ -633,4 +634,125 @@ it("moving a selected ruler previews its infinite reference and commits one tran
   ]);
   c.pointer(20, 30, true);
   expect(store.getState().entities[id]).toMatchObject({ origin: V(20, 30) });
+});
+
+it("midpoint rulers preserve edge direction even when the snap is a virtual vertex", () => {
+  const { store, controller: c, hit, view } = setup();
+  store.execute({ type: "draw", segments: [[V(0, 10), V(100, 10)]] });
+  const edge = edges(store.getState())[0];
+  let previewRulers: { direction: ReturnType<typeof V> }[] = [];
+  view.preview = (_, rulers = []) => {
+    previewRulers = rulers;
+  };
+  c.setTool("tape");
+  hit({
+    id: "virtual:midpoint",
+    kind: "vertex",
+    snap: "midpoint",
+    sourceEdge: edge.id,
+    point: V(50, 10),
+  });
+  c.pointer(50, 10, true);
+  hit(null);
+  c.pointer(70, 60);
+  expect(previewRulers).toHaveLength(1);
+  expect(previewRulers[0].direction).toEqual(V(1));
+  expect(
+    Object.values(store.getState().entities).some((e) => e.kind === "guide"),
+  ).toBe(false);
+  c.pointer(70, 60, true);
+  expect(
+    Object.values(store.getState().entities).find((e) => e.kind === "guide"),
+  ).toMatchObject({ direction: V(1) });
+  expect(previewRulers).toHaveLength(0);
+});
+it("rectangle commits a midpoint-aligned endpoint and Alt restores the raw dimension", () => {
+  for (const bypass of [false, true]) {
+    const { store, controller: c, hit, hint } = setup();
+    const ps = [V(), V(100), V(100, 100), V(0, 100)];
+    store.execute({
+      type: "draw",
+      segments: ps.map((p, i) => [p, ps[(i + 1) % 4]]),
+    });
+    const face = faces(store.getState())[0];
+    c.setTool("rectangle");
+    hit({ id: face.id, kind: "face", point: V(30, 30) });
+    c.pointer(30, 30, true);
+    hit({ id: face.id, kind: "face", point: V(40, 49) });
+    c.pointer(40, 49);
+    if (bypass) c.setSnapping(false);
+    else expect(hint()).toMatch(/Midpoint alignment/);
+    c.pointer(40, 49, true);
+    expect(
+      vertices(store.getState()).some((v) =>
+        near(v.position, V(40, bypass ? 49 : 50)),
+      ),
+    ).toBe(true);
+  }
+});
+it("rectangle proportions snap the endpoint exactly, release Alt restores snapping, and typed values win", () => {
+  const { store, controller: c, view, hint } = setup();
+  let preview: [ReturnType<typeof V>, ReturnType<typeof V>][] = [];
+  view.preview = (lines) => {
+    preview = lines;
+  };
+  c.setTool("rectangle");
+  c.pointer(0, 0, true);
+  c.pointer(100, 98);
+  expect(hint()).toBe("Square · 1:1");
+  c.setSnapping(false);
+  expect(hint()).toBe("");
+  expect(preview.flat()).toContainEqual(V(100, 98));
+  c.setSnapping(true);
+  expect(hint()).toBe("Square · 1:1");
+  c.setTyped("100,98");
+  c.submit();
+  expect(
+    vertices(store.getState()).some((v) => near(v.position, V(100, 98))),
+  ).toBe(true);
+});
+
+it("push/pull commits the referenced vertex level; Alt bypasses it and typed input wins", () => {
+  for (const mode of ["snap", "alt", "typed"] as const) {
+    const { store, controller: c, hit, view, hint } = drawn();
+    const id = faces(store.getState())[0].id;
+    const eye = V(50, -500, 500);
+    view.ray = (x, y) => ({
+      origin: eye,
+      direction: unit(sub(V(x, 50, y), eye)),
+    });
+    hit({ id, kind: "face", point: V(50, 50) });
+    c.setTool("pushpull");
+    c.press(50, 0);
+    hit(
+      mode === "alt"
+        ? null
+        : { id: "target", kind: "vertex", point: V(100, 100, 30) },
+    );
+    if (mode === "alt") c.setSnapping(false);
+    c.pointer(50, 28);
+    if (mode === "snap") expect(hint()).toMatch(/Vertex level/);
+    if (mode === "typed") c.setTyped("17");
+    c.release(50, 28);
+    expect(
+      Math.max(...vertices(store.getState()).map((v) => v.position.z)),
+    ).toBeCloseTo(mode === "snap" ? 30 : mode === "alt" ? 28 : 17);
+  }
+});
+it("Alt bypasses automatic axis inference while explicit locks still apply", () => {
+  const { store, controller: c } = setup();
+  c.setTool("line");
+  c.pointer(0, 0, true);
+  c.setSnapping(false);
+  c.pointer(10, 1, true);
+  expect(
+    vertices(store.getState()).some((v) => near(v.position, V(10, 1))),
+  ).toBe(true);
+  c.cancel();
+  c.pointer(10, 1, true);
+  c.key("ArrowRight");
+  c.pointer(20, 3, true);
+  expect(
+    vertices(store.getState()).some((v) => near(v.position, V(20, 1))),
+  ).toBe(true);
 });

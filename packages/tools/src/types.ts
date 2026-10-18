@@ -49,11 +49,13 @@ export const TOOLS: { id: Tool; label: string; key: string; hint: string }[] = [
 export interface ToolHit {
   id: string;
   kind: "vertex" | "edge" | "face" | "guide";
-  snap?: "midpoint" | "intersection" | "origin";
+  snap?: "midpoint" | "intersection" | "origin" | "alignment" | "diagonal";
+  sourceEdge?: string;
   point: Vec3;
 }
 export interface ToolView {
   ray(x: number, y: number): Ray;
+  visible(p: Vec3): boolean;
   project(p: Vec3): { x: number; y: number; visible: boolean };
   pick(x: number, y: number, faceOnly?: boolean): ToolHit | null;
   preview(lines: Segment[], rulers?: ReferenceLine[]): void;
@@ -69,12 +71,14 @@ export interface Status {
   unit: Unit;
   measurement: string;
   plane: string;
+  snapping: boolean;
 }
 export interface Controller {
   status(): Status;
   subscribe(fn: () => void): () => void;
   setTool(t: Tool): void;
   setUnit(u: Unit): void;
+  setSnapping(enabled: boolean): void;
   setTyped(s: string): void;
   submit(): void;
   pointer(

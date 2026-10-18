@@ -639,13 +639,11 @@ for (const mode of ["click", "drag"] as const) {
       if (event === "blur")
         await page.evaluate(() => window.dispatchEvent(new Event("blur")));
       else
-        await page
-          .locator("canvas")
-          .dispatchEvent("pointercancel", {
-            pointerId: 1,
-            pointerType: "mouse",
-            button: 0,
-          });
+        await page.locator("canvas").dispatchEvent("pointercancel", {
+          pointerId: 1,
+          pointerType: "mouse",
+          button: 0,
+        });
       if (mode === "drag") await page.mouse.up();
       expect(await count(page, "guide")).toBe(0);
       expect(
@@ -654,4 +652,156 @@ for (const mode of ["click", "drag"] as const) {
       await expect(page.locator(".cursor-hint")).toBeHidden();
     });
   }
+}
+
+for (const bypass of [false, true]) {
+  test(`face midpoint alignment commits ${bypass ? "raw coordinates with Alt" : "an exact midline"}`, async ({
+    page,
+  }) => {
+    await rectangle(page);
+    await page.keyboard.press("f");
+    await page.getByRole("button", { name: /^Rectangle/ }).click();
+    await clickWorld(page, { x: 30, y: 30, z: 0 });
+    const p = await screenOf(page, { x: 40, y: 49, z: 0 });
+    await page.mouse.move(p.x, p.y);
+    await expect(page.locator(".cursor-hint")).toContainText(
+      "Midpoint alignment",
+    );
+    if (bypass) {
+      await page.keyboard.down("Alt");
+      await expect(
+        page.getByText("Snapping off · Alt", { exact: true }),
+      ).toBeVisible();
+      await expect(page.locator(".snap-marker")).toBeHidden();
+    }
+    await page.mouse.click(p.x, p.y);
+    if (bypass) await page.keyboard.up("Alt");
+    const points = Object.values((await snapshot(page)).entities)
+      .filter((e) => e.kind === "vertex")
+      .map((v) => v.position);
+    expect(
+      points.some(
+        (p) =>
+          Math.abs(p.x - 40) < 0.5 &&
+          Math.abs(p.y - (bypass ? 49 : 50)) < (bypass ? 0.5 : 0.00001),
+      ),
+    ).toBe(true);
+  });
+}
+for (const [x, y, ratio] of [
+  [100, 98, 1],
+  [200, 98, 2],
+] as const) {
+  test(`rectangle proximity snapping commits exact ${ratio}:1 dimensions`, async ({
+    page,
+  }) => {
+    await page.getByRole("button", { name: /^Rectangle/ }).click();
+    await clickWorld(page, { x: 0, y: 0, z: 0 });
+    const p = await screenOf(page, { x, y, z: 0 });
+    await page.mouse.move(p.x, p.y);
+    await expect(page.locator(".cursor-hint")).toContainText(
+      ratio === 1 ? "1:1" : "2:1",
+    );
+    await page.keyboard.down("Alt");
+    await expect(page.locator(".cursor-hint")).toBeHidden();
+    await page.keyboard.up("Alt");
+    await expect(page.locator(".cursor-hint")).toBeVisible();
+    await page.mouse.click(p.x, p.y);
+    const points = Object.values((await snapshot(page)).entities)
+      .filter((e) => e.kind === "vertex")
+      .map((v) => v.position);
+    expect(
+      Math.max(...points.map((p) => p.x)) / Math.max(...points.map((p) => p.y)),
+    ).toBeCloseTo(ratio, 6);
+    expect(await count(page, "edge")).toBe(4);
+  });
+}
+
+test("line drawing snaps to a face diagonal and Alt resets after blur", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await page.keyboard.press("f");
+  await page.getByRole("button", { name: /^Line/ }).click();
+  await clickWorld(page, { x: 10, y: 15, z: 0 });
+  const p = await screenOf(page, { x: 25, y: 26, z: 0 });
+  await page.mouse.move(p.x, p.y);
+  await expect(page.locator(".snap-label")).toHaveText("Face diagonal");
+  await page.keyboard.down("Alt");
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().snapping),
+  ).toBe(false);
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().snapping),
+  ).toBe(true);
+  await page.keyboard.up("Alt");
+  await page.mouse.move(p.x + 1, p.y);
+  await page.mouse.move(p.x, p.y);
+  await page.mouse.click(p.x, p.y);
+  const points = Object.values((await snapshot(page)).entities)
+    .filter((e) => e.kind === "vertex")
+    .map((v) => v.position);
+  expect(
+    points.some((p) => p.x > 20 && p.x < 30 && Math.abs(p.x - p.y) < 0.00001),
+  ).toBe(true);
+});
+
+for (const kind of ["vertex", "edge", "face"] as const) {
+  test(`push/pull matches a visible ${kind} depth`, async ({ page }) => {
+    await rectangle(page);
+    await page.evaluate((kind) => {
+      const { store } = window.__gabarito;
+      const V = (x: number, y: number, z: number) => ({ x, y, z });
+      if (kind === "face") {
+        const p = [
+          V(110, 40, 25),
+          V(150, 40, 25),
+          V(150, 90, 25),
+          V(110, 90, 25),
+        ];
+        store.execute({
+          type: "draw",
+          segments: p.map((a, i) => [a, p[(i + 1) % 4]]),
+        });
+      } else
+        store.execute({
+          type: "draw",
+          segments: [[V(150, 0, 25), V(170, 0, 25)]],
+        });
+    }, kind);
+    await page.getByRole("button", { name: /^Push\/Pull/ }).click();
+    const a = await screenOf(page, {
+      x: kind === "face" ? 90 : 50,
+      y: 50,
+      z: 0,
+    });
+    const b = await screenOf(
+      page,
+      kind === "face"
+        ? { x: 130, y: 63.25, z: 25 }
+        : { x: kind === "vertex" ? 150 : 160, y: 0, z: 25 },
+    );
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    await page.mouse.move(b.x, b.y);
+    await expect(page.locator(".cursor-hint")).toContainText(
+      `${kind[0].toUpperCase() + kind.slice(1)} level`,
+    );
+    await page.mouse.up();
+    const m = await snapshot(page);
+    const cap = Object.values(m.entities).find(
+      (e) =>
+        e.kind === "face" &&
+        e.outer.every((id) => {
+          const v = m.entities[id];
+          return (
+            v.kind === "vertex" &&
+            Math.abs(v.position.z - 25) < 0.00001 &&
+            v.position.x <= 100.00001
+          );
+        }),
+    );
+    expect(cap).toBeDefined();
+  });
 }

@@ -19,6 +19,7 @@ export interface Viewport {
   canvas: HTMLCanvasElement;
   ray(x: number, y: number): Ray;
   project(p: Vec3): ScreenPoint;
+  visible(p: Vec3): boolean;
   pick(x: number, y: number, faceOnly?: boolean): Hit | null;
   preview(lines: Segment[], rulers?: ReferenceLine[]): void;
   cursorHint(text: string, x: number, y: number): void;
@@ -108,14 +109,24 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
     segments: Segment[],
     color: number,
     depthTest = true,
+    dashed = false,
   ): THREE.LineSegments => {
     const geometry = new THREE.BufferGeometry().setFromPoints(
       segments.flatMap((s) => s.map((p) => new THREE.Vector3(p.x, p.y, p.z))),
     );
-    return new THREE.LineSegments(
+    const object = new THREE.LineSegments(
       geometry,
-      new THREE.LineBasicMaterial({ color, depthTest }),
+      dashed
+        ? new THREE.LineDashedMaterial({
+            color,
+            depthTest,
+            dashSize: 5,
+            gapSize: 4,
+          })
+        : new THREE.LineBasicMaterial({ color, depthTest }),
     );
+    if (dashed) object.computeLineDistances();
+    return object;
   };
   const drawReferences = () => {
     disposeGroup(referenceGroup);
@@ -138,16 +149,7 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
               line.id
             ] ?? 0xffffff)
           : 0xb5b680;
-      const object = lineObject([clipped], color);
-      if (!axis) {
-        (object.material as THREE.Material).dispose();
-        object.material = new THREE.LineDashedMaterial({
-          color,
-          dashSize: 5,
-          gapSize: 4,
-        });
-        object.computeLineDistances();
-      }
+      const object = lineObject([clipped], color, true, !axis);
       referenceGroup.add(object);
     }
   };
@@ -325,7 +327,7 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
           );
       }
     }
-    if (hit.kind === "face") return;
+    if (hit.kind === "face" && !hit.snap) return;
     const p = project(hit.point);
     if (!p.visible) return;
     marker.hidden = false;
@@ -334,19 +336,23 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
     marker.style.left = `${p.x}px`;
     marker.style.top = `${p.y}px`;
     label.textContent =
-      hit.snap === "midpoint"
-        ? "Midpoint"
-        : hit.snap === "intersection"
-          ? "Intersection"
-          : hit.snap === "origin"
-            ? "Origin"
-            : hit.kind === "vertex"
-              ? "Vertex"
-              : hit.kind === "guide"
-                ? hit.id.startsWith("world:")
-                  ? `${hit.id.slice(-1).toUpperCase()} axis`
-                  : "Ruler"
-                : "Edge";
+      hit.snap === "alignment"
+        ? "Midpoint alignment"
+        : hit.snap === "diagonal"
+          ? "Face diagonal"
+          : hit.snap === "midpoint"
+            ? "Midpoint"
+            : hit.snap === "intersection"
+              ? "Intersection"
+              : hit.snap === "origin"
+                ? "Origin"
+                : hit.kind === "vertex"
+                  ? "Vertex"
+                  : hit.kind === "guide"
+                    ? hit.id.startsWith("world:")
+                      ? `${hit.id.slice(-1).toUpperCase()} axis`
+                      : "Ruler"
+                    : "Edge";
   }
   let active = true;
   const render = () => {
@@ -361,6 +367,12 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
     canvas,
     ray,
     project,
+    visible: (p) =>
+      visible(
+        store.getState(),
+        { origin: asVec(camera.position), project, ray },
+        p,
+      ),
     pick(x, y, faceOnly = false) {
       const m = store.getState();
       return faceOnly
@@ -381,7 +393,9 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
         const segment = clipReference(r, frustum.planes);
         return segment ? [segment] : [];
       });
-      previewGroup.add(lineObject([...segments, ...clipped], 0x69dfcc, false));
+      previewGroup.add(lineObject(segments, 0x69dfcc, false));
+      if (clipped.length)
+        previewGroup.add(lineObject(clipped, 0x69dfcc, false, true));
     },
     frame() {
       feedback(null);

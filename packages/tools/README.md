@@ -2,10 +2,10 @@
 
 `createController(store, view)` is a headless interaction state machine. No Three.js or scene import.
 `types.ts` exports `ToolView`, `Controller`, `Status` and the seven editing and measuring tools in `TOOLS`.
-Camera navigation, belongs to scene.
+Camera navigation belongs to scene.
 
 Public calls: `setTool`, `pointer`, `key`, `setTyped`, `submit`, `setUnit`, `cancel`, `status`,
-`subscribe`, `press`, `release`, `leave`. A view supplies visible picking, projection/rays, transient
+`subscribe`, `press`, `release`, `leave`, `setSnapping`. A view supplies visible picking, projection/rays, transient
 preview segments and `feedback(hit)` for the eligible hover/snap target. `pointer` accepts a native
 click count; app routes held gestures through `press` and `release`.
 
@@ -37,7 +37,23 @@ is a no-op. Click mode needs a second press/release; drag mode finishes after a 
 `cursorHint(text, x, y)` displays transient measurements/proportions without mutating selection.
 `preview(segments, rulers?)` also supports infinite ruler previews during transforms.
 
-`proportions.ts` recognizes squares and integer aspect ratios, in either orientation, within 0.02
-of the ratio. The rectangle preview adds a diagonal and cursor hint only; actual corner positions
-and typed dimensions remain unchanged. Midpoints, virtual intersections, origin and rulers share
-the ordinary visible snap-hit contract (`snap` distinguishes named point references).
+`proportions.ts` snaps rectangle endpoints to exact squares/integer aspect ratios within eight
+screen pixels. Visible explicit geometry wins; face layout references win over approximate ratios,
+while an already exact ratio remains exact. Preview and commit share the result; typed dimensions
+override proximity. The diagonal stays transient. Tape previews include the prospective infinite
+ruler as well as the finite measurement segment; neither writes document state before completion.
+
+`face-snap.ts` infers perpendicular alignment lines from visible boundary midpoints and diagonals
+of quadrilateral faces, including rotated planes and collinear boundary splits. Holes exclude false
+material targets. Intersections can lock both coordinates. Feedback includes the named source and
+reference line. `midpointEdge` resolves source provenance, so virtual midpoint hits still produce
+edge-parallel rulers. Hits carry `sourceEdge` when needed.
+
+`extrusion-snap.ts` matches a hovered vertex/edge elevation or a nearby crossing face plane along
+the existing extrusion axis. Face and zero-level snaps require proximity; the active face and
+parallel face planes are excluded. Feedback names the level and connects it to the extrusion axis.
+
+`ToolView.visible(point)` applies scene occlusion to inferred reference points. `setSnapping(false)`
+bypasses feature picking, face/proportion/automatic-axis inference and push/pull references; it
+preserves the support plane, explicit locks and typed dimensions. `Status.snapping` exposes this
+state. App maps Alt down/up to this method and resets it on blur.

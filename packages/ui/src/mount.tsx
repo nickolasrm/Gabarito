@@ -18,6 +18,7 @@ export interface UiStatus {
   unit: Unit;
   measurement: string;
   plane: string;
+  snapping: boolean;
 }
 export interface UiApi {
   store: Store;
@@ -143,7 +144,7 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
             </p>
             <p className="muted">
               Double-click selects a face and its boundary. Triple-click selects
-              connected geometry. Esc cancels.
+              connected geometry. Esc cancels. Hold Alt to bypass snapping.
             </p>
           </aside>
         </section>
@@ -151,6 +152,9 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
           <div className="status">
             <strong>{active.label}</strong>
             <span className="axis">{status.axis}</span>
+            {!status.snapping && (
+              <span className="axis">Snapping off · Alt</span>
+            )}
             {status.tool === "rectangle" && (
               <span className="axis" title="Drawing plane">
                 {status.plane}

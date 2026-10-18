@@ -1,4 +1,6 @@
-import { rectangleRatio } from "./proportions";
+import { snapOnFace, midpointEdge } from "./face-snap";
+import { snapExtrusion } from "./extrusion-snap";
+import { rectangleRatio, snapProportion } from "./proportions";
 import {
   V,
   EPS,
@@ -54,6 +56,9 @@ export function createController(store: Store, view: ToolView): Controller {
   let planeLabel = "Ground";
   let lastX = 0,
     lastY = 0;
+  let snapping = true,
+    inferenceLines: Segment[] = [],
+    inferenceLabel = "";
   let rulerDirection: Vec3 | null = null;
   let tapePress: { x: number; y: number; active: boolean } | null = null;
   const listeners = new Set<() => void>();
@@ -63,6 +68,8 @@ export function createController(store: Store, view: ToolView): Controller {
   const cancel = () => {
     tapePress = null;
     rulerDirection = null;
+    inferenceLines = [];
+    inferenceLabel = "";
     start = null;
     first = null;
     reference = null;
@@ -115,33 +122,49 @@ export function createController(store: Store, view: ToolView): Controller {
   };
   const updatePreview = () => {
     if (!start) {
-      view.preview([]);
+      view.preview(inferenceLines);
+      view.cursorHint(inferenceLabel, lastX, lastY);
       return;
     }
     let ratio = "";
-    if (tool === "line" || tool === "tape") view.preview([[start, current]]);
+    if (tool === "line") view.preview([[start, current], ...inferenceLines]);
+    else if (tool === "tape")
+      view.preview(
+        [[start, current]],
+        near(start, current)
+          ? []
+          : [
+              {
+                id: "preview:ruler",
+                origin: current,
+                direction: unit(rulerDirection ?? sub(current, start)),
+              },
+            ],
+      );
     else if (tool === "rectangle") {
       const corners = rectangle(current),
         [width, height] = project(current, { ...drawingPlane, origin: start });
-      ratio = rectangleRatio(width, height);
+      ratio = snapping ? rectangleRatio(width, height) : "";
       const lines = polygonSegments(corners);
       if (ratio) lines.push([start, current]);
-      view.preview(lines);
+      view.preview([...lines, ...inferenceLines]);
     } else if (tool === "pushpull") {
       const f = faces(store.getState()).find((f) => f.id === faceId);
       if (!f) return;
       const d = mul(direction(), dot(sub(current, start), direction()));
       view.preview(
-        loops(f).flatMap((l) =>
-          l.flatMap((id, i) => {
-            const a = position(store.getState(), id),
-              b = position(store.getState(), l[(i + 1) % l.length]);
-            return [
-              [add(a, d), add(b, d)],
-              [a, add(a, d)],
-            ] as Segment[];
-          }),
-        ),
+        loops(f)
+          .flatMap((l) =>
+            l.flatMap((id, i) => {
+              const a = position(store.getState(), id),
+                b = position(store.getState(), l[(i + 1) % l.length]);
+              return [
+                [add(a, d), add(b, d)],
+                [a, add(a, d)],
+              ] as Segment[];
+            }),
+          )
+          .concat(inferenceLines),
       );
     } else if (tool === "move" || tool === "rotate") {
       const m = store.getState(),
@@ -183,7 +206,18 @@ export function createController(store: Store, view: ToolView): Controller {
       tool === "rotate"
         ? `${((rotatedAngle(current) * 180) / Math.PI).toFixed(1)}°`
         : `${(distance / UNITS[unitId]).toFixed(2)} ${unitId}`;
-    view.cursorHint(tool === "tape" ? measurement : ratio, lastX, lastY);
+    view.cursorHint(
+      tool === "tape"
+        ? measurement
+        : [
+            inferenceLabel,
+            ratio || (tool === "pushpull" && inferenceLabel ? measurement : ""),
+          ]
+            .filter(Boolean)
+            .join(" · "),
+      lastX,
+      lastY,
+    );
   };
   const finish = (end: Vec3, number?: number): boolean => {
     if (!start) return false;
@@ -199,6 +233,8 @@ export function createController(store: Store, view: ToolView): Controller {
         start = end;
         current = end;
         typed = "";
+        inferenceLines = [];
+        inferenceLabel = "";
         view.preview([]);
         emit();
       }
@@ -309,8 +345,14 @@ export function createController(store: Store, view: ToolView): Controller {
   ) => {
     lastX = x;
     lastY = y;
-    const ray = view.ray(x, y),
-      hit = view.pick(x, y, tool === "pushpull");
+    inferenceLines = [];
+    inferenceLabel = "";
+    const ray = view.ray(x, y);
+    let hit = view.pick(
+      x,
+      y,
+      (tool === "pushpull" && !start) || (!snapping && tool !== "select"),
+    );
     if (!start) {
       const aimed =
         hit?.kind === "face" ? store.getState().entities[hit.id] : null;
@@ -363,12 +405,56 @@ export function createController(store: Store, view: ToolView): Controller {
       return;
     }
     if (
+      snapping &&
+      (tool === "line" || tool === "rectangle") &&
+      (!hit || hit.kind === "face")
+    ) {
+      const inferred = snapOnFace(store.getState(), drawingPlane, end, view);
+      const proportion =
+        start && tool === "rectangle"
+          ? snapProportion(start, end, drawingPlane, view)
+          : null;
+      const raw = end;
+      const pixels = (p: Vec3) => {
+        const a = view.project(p),
+          b = view.project(raw);
+        return Math.hypot(a.x - b.x, a.y - b.y);
+      };
+      if (
+        inferred &&
+        (!proportion ||
+          pixels(proportion) > 1e-6 ||
+          pixels(inferred.point) <= 1e-6)
+      ) {
+        end = inferred.point;
+        hit = inferred.hit;
+        inferenceLines = inferred.lines;
+        inferenceLabel = inferred.label;
+      } else if (proportion) end = proportion;
+    }
+    if (snapping && start && tool === "pushpull") {
+      const inferred = snapExtrusion(
+        store.getState(),
+        start,
+        end,
+        direction(),
+        faceId,
+        hit,
+        view,
+      );
+      if (inferred) {
+        end = inferred.point;
+        inferenceLines = inferred.lines;
+        inferenceLabel = inferred.label;
+      }
+    }
+    if (
+      snapping &&
+      !inferenceLabel &&
       start &&
       !axis &&
       tool === "line" &&
-      hit?.kind !== "vertex" &&
-      hit?.kind !== "guide" &&
-      !hit?.snap
+      (!hit || hit.kind === "face")
     ) {
       for (const a of ["x", "y", "z"] as Axis[]) {
         const p = axisPoint(ray, start, axisVector(a)),
@@ -385,7 +471,13 @@ export function createController(store: Store, view: ToolView): Controller {
     }
     current = end;
     view.feedback(
-      hit && (tool === "pushpull" ? !start : near(end, hit.point)) ? hit : null,
+      hit &&
+        (tool === "pushpull"
+          ? !start || !!inferenceLabel
+          : near(end, hit.point)) &&
+        (snapping || tool === "select" || tool === "pushpull")
+        ? hit
+        : null,
     );
     if (click) {
       message = "";
@@ -409,7 +501,7 @@ export function createController(store: Store, view: ToolView): Controller {
             return;
           }
           const m = store.getState(),
-            source = m.entities[hit.id];
+            source = m.entities[midpointEdge(m, hit) ?? hit.id];
           rulerDirection =
             source?.kind === "edge"
               ? sub(
@@ -463,6 +555,7 @@ export function createController(store: Store, view: ToolView): Controller {
       unit: unitId,
       measurement,
       plane: planeLabel,
+      snapping,
     }),
     subscribe(fn) {
       listeners.add(fn);
@@ -480,6 +573,12 @@ export function createController(store: Store, view: ToolView): Controller {
     setUnit(u) {
       unitId = u;
       updatePreview();
+      emit();
+    },
+    setSnapping(enabled) {
+      if (snapping === enabled) return;
+      snapping = enabled;
+      pointer(lastX, lastY);
       emit();
     },
     setTyped(s) {
