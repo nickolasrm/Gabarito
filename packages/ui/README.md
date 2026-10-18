@@ -24,3 +24,6 @@ explains the modifier. Cursor hints also name face alignments and extrusion refe
 
 Push/Pull guidance describes both click/move/click and hold/drag/release. Active status text supports
 both gestures without a separate mode selector. Tape labels include active face-inference names.
+
+Rotate guidance describes anchor A and zero-angle B before the final angle click or typed degrees.
+Its status bar also names the supporting plane; the cursor shows the signed angle in degrees.

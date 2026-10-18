@@ -155,7 +155,7 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
             {!status.snapping && (
               <span className="axis">Snapping off · Alt</span>
             )}
-            {status.tool === "rectangle" && (
+            {(status.tool === "rectangle" || status.tool === "rotate") && (
               <span className="axis" title="Drawing plane">
                 {status.plane}
               </span>
@@ -165,7 +165,9 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
                 (status.active
                   ? status.tool === "pushpull"
                     ? "Move or type a distance; click or release to finish"
-                    : "Choose destination or enter dimensions"
+                    : status.tool === "rotate"
+                      ? "Choose B, then rotate and click; or enter degrees"
+                      : "Choose destination or enter dimensions"
                   : status.tool === "pushpull"
                     ? "Click or drag a face to start"
                     : "Choose a starting point")}
