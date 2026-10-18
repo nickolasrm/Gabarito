@@ -7,7 +7,7 @@
   and shares Line's automatic axis inference over empty space. Alt still bypasses inference.
 - Push/Pull supports both click/move/click and hold/drag/release without a mode switch. Both preserve
   snapping, numeric input and one-step undo/redo; cancellation also works between clicks.
-- Axis pins and their signs reset after completion, Escape and tool changes. Line segments reset
+- Axis pins, their signs and cached plane labels reset after completion, Escape and tool changes. Line segments reset
   their pins individually while retaining the chain; active explicit pins override face inference.
 - Specs: [0028](docs/specs/0028-tape-measure-inference.md),
   [0029](docs/specs/0029-dual-pushpull-gestures.md), [0030](docs/specs/0030-reset-axis-pins.md).

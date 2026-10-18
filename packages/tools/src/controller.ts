@@ -68,6 +68,7 @@ export function createController(store: Store, view: ToolView): Controller {
   const cancel = () => {
     axis = null;
     axisSign = 1;
+    planeLabel = "Ground";
     gesturePress = null;
     rulerDirection = null;
     inferenceLines = [];

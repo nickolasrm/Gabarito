@@ -906,6 +906,7 @@ it("axis pins clear after committed segments, tool completion, Escape and tool c
   c.setTyped("20,10");
   c.submit();
   expect(c.status().axis).toBe("Free");
+  expect(c.status().plane).toBe("Ground");
   c.key("ArrowUp");
   c.setTool("tape");
   expect(c.status().axis).toBe("Free");

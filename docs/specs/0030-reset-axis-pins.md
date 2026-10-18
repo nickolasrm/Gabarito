@@ -31,6 +31,7 @@ completion and Escape. Run all tests, typecheck and static build.
 
 - The shared cancellation/completion path resets axis and sign. A successful line segment also
   clears its pin while keeping the polygon chain active. Tool changes and Escape clear the lock.
+- Cached axis-plane labels also clear after completion/cancellation, so the idle UI cannot show a stale pin.
 - Active explicit pins take priority over face inference, preventing off-axis endpoints.
 - Headless and browser regressions cover completion, chained segments, Escape, tool switches,
   negative-Z reset and the next operation's geometry. Existing pin-toggle tests now verify the
