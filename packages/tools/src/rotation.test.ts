@@ -208,7 +208,7 @@ it("freezes its plane at B even over another face and bypasses feature snapping 
     (f) => f.id !== faces(store.getState())[0].id,
   )!;
   view.pick = () => ({ kind: "face", id: other.id, point: V(50, 100, 30) });
-  c.pointer(50, 100);
+  c.pointer(50, 120);
   expect(c.status().measurement).toBe("90.0°");
   expect(feedback()).toBeNull();
   view.pick = () => ({
@@ -234,6 +234,7 @@ it("keeps explicit axis overrides, reprojects B and requests a new B when it col
   c.pointer(100, 50, true);
   c.key("ArrowRight");
   expect(c.status().axis).toBe("X");
+  expect(hint()).not.toMatch(/alignment|diagonal|intersection/);
   expect(c.status().measurement).toBe("0.0°");
   view.pick = () => ({ id: "b", kind: "vertex", point: point(50, 100) });
   c.pointer(50, 100, true);
@@ -291,11 +292,16 @@ it("cancels the reference and frozen plane on tool change before starting anothe
   expect(c.status().measurement).toBe("0.0°");
 });
 it("keeps the clicked face point as A when an axis is pinned before the first click", () => {
-  const { store, c, aim, point } = setup(V(0, 0, 80), V(1, 0, 0), V(0, 1, 0));
+  const { store, c, aim, point, hint } = setup(
+    V(0, 0, 80),
+    V(1, 0, 0),
+    V(0, 1, 0),
+  );
   const before = structuredClone(store.getState().entities);
   c.key("ArrowRight");
-  aim(50, 50);
-  c.pointer(50, 50, true);
+  aim(49, 49);
+  c.pointer(49, 49, true);
+  expect(hint()).toContain("Reference intersection");
   expect(c.status().active).toBe(true);
   c.setTyped("90");
   c.submit();
@@ -309,3 +315,53 @@ it("keeps the clicked face point as A when an axis is pinned before the first cl
     ).toBe(true);
   }
 });
+for (const [name, origin, u, v] of [
+  ["horizontal", V(0, 0, 80), V(1, 0, 0), V(0, 1, 0)],
+  ["vertical", V(100, 0, 0), V(0, 1, 0), V(0, 0, 1)],
+] as const) {
+  it(`shows face center, midpoint and diagonal hints through a ${name} rotation with exact snapping and Alt bypass`, () => {
+    const { store, c, aim, point, feedback, hint, preview, face } = setup(
+      origin,
+      u,
+      v,
+    );
+    const before = structuredClone(store.getState().entities);
+    aim(49, 49);
+    c.pointer(49, 49);
+    expect(hint()).toBe("Reference intersection");
+    expect(near(feedback()!.point, point(50, 50))).toBe(true);
+    expect(preview().length).toBeGreaterThan(0);
+    c.pointer(49, 49, true);
+    aim(85, 49);
+    c.pointer(85, 49);
+    expect(hint()).toContain("Midpoint alignment");
+    expect(near(feedback()!.point, point(85, 50))).toBe(true);
+    c.pointer(85, 49, true);
+    aim(60, 61);
+    c.pointer(60, 61);
+    expect(hint()).toContain("Face diagonal");
+    expect(c.status().measurement).toBe("45.0°");
+    expect(near(feedback()!.point, point(60.5, 60.5))).toBe(true);
+    expect(store.getState().entities).toEqual(before);
+    c.setSnapping(false);
+    expect(hint()).not.toMatch(/diagonal|alignment|intersection/);
+    expect(c.status().measurement).toBe("47.7°");
+    c.setSnapping(true);
+    c.pointer(60, 61, true);
+    const n = facePlane({ ...store.getState(), entities: before }, face).normal;
+    for (const id of face.outer)
+      expect(
+        near(
+          position(store.getState(), id),
+          rotate(
+            (before[id] as { position: Vec3 }).position,
+            point(50, 50),
+            n,
+            Math.PI / 4,
+          ),
+        ),
+      ).toBe(true);
+    store.undo();
+    expect(store.getState().entities).toEqual(before);
+  });
+}

@@ -82,3 +82,10 @@ and current directions. Explicit arrows override the rotation axis; B is project
 plane, or cleared when it collapses onto A. Typed degrees after A remain supported. Preview and
 commit share the plane, pivot and angle; Escape or changing tools clears the reference. Tests in
 `rotation.test.ts` cover orientation, both signs, exact history, snapping, overrides and cancellation.
+
+Rotate also shares `snapOnFace` for face-interior midpoint alignments, center intersections and
+quadrilateral diagonals at all three input stages. Before A, references follow the hovered face even with a pre-pinned axis. After A, the active
+rotation plane constrains inference,
+including axis overrides, so hints cannot reorient a rotation after B. Eligible explicit geometry
+retains priority. Named cursor hints, markers and reference lines identify the same exact point used
+by preview and commit. Alt bypasses these references.

@@ -1084,7 +1084,13 @@ for (const side of ["top", "side"] as const) {
       store.select(Object.keys(store.getState().entities));
     });
     await page.getByRole("button", { name: /^Rotate/ }).click();
-    await clickWorld(page, a);
+    const ap = await screenOf(page, a);
+    await page.mouse.move(ap.x, ap.y);
+    await expect(page.locator(".cursor-hint")).toContainText(
+      "Reference intersection",
+    );
+    await expect(page.locator(".snap-marker")).toBeVisible();
+    await page.mouse.click(ap.x, ap.y);
     const bp = await screenOf(page, b);
     await page.mouse.move(bp.x, bp.y);
     await expect(page.locator(".cursor-hint")).toContainText("0.0°");
@@ -1167,4 +1173,64 @@ test("Rotate cancels after B and accepts signed typed degrees on its next use", 
   }
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   expect((await snapshot(page)).entities).toEqual(before.entities);
+});
+
+test("Rotate shows face-center, midpoint and diagonal hints and Alt bypasses their snapping", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await page.keyboard.press("f");
+  const before = await snapshot(page);
+  await page.getByRole("button", { name: /^Select/ }).click();
+  await clickWorld(page, { x: 50, y: 50, z: 0 });
+  await page.getByRole("button", { name: /^Rotate/ }).click();
+  const a = await screenOf(page, { x: 49, y: 49, z: 0 });
+  await page.mouse.move(a.x, a.y);
+  await expect(page.locator(".cursor-hint")).toContainText(
+    "Reference intersection",
+  );
+  await expect(page.locator(".snap-marker")).toBeVisible();
+  await page.mouse.click(a.x, a.y);
+  const b = await screenOf(page, { x: 85, y: 49, z: 0 });
+  await page.mouse.move(b.x, b.y);
+  await expect(page.locator(".cursor-hint")).toContainText(
+    "Midpoint alignment",
+  );
+  await page.mouse.click(b.x, b.y);
+  const c = await screenOf(page, { x: 60, y: 61, z: 0 });
+  await page.mouse.move(c.x, c.y);
+  await expect(page.locator(".cursor-hint")).toContainText("45.0°");
+  await expect(page.locator(".cursor-hint")).toContainText("Face diagonal");
+  await expect(page.locator(".snap-marker")).toHaveAttribute(
+    "data-kind",
+    "diagonal",
+  );
+  expect((await snapshot(page)).entities).toEqual(before.entities);
+  await page.keyboard.down("Alt");
+  await expect(page.locator(".snap-marker")).toBeHidden();
+  expect(
+    parseFloat(await page.locator(".cursor-hint").innerText()),
+  ).toBeGreaterThan(46);
+  await page.keyboard.up("Alt");
+  await expect(page.locator(".cursor-hint")).toContainText("Face diagonal");
+  await page.mouse.click(c.x, c.y);
+  const after = await snapshot(page);
+  for (const e of Object.values(before.entities)) {
+    if (e.kind !== "vertex") continue;
+    const actual = after.entities[e.id];
+    if (actual.kind !== "vertex") throw new Error("Missing rotated vertex");
+    expect(actual.position.x).toBeCloseTo(
+      50 + (e.position.x - e.position.y) / Math.SQRT2,
+      5,
+    );
+    expect(actual.position.y).toBeCloseTo(
+      50 + (e.position.x + e.position.y - 100) / Math.SQRT2,
+      5,
+    );
+    expect(actual.position.z).toBeCloseTo(0, 5);
+  }
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect((await snapshot(page)).entities).toEqual(before.entities);
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  expect((await snapshot(page)).entities).toEqual(after.entities);
 });

@@ -1,5 +1,12 @@
 # Changelog
 
+## Rotation face-reference hints — 2026-10-18
+
+- Rotate shares face midpoint alignment, center-intersection and diagonal inference while choosing
+  its anchor, zero direction and angle. Named markers and transient lines identify the snapped
+  reference. Explicit geometry wins, Alt bypasses inference, and the frozen rotation plane stays fixed.
+- Spec: [0033](docs/specs/0033-rotate-face-reference-hints.md).
+
 ## Rotation anchor and orientation — 2026-10-18
 
 - Rotate uses anchor A and zero-angle point B to infer its supporting face or boundary plane, then

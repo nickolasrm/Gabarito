@@ -448,16 +448,21 @@ export function createController(store: Store, view: ToolView): Controller {
     }
     if (
       snapping &&
-      (!axis || tool === "rectangle") &&
-      (tool === "line" || tool === "rectangle" || tool === "tape") &&
+      (!axis || tool === "rectangle" || tool === "rotate") &&
+      (tool === "line" ||
+        tool === "rectangle" ||
+        tool === "tape" ||
+        tool === "rotate") &&
       (!hit || hit.kind === "face")
     ) {
       const m = store.getState(),
         target = hit ? m.entities[hit.id] : null;
       const support =
-        tool === "tape" && target?.kind === "face"
-          ? facePlane(m, target)
-          : drawingPlane;
+        tool === "rotate" && start
+          ? rotationPlane()
+          : (tool === "tape" || tool === "rotate") && target?.kind === "face"
+            ? facePlane(m, target)
+            : drawingPlane;
       const inferred = snapOnFace(m, support, end, view);
       const proportion =
         start && tool === "rectangle"
