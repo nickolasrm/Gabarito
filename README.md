@@ -16,18 +16,26 @@ continuation of anything it draws on, and not a replacement for any of it.
 
 ## Status
 
-**Early modeler.** A working SketchUp-like base is in place: draw lines, rectangles and circles, pull
-faces into solids, move and rotate, measure, and lay down guides — with snapping, axis locking, typed
-dimensions in seven units, and undo.
+**Rewritten basic modeler.** Camera orbit/pan/zoom, rectangle, polygon line builder, selection,
+move, push/pull and rotate. Typed dimensions, axis locks, visible-geometry snapping and undo/redo.
+Drawings partition shared surfaces; closed-solid edits use bundled Manifold WASM.
 
-No persistence yet: nothing is saved between sessions. No plugin host, and no woodworking, lighting or
-house features. The geometry kernel is still
-[proposed](./docs/decisions/0011-geometry-kernel-strategy.md); push/pull is straight extrusion.
+Lengths are stored in millimetres. Input supports mm, cm, m, in and ft. While drawing, type values
+and press Enter: rectangle `100,100`, line `10`, push/pull `10` (or `-10` to cut inward).
+Arrow Up pins height/Z, Right width/X, Left depth/Y; press the same key again to release.
+Middle mouse orbits; Shift+middle pans; wheel zooms. `F` frames the model.
+
+No persistence yet: reload clears the document. No plugin host, lighting or woodworking tools.
+The rewrite intentionally limits the toolbar to the requested basic tools; the previous circle,
+ruler and annotation tools are deferred. See [spec 0021](docs/specs/0021-rewrite-modeler.md).
 
 ```bash
-npm install
+npm ci
 npm run dev      # http://localhost:5173
+npm run typecheck
 npm test
+npx playwright install chromium
+npm run test:e2e
 npm run build
 ```
 

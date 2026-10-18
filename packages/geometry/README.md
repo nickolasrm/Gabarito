@@ -1,60 +1,16 @@
-# @gabarito/geometry
+# geometry
 
-**Status:** implemented — pure maths plus one dependency: the mesh CSG kernel behind `solid`
+Headless geometry, independent of every other repository package.
 
-## Responsibility
+- `math.ts`: millimetre vectors, Z-up planes, projection, rays and rotation. `EPS` is 1e-5 mm.
+- `arrangement.ts`: split segment intersections/overlaps, then recover planar cells by half-edge
+  walking. `regions` returns outer loops and holes; it does not enumerate arbitrary graph cycles.
+- `kernel.ts`: `initializeGeometry`, shared `triangulate`, general polygon `sweep`, `surfacesOf`,
+  signed mesh `volume`, and `mergeCoplanar` for oriented surface unions/cancellations. Manifold WASM is bundled locally, initialized before editing, and freed
+  after each boolean. Kernel failures propagate to the transaction boundary.
 
-Every numerical guarantee in the product. Testable in plain Node, with no browser and no GPU.
+Public exports are in `src/index.ts`. `Surface` holds world-space outer/hole contours; `Mesh` holds
+positions and indexed triangles. No kernel object crosses the boundary.
 
-- Vectors, planes, rays, segments, bounds, and named tolerances (`EPS`).
-- Polygons: normals, area, centroid, planarity, point containment, winding.
-- Triangulation by ear clipping, including concave loops.
-- Extrusion into closed solids and caps.
-- Rotation, translation and mirroring about an axis or plane.
-- Solid cuts through `manifold-3d`: two axis-aligned boxes in, welded triangles with consistent
-  outward winding out ([decision 0022](../../docs/decisions/0022-cuts-run-on-manifold.md)). The WASM
-  kernel initialises on first use; `ensureSolid` resolves when it is ready.
-
-## Public interface
-
-```ts
-vec3          of, add, sub, scale, mul, dot, cross, len, normalize, lerp, dist, equals, isZero …
-rect          fromPolygon, intersect, corners, cornersOutward
-solid         ensureSolid (await the kernel), solidReady, subtractSolid (outer, inner) →
-              { positions, triangles } — throws on an open or inside-out result;
-              sweepShell (shell of loops, tool box) → { verb: "cut" | "add", mesh } — the measured
-              sweep: material subtracts, an empty sweep unions (decision 0025)
-plane         fromPoints, fromPointNormal, fromAxis, distanceToPoint, projectPoint, contains, flip
-ray           of, at, intersectPlane, intersectSegment, closestPointsToSegment
-segment       length, direction, midpoint, closestPointToPoint, closestPoints
-poly          normal, area, centroid, isPlanar, containsPoint, orient, dedupe, signedArea2D
-triangulate   polygon (ear clipping), fan
-extrude       prism, walls, cap
-transform     rotatePointAroundAxis, rotatePointsAroundAxis, translate, mirrorPoint
-bounds        empty, fromPoints, expand, union, contains, intersects, center, size, diagonal
-angle         between, signedAround, toDegrees, toRadians
-EPS           LENGTH, ANGLE, MERGE, PARALLEL
-```
-
-Lengths are millimetres, angles radians, world Z-up, right-handed
-([decision 0008](../../docs/decisions/0008-units-coordinates-precision.md)).
-
-## Must not
-
-- Import anything, not even another Gabarito package. Enforced by a test
-  ([decision 0015](../../docs/decisions/0015-core-depends-on-geometry.md)).
-- Import Three.js, React, or touch the DOM.
-- Mutate its inputs, or hold any state between calls.
-
-## Depends on
-
-Nothing.
-
-## Test
-
-`npm test` — `packages/geometry/src/geometry.test.ts`.
-
-## Read next
-
-[`docs/decisions/0011-geometry-kernel-strategy.md`](../../docs/decisions/0011-geometry-kernel-strategy.md) ·
-[`docs/decisions/0013-curves-are-tessellated.md`](../../docs/decisions/0013-curves-are-tessellated.md)
+Run `npm test` for geometry behavior through core topology/volume tests.
+See [0027](../../docs/decisions/0027-topology-rewrite.md) for the topology decision.

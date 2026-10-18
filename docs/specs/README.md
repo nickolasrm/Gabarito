@@ -39,6 +39,10 @@ and by decision records, so a rejected spec keeps its number forever.
 | [0019](./0019-pull-is-a-union.md) | Pull is a union, and the sweep follows the drag | **implemented** | core, geometry, tools | 0025 |
 | [0020](./0020-no-hole-limit.md) | No limit on holes | **implemented** | core, geometry, scene | 0026 |
 
+| [0021](./0021-rewrite-modeler.md) | Rewrite the basic modeler around shared topology | implemented | geometry, core, scene, tools, ui, app, web | 0027 |
+
+| [0022](./0022-open-sheet-pushpull.md) | Continue push/pull on raised open sheets | implemented | core, geometry | 0027 |
+
 Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 
 ## Writing one

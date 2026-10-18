@@ -1,155 +1,132 @@
-import { ray as rayOps, plane as planeOps, poly as polyOps, vec3 } from "@gabarito/geometry";
-import type { Ray, Vec3 } from "@gabarito/geometry";
-import { edgesOf, faceHoles, facePositions, facesOf, getPoint, guidesOf, dimensionsOf } from "@gabarito/core";
-import type { DocumentState, EntityId } from "@gabarito/core";
-
-export interface PickHit {
-  entityId: EntityId;
-  kind: "point" | "edge" | "face" | "guide" | "dimension";
+import {
+  EPS,
+  add,
+  sub,
+  mul,
+  dot,
+  cross,
+  length,
+  unit,
+  triangulate,
+} from "@gabarito/geometry";
+import type { Vec3, Ray } from "@gabarito/geometry";
+import { vertices, edges, faces, position, surface } from "@gabarito/core";
+import type { Model } from "@gabarito/core";
+export interface ScreenPoint {
+  x: number;
+  y: number;
+  depth: number;
+  visible: boolean;
+}
+export interface PickView {
+  origin: Vec3;
+  project(p: Vec3): ScreenPoint;
+  ray(x: number, y: number): Ray;
+}
+export interface Hit {
+  id: string;
+  kind: "vertex" | "edge" | "face";
   point: Vec3;
-  distance: number;
 }
-
-interface Candidate extends PickHit {
-  t: number;
-  /** Faces only: used to prefer the innermost of several stacked coplanar faces. */
-  area: number;
+function triangleHit(ray: Ray, a: Vec3, b: Vec3, c: Vec3): number | null {
+  const e1 = sub(b, a),
+    e2 = sub(c, a),
+    h = cross(ray.direction, e2),
+    det = dot(e1, h);
+  if (Math.abs(det) < 1e-10) return null;
+  const s = sub(ray.origin, a),
+    u = dot(s, h) / det,
+    q = cross(s, e1),
+    v = dot(ray.direction, q) / det;
+  if (u < -1e-9 || v < -1e-9 || u + v > 1 + 1e-9) return null;
+  const t = dot(e2, q) / det;
+  return t > EPS ? t : null;
 }
-
-function faceCandidate(ray: Ray, entityId: EntityId, positions: Vec3[], holes: Vec3[][]): Candidate | null {
-  const normal = polyOps.normal(positions);
-  if (!normal) return null;
-  const plane = planeOps.fromPointNormal(positions[0], normal);
-  const hit = rayOps.intersectPlane(ray, plane);
-  if (!hit) return null;
-  if (!polyOps.containsPoint(positions, hit, 1e-6)) return null;
-  // A hit inside a hole is a miss: the face is the material around the hole, not the hole.
-  if (holes.some((hole) => polyOps.containsPoint(hole, hit, 1e-6))) return null;
-  const t = vec3.dist(hit, ray.origin);
-  return { entityId, kind: "face", point: hit, distance: t, t, area: polyOps.area(positions) };
-}
-
-function segmentCandidate(
+export function faceHit(
+  m: Model,
   ray: Ray,
-  kind: PickHit["kind"],
-  entityId: EntityId,
-  a: Vec3,
-  b: Vec3,
-  tolerance: number,
-): Candidate | null {
-  const closest = rayOps.closestPointsToSegment(ray, { a, b });
-  if (closest.tRay <= 0) return null;
-  if (closest.dist > tolerance) return null;
-  return {
-    entityId,
-    kind,
-    point: closest.onSegment,
-    distance: closest.tRay,
-    t: closest.tRay,
-    area: 0,
-  };
-}
-
-function pointCandidate(
-  ray: Ray,
-  kind: PickHit["kind"],
-  entityId: EntityId,
-  position: Vec3,
-  tolerance: number,
-): Candidate | null {
-  const t = vec3.dot(vec3.sub(position, ray.origin), ray.direction);
-  if (t <= 0) return null;
-  const closest = vec3.add(ray.origin, vec3.scale(ray.direction, t));
-  if (vec3.dist(closest, position) > tolerance) return null;
-  return { entityId, kind, point: position, distance: t, t, area: 0 };
-}
-
-/**
- * Analytic picking against document entities rather than against rendered meshes:
- * no dependence on three.js objects, and the same maths can be tested headlessly.
- * Faces win over edges win over points at equal distance, which is what a user expects.
- */
-export function pickFace(ray: Ray, doc: DocumentState): PickHit | null {
-  const candidates: Candidate[] = [];
-  for (const face of facesOf(doc)) {
-    const positions = facePositions(doc, face);
-    if (positions.length < 3) continue;
-    const candidate = faceCandidate(ray, face.id, positions, faceHoles(doc, face));
-    if (candidate) candidates.push(candidate);
-  }
-  if (candidates.length === 0) return null;
-  candidates.sort((a, b) => {
-    const gap = a.t - b.t;
-    if (Math.abs(gap) / Math.max(a.t, b.t, 1) > 0.02) return gap;
-    return a.area - b.area;
-  });
-  const best = candidates[0];
-  return { entityId: best.entityId, kind: "face", point: best.point, distance: best.distance };
-}
-
-export function pick(ray: Ray, doc: DocumentState, tolerance: number): PickHit | null {
-  const candidates: Candidate[] = [];
-
-  for (const face of facesOf(doc)) {
-    const positions = facePositions(doc, face);
-    if (positions.length < 3) continue;
-    const candidate = faceCandidate(ray, face.id, positions, faceHoles(doc, face));
-    if (candidate) candidates.push(candidate);
-  }
-
-  for (const edge of edgesOf(doc)) {
-    const a = getPoint(doc, edge.points[0]);
-    const b = getPoint(doc, edge.points[1]);
-    if (!a || !b) continue;
-    const candidate = segmentCandidate(ray, "edge", edge.id, a, b, tolerance);
-    if (candidate) candidates.push(candidate);
-  }
-
-  for (const guide of guidesOf(doc)) {
-    const huge = 1e6;
-    const a = vec3.add(guide.origin, vec3.scale(guide.direction, huge));
-    const b = vec3.sub(guide.origin, vec3.scale(guide.direction, huge));
-    const candidate = segmentCandidate(ray, "guide", guide.id, a, b, tolerance);
-    if (candidate) candidates.push(candidate);
-  }
-
-  for (const dimension of dimensionsOf(doc)) {
-    const candidate = segmentCandidate(ray, "dimension", dimension.id, dimension.a, dimension.b, tolerance * 2);
-    if (candidate) candidates.push(candidate);
-  }
-
-  const points = new Map<EntityId, Vec3>();
-  for (const edge of edgesOf(doc)) {
-    for (const id of edge.points) {
-      const position = getPoint(doc, id);
-      if (position) points.set(id, position);
+): (Hit & { distance: number }) | null {
+  let best: (Hit & { distance: number }) | null = null;
+  for (const f of faces(m)) {
+    const mesh = triangulate(surface(m, f));
+    for (let i = 0; i < mesh.triangles.length; i += 3) {
+      const [a, b, c] = mesh.triangles
+          .slice(i, i + 3)
+          .map((k) => mesh.points[k]),
+        t = triangleHit(ray, a, b, c);
+      if (t !== null && (!best || t < best.distance))
+        best = {
+          id: f.id,
+          kind: "face",
+          point: add(ray.origin, mul(ray.direction, t)),
+          distance: t,
+        };
     }
   }
-  for (const [id, position] of points) {
-    const candidate = pointCandidate(ray, "point", id, position, tolerance);
-    if (candidate) candidates.push(candidate);
-  }
-
-  if (candidates.length === 0) return null;
-
-  const priority: Record<PickHit["kind"], number> = {
-    point: 0,
-    face: 1,
-    edge: 2,
-    guide: 3,
-    dimension: 4,
-  };
-
-  candidates.sort((a, b) => {
-    const gap = a.t - b.t;
-    const relative = Math.abs(gap) / Math.max(a.t, b.t, 1);
-    if (relative > 0.02) return gap;
-    // Nested faces are coplanar, so they tie on distance. The user aimed at the
-    // smallest one: a face drawn inside another is the precise target, not the parent.
-    if (a.kind === "face" && b.kind === "face" && a.area !== b.area) return a.area - b.area;
-    return priority[a.kind] - priority[b.kind];
+  return best;
+}
+export function visible(m: Model, view: PickView, p: Vec3): boolean {
+  if (!view.project(p).visible) return false;
+  const offset = sub(p, view.origin),
+    distance = length(offset);
+  const obstruction = faceHit(m, {
+    origin: view.origin,
+    direction: unit(offset),
   });
-
-  const best = candidates[0];
-  return { entityId: best.entityId, kind: best.kind, point: best.point, distance: best.distance };
+  return !obstruction || obstruction.distance >= distance - EPS * 10;
+}
+export function pick(
+  m: Model,
+  view: PickView,
+  x: number,
+  y: number,
+  tolerance = 8,
+): Hit | null {
+  const candidates: {
+    hit: Hit;
+    pixels: number;
+    priority: number;
+    depth: number;
+  }[] = [];
+  for (const v of vertices(m)) {
+    const p = view.project(v.position),
+      pixels = Math.hypot(p.x - x, p.y - y);
+    if (pixels <= tolerance && visible(m, view, v.position))
+      candidates.push({
+        hit: { id: v.id, kind: "vertex", point: v.position },
+        pixels,
+        priority: 0,
+        depth: p.depth,
+      });
+  }
+  for (const e of edges(m)) {
+    const a = position(m, e.vertices[0]),
+      b = position(m, e.vertices[1]),
+      pa = view.project(a),
+      pb = view.project(b);
+    // Segments crossing the near plane are not snap targets; never project their hidden endpoint.
+    if (!pa.visible || !pb.visible) continue;
+    const dx = pb.x - pa.x,
+      dy = pb.y - pa.y,
+      size = dx * dx + dy * dy;
+    const alpha =
+      size > 0
+        ? Math.max(0, Math.min(1, ((x - pa.x) * dx + (y - pa.y) * dy) / size))
+        : 0;
+    const pixels = Math.hypot(pa.x + alpha * dx - x, pa.y + alpha * dy - y);
+    const t = (alpha * pa.depth) / ((1 - alpha) * pb.depth + alpha * pa.depth);
+    const point = add(a, mul(sub(b, a), t));
+    if (pixels <= tolerance && visible(m, view, point))
+      candidates.push({
+        hit: { id: e.id, kind: "edge", point },
+        pixels,
+        priority: 1,
+        depth: view.project(point).depth,
+      });
+  }
+  candidates.sort(
+    (a, b) =>
+      a.priority - b.priority || a.pixels - b.pixels || a.depth - b.depth,
+  );
+  return candidates[0]?.hit ?? faceHit(m, view.ray(x, y));
 }

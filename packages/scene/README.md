@@ -1,65 +1,18 @@
-# @gabarito/scene
+# scene
 
-**Status:** implemented — Three.js viewport, Z-up camera, analytic picking
+Derived Three.js rendering and visibility-aware analytic picking.
 
-## Responsibility
+`createViewport(host, store)` owns a canvas, Z-up perspective camera, OrbitControls and disposable
+render resources. It exposes `ray`, `project`, `pick`, `preview`, `frame`, `cameraState` and `dispose`.
+Document geometry remains in core. Face triangles come from geometry's shared triangulator.
 
-Everything between the document and the GPU.
+`pick(model, view, x, y, pixelTolerance)` prefers visible vertices, then edges, then the nearest face.
+The projection contract includes forward depth and near/far visibility. Each point/edge candidate is
+occlusion-tested on the ray through its own world position. There is no relative depth tie.
+`faceHit` intersects actual triangulated material, excluding holes and geometry behind the camera.
+Segments crossing the near plane are omitted from snap targets until both endpoints are in front.
 
-- The renderer, render loop, lights, and grid.
-- The spherical orbit camera and all navigation input.
-- Document → scene rebuilding, on every change of `revision`. A face with holes triangulates as one
-  region, contour plus every hole, so an opening's border renders seamless
-  ([decision 0023](../../docs/decisions/0023-faces-hold-holes.md)).
-- Analytic picking against document entities. A plane hit that lands inside a hole is a miss.
-- Projection helpers used by the tools for snap tolerance and screen-space overlays.
+Middle-button orbit and Shift+middle-button pan use OrbitControls' ROTATE mapping; the modifier is
+handled by OrbitControls. Wheel zoom never sends editing commands. Left mouse belongs to tools.
 
-## Public interface
-
-```ts
-Viewport(container, store)   setHandlers, setPreview, setSnap, markDirty, frameDocument,
-                            resetView, centerView, worldToScreen, pixelsPerWorldUnit,
-                            toleranceAt, raycast, raycastPlane, viewDirection, dispose
-CameraController             orbit, pan, zoom, frame, worldToScreen, screenToRay
-pick(ray, doc, tolerance)    → PickHit | null
-rebuildScene(graph, doc)     derived scene from the document
-COLORS                       shared palette
-```
-
-## Orientation: there is no conversion anywhere
-
-The world is Z-up and Three.js runs in document coordinates directly — the camera simply sets
-`up = +Z`. This removes the axis conversion the original design note anticipated, so picking,
-projection and tool math all share one coordinate system
-([decision 0008](../../docs/decisions/0008-units-coordinates-precision.md)).
-
-## Navigation
-
-| Input | Action |
-|---|---|
-| Middle-mouse drag | Orbit |
-| `Shift` + middle-mouse drag | Pan |
-| Wheel | Zoom, anchored to the pointer |
-| `Home` | Frame the document |
-
-Tool input is bound to the left button only, so navigation and drawing never compete.
-
-## Owns
-
-All Three.js objects. The scene graph is a **derived view**: it is thrown away and rebuilt from the
-document, and nothing is ever read back from it.
-
-## Must not
-
-- Be authoritative for anything ([invariant 5](../../docs/architecture/invariants.md)).
-- Be imported by `ui` (React never touches the viewport) or by `tools`.
-- Let Three.js types appear in another package's public interface — `tools` describes the viewport
-  as its own `ViewportAdapter` and `app` matches them structurally.
-
-## Depends on
-
-`@gabarito/core`, `@gabarito/geometry`, `three`.
-
-## Read next
-
-[`docs/decisions/0003-rendering-engine-threejs.md`](../../docs/decisions/0003-rendering-engine-threejs.md)
+Run `npm test` for headless picking regressions and `npm run test:e2e` for camera gestures.

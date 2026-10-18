@@ -1,88 +1,74 @@
-import { applyCommand, isNoop, revertCommand, type Command, type Inverse } from "./commands";
-import { createDocument } from "./document";
-import type { DocumentState, EntityId, Settings } from "./types";
-
-interface UndoEntry {
-  commands: Command[];
-  inverses: Inverse[];
-}
-
+import { createModel, validate } from "./model";
+import type { Model } from "./model";
+import { apply } from "./edit";
+import type { Command } from "./edit";
+export type { Command } from "./edit";
+export { isClosed } from "./edit";
 export interface Store {
-  getState(): DocumentState;
-  subscribe(listener: (state: DocumentState) => void): () => void;
-  dispatch(command: Command | Command[]): void;
-  undo(): boolean;
-  redo(): boolean;
+  getState(): Model;
+  subscribe(listener: () => void): () => void;
+  execute(command: Command): void;
+  select(ids: string[]): void;
+  undo(): void;
+  redo(): void;
   canUndo(): boolean;
   canRedo(): boolean;
 }
-
-export function createStore(settings?: Partial<Settings>): Store {
-  let state = createDocument(settings);
-  const listeners = new Set<(state: DocumentState) => void>();
-  const undoStack: UndoEntry[] = [];
-  const redoStack: UndoEntry[] = [];
-
-  const notify = (): void => {
-    for (const listener of listeners) listener(state);
+export function createStore(): Store {
+  let state = createModel(),
+    nextId = 1;
+  const history: { before: Model; after: Model }[] = [],
+    future: typeof history = [];
+  const listeners = new Set<() => void>();
+  const publish = (model: Model) => {
+    model.revision = state.revision + 1;
+    model.nextId = Math.max(model.nextId, nextId);
+    nextId = model.nextId;
+    state = model;
+    for (const fn of listeners) fn();
   };
-
-  const run = (commands: Command[]): void => {
-    if (commands.length === 0) return;
-    const inverses = commands.map((command) => applyCommand(state, command));
-    if (inverses.every(isNoop)) return;
-    undoStack.push({ commands, inverses });
-    redoStack.length = 0;
-    state.revision += 1;
-    notify();
-  };
-
   return {
     getState: () => state,
-
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
+    subscribe(fn) {
+      listeners.add(fn);
+      return () => {
+        listeners.delete(fn);
+      };
     },
-
-    dispatch(command) {
-      run(Array.isArray(command) ? command : [command]);
+    execute(command) {
+      const next = structuredClone(state);
+      apply(next, command);
+      validate(next);
+      if (JSON.stringify(next.entities) === JSON.stringify(state.entities))
+        return;
+      history.push({
+        before: structuredClone(state),
+        after: structuredClone(next),
+      });
+      future.length = 0;
+      publish(next);
     },
-
+    select(ids) {
+      publish({
+        ...state,
+        selection: [...new Set(ids)].filter((id) => !!state.entities[id]),
+      });
+    },
     undo() {
-      const entry = undoStack.pop();
-      if (!entry) return false;
-      for (let index = entry.inverses.length - 1; index >= 0; index -= 1) {
-        revertCommand(state, entry.inverses[index]);
+      const h = history.pop();
+      if (h) {
+        future.push(h);
+        publish(structuredClone(h.before));
       }
-      redoStack.push(entry);
-      state.revision += 1;
-      notify();
-      return true;
     },
-
     redo() {
-      const entry = redoStack.pop();
-      if (!entry) return false;
-      const inverses = entry.commands.map((command) => applyCommand(state, command));
-      undoStack.push({ commands: entry.commands, inverses });
-      state.revision += 1;
-      notify();
-      return true;
+      const h = future.pop();
+      if (h) {
+        history.push(h);
+        publish(structuredClone(h.after));
+      }
     },
-
-    canUndo: () => undoStack.length > 0,
-    canRedo: () => redoStack.length > 0,
+    canUndo: () => history.length > 0,
+    canRedo: () => future.length > 0,
   };
-}
-
-/** Convenience helpers used by tools and the UI. */
-export function selectOnly(ids: EntityId[]): Command {
-  return { type: "setSelection", ids };
-}
-
-export function toggleSelection(current: EntityId[], id: EntityId): Command {
-  return current.includes(id)
-    ? { type: "setSelection", ids: current.filter((entry) => entry !== id) }
-    : { type: "setSelection", ids: [...current, id] };
 }

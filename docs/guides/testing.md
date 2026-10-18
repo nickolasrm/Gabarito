@@ -23,11 +23,11 @@ browser test that proves a pixel.
 The highest-value test in this repository. Every command must pass it:
 
 ```ts
-const before = store.snapshotForTest();
+const before = structuredClone(store.getState());
 const command = makeCommand(...);
-store.apply(command);
-store.apply(inverseOf(command));
-expect(store.snapshotForTest()).toEqual(before);
+store.execute(command);
+store.undo();
+expect(store.getState().entities).toEqual(before.entities);
 ```
 
 If a command has no inverse, it must not be a command.
@@ -61,7 +61,7 @@ npm run test:e2e  # real browser, seconds
 
 ### The dev debug handle
 
-`packages/app` attaches `window.__gabarito` (store, viewport, active tool) **in dev builds only**,
+`packages/app` attaches `window.__gabarito` (store, viewport, controller) **in dev builds only**,
 so end-to-end tests can assert real document state instead of guessing from pixels. The bundler
 removes it from production output, and no other code may depend on it.
 
