@@ -4,15 +4,15 @@ import {
   mul,
   dot,
   normal,
-  onPlane,
-  plane,
   rotate,
   sweep,
   surfacesOf,
+  mergeCoplanar,
 } from "@gabarito/geometry";
 import type { Vec3, Segment } from "@gabarito/geometry";
 import {
   draw,
+  conformEdges,
   position,
   edges,
   faces,
@@ -117,46 +117,37 @@ function extrude(
   if (face?.kind !== "face") throw new Error("Choose a face");
   const connected = component(m, face),
     closed = isClosed(connected);
-  if (!closed && connected.length !== 1) {
-    const source = surface(m, face),
-      f = plane(source.outer[0], normal(source.outer));
-    if (
-      !connected.every((other) =>
-        loops(other)
-          .flat()
-          .every((id) => onPlane(position(m, id), f)),
-      )
-    )
-      throw new Error("Repair the open surface before push/pull");
-    const delta = mul(direction ?? f.normal, distance);
-    if (Math.abs(dot(f.normal, delta)) < EPS)
-      throw new Error("Push/pull direction must leave the face plane");
-    delete m.entities[face.id];
-    addSurface(m, {
-      outer: source.outer.map((p) => add(p, delta)),
-      holes: source.holes.map((l) => l.map((p) => add(p, delta))),
-    });
-    for (const loop of [source.outer, ...source.holes])
-      loop.forEach((a, i) => {
-        const b = loop[(i + 1) % loop.length];
-        addSurface(m, {
-          outer: [a, b, add(b, delta), add(a, delta)],
-          holes: [],
-        });
-      });
-    m.selection = [];
-    return;
-  }
   if (closed) orient(m, connected);
   const s = surface(m, face),
     n = normal(s.outer),
     delta = mul(direction ?? n, distance);
-  const mesh = sweep(
-    s,
-    delta,
-    closed ? connected.map((f) => surface(m, f)) : undefined,
-    closed && dot(n, delta) < 0,
-  );
+  if (Math.abs(dot(n, delta)) < EPS)
+    throw new Error("Push/pull direction must leave the face plane");
+  const result =
+    !closed && connected.length > 1
+      ? mergeCoplanar([
+          ...connected
+            .filter((f) => f.id !== face.id)
+            .map((f) => surface(m, f)),
+          {
+            outer: s.outer.map((p) => add(p, delta)),
+            holes: s.holes.map((l) => l.map((p) => add(p, delta))),
+          },
+          ...[s.outer, ...s.holes].flatMap((loop) =>
+            loop.map((a, i) => {
+              const b = loop[(i + 1) % loop.length];
+              return { outer: [a, b, add(b, delta), add(a, delta)], holes: [] };
+            }),
+          ),
+        ])
+      : surfacesOf(
+          sweep(
+            s,
+            delta,
+            closed ? connected.map((f) => surface(m, f)) : undefined,
+            closed && dot(n, delta) < 0,
+          ),
+        );
   const removed = new Set(connected.map((f) => f.id));
   const oldVertices = selectedVertices(m, [...removed]);
   for (const key of removed) delete m.entities[key];
@@ -175,7 +166,8 @@ function extrude(
       delete m.entities[e.id];
   const used = new Set(edges(m).flatMap((e) => e.vertices));
   for (const key of oldVertices) if (!used.has(key)) delete m.entities[key];
-  for (const result of surfacesOf(mesh)) addSurface(m, result);
+  for (const patch of result) addSurface(m, patch);
+  conformEdges(m);
   // Kernel holes are empty regions, not unfinished edge loops awaiting a face.
   for (const f of faces(m))
     for (const hole of f.holes) {

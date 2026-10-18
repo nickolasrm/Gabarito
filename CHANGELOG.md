@@ -1,5 +1,15 @@
 # Changelog
 
+## Raised-sheet push/pull fix — 2026-10-18
+
+- Fixed pushing or pulling a face drawn on top of an already raised sheet. The first extrusion
+  legitimately leaves an open surface, which the former flat-sheet check refused on the next edit.
+- Coplanar swept walls now merge or cancel, allowing extension, retraction and return to flat without
+  overlapping faces. Reused shared-edge splitting preserves adjacent boundaries.
+- Added eight headless and four browser regressions, including mouse/numeric input in both
+  directions, repeated edits, rotated sheets, perimeter/winding checks and undo/redo.
+- Spec: [0022](docs/specs/0022-open-sheet-pushpull.md).
+
 ## Topology rewrite — 2026-10-17
 
 - Replaced the modeler runtime with shared vertices/edges and planar face partitions. Nested drawings

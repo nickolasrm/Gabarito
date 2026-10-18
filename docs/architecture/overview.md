@@ -62,7 +62,7 @@ viewport reaches them through the `ToolView` interface.
 ## Current modeling implementation
 
 Drawing splits segments and walks bounded planar regions, so nested drawings partition a face.
-Closed-shell push/pull goes through Manifold. Open planar sheets use a selected-patch extrusion.
+Closed-shell push/pull goes through Manifold. Open sheets use selected-patch extrusion with coplanar wall merging and cancellation.
 Snapshot transactions validate before publishing and provide undo/redo. See
 [0027](../decisions/0027-topology-rewrite.md) and the owning package READMEs for implementation.
 The old implementation's specs remain historical; spec 0021 describes the replacement.

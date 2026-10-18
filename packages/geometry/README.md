@@ -6,7 +6,7 @@ Headless geometry, independent of every other repository package.
 - `arrangement.ts`: split segment intersections/overlaps, then recover planar cells by half-edge
   walking. `regions` returns outer loops and holes; it does not enumerate arbitrary graph cycles.
 - `kernel.ts`: `initializeGeometry`, shared `triangulate`, general polygon `sweep`, `surfacesOf`,
-  and signed mesh `volume`. Manifold WASM is bundled locally, initialized before editing, and freed
+  signed mesh `volume`, and `mergeCoplanar` for oriented surface unions/cancellations. Manifold WASM is bundled locally, initialized before editing, and freed
   after each boolean. Kernel failures propagate to the transaction boundary.
 
 Public exports are in `src/index.ts`. `Surface` holds world-space outer/hole contours; `Mesh` holds

@@ -1,7 +1,21 @@
 import factory from "manifold-3d";
 import type { ManifoldToplevel, Manifold } from "manifold-3d";
 import wasmUrl from "manifold-3d/manifold.wasm?url";
-import { EPS, V, add, dot, cross, normal, plane, project, area2 } from "./math";
+import {
+  EPS,
+  V,
+  add,
+  dot,
+  cross,
+  normal,
+  plane,
+  project,
+  area2,
+  canonicalPlane,
+  planeKey,
+  unproject,
+  inside,
+} from "./math";
 import type { Vec3 } from "./math";
 export interface Surface {
   outer: Vec3[];
@@ -204,6 +218,66 @@ export function surfacesOf(mesh: Mesh): Surface[] {
     if (outers.length !== 1)
       throw new Error("Solid face has disconnected boundary");
     result.push({ outer: outers[0], holes });
+  }
+  return result;
+}
+
+/** Combine oriented patches; opposite winding cancels retracted walls instead of doubling them. */
+export function mergeCoplanar(surfaces: Surface[]): Surface[] {
+  const groups = new Map<
+    string,
+    { frame: ReturnType<typeof plane>; surfaces: Surface[] }
+  >();
+  for (const surface of surfaces) {
+    const frame = canonicalPlane(surface.outer[0], normal(surface.outer)),
+      key = planeKey(frame);
+    const group = groups.get(key) ?? { frame, surfaces: [] };
+    group.surfaces.push(surface);
+    groups.set(key, group);
+  }
+  const result: Surface[] = [];
+  for (const { frame, surfaces: patches } of groups.values()) {
+    if (patches.length === 1) {
+      result.push(patches[0]);
+      continue;
+    }
+    const contours = patches.flatMap((s) =>
+      [s.outer, ...s.holes].map((l) => l.map((p) => project(p, frame))),
+    );
+    for (const sign of [1, -1]) {
+      const section = new kernel.CrossSection(
+        contours,
+        sign === 1 ? "Positive" : "Negative",
+      );
+      try {
+        const polygons = section.toPolygons();
+        const outers = polygons.filter((l) => area2(l) > EPS * EPS),
+          holes = polygons.filter((l) => area2(l) < -EPS * EPS);
+        const owner = holes.map(
+          (hole) =>
+            outers
+              .map((outer, i) => ({
+                i,
+                area: area2(outer),
+                contains: inside(hole[0], outer),
+              }))
+              .filter((x) => x.contains)
+              .sort((a, b) => a.area - b.area)[0]?.i,
+        );
+        const world = (loop: [number, number][]) => {
+          const points = loop.map((p) => unproject(p, frame));
+          return sign === 1 ? points : points.reverse();
+        };
+        outers.forEach((outer, i) =>
+          result.push({
+            outer: world(outer),
+            holes: holes.filter((_, j) => owner[j] === i).map(world),
+          }),
+        );
+      } finally {
+        section.delete();
+      }
+    }
   }
   return result;
 }

@@ -41,6 +41,8 @@ and by decision records, so a rejected spec keeps its number forever.
 
 | [0021](./0021-rewrite-modeler.md) | Rewrite the basic modeler around shared topology | implemented | geometry, core, scene, tools, ui, app, web | 0027 |
 
+| [0022](./0022-open-sheet-pushpull.md) | Continue push/pull on raised open sheets | implemented | core, geometry | 0027 |
+
 Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 
 ## Writing one

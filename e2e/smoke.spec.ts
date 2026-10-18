@@ -114,6 +114,45 @@ test("partitions a cube surface, cuts a recess and undoes it as one operation", 
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   expect(await count(page, "face")).toBe(7);
 });
+for (const distance of [20, -20])
+  for (const input of ["typed", "mouse"]) {
+    test(`push/pull on a nested raised-sheet face: ${input} ${distance}`, async ({
+      page,
+    }) => {
+      await rectangle(page, { x: 0, y: 0, z: 0 }, "200,200");
+      await rectangle(page, { x: 50, y: 50, z: 0 }, "100,100");
+      await push(page, { x: 100, y: 100, z: 0 }, "100");
+      await rectangle(page, { x: 75, y: 75, z: 100 }, "50,50");
+      const before = (await snapshot(page)).entities;
+      if (input === "typed")
+        await push(page, { x: 100, y: 100, z: 100 }, String(distance));
+      else {
+        await page.getByRole("button", { name: /^Push\/Pull/ }).click();
+        await clickWorld(page, { x: 100, y: 100, z: 100 });
+        const target = await screenOf(page, {
+          x: 100,
+          y: 100,
+          z: 100 + distance,
+        });
+        await page.mouse.move(target.x, target.y, { steps: 8 });
+        await page.mouse.click(target.x, target.y);
+      }
+      await expect(page.getByRole("status")).not.toContainText("Repair");
+      expect(await count(page, "face")).toBe(11);
+      const m = await snapshot(page);
+      expect(
+        Object.values(m.entities).some(
+          (e) =>
+            e.kind === "vertex" &&
+            Math.abs(e.position.z - (100 + distance)) < 1,
+        ),
+      ).toBe(true);
+      await page.getByRole("button", { name: "Undo", exact: true }).click();
+      expect((await snapshot(page)).entities).toEqual(before);
+      await page.getByRole("button", { name: "Redo", exact: true }).click();
+      expect((await snapshot(page)).entities).toEqual(m.entities);
+    });
+  }
 test("closes a polygon from visible vertices with the line tool", async ({
   page,
 }) => {

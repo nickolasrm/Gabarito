@@ -5,6 +5,8 @@ import {
   triangulate,
   volume,
   EPS,
+  rotate,
+  near,
 } from "@gabarito/geometry";
 import type { Vec3 } from "@gabarito/geometry";
 import { createStore, isClosed } from "./store";
@@ -17,6 +19,8 @@ import {
   meshOfModel,
   validate,
   position,
+  loops,
+  edgeKey,
 } from "./model";
 import { parseDimensions } from "./input";
 beforeAll(initializeGeometry);
@@ -324,6 +328,168 @@ describe("open sheets", () => {
         f.outer.every((id) => position(s.getState(), id).z === 0),
       ),
     ).toHaveLength(1);
+  });
+});
+describe("raised open sheets", () => {
+  function raised(): Store {
+    const s = createStore();
+    rectangle(s, 0, 0, 200, 200);
+    rectangle(s, 50, 50, 100, 100);
+    s.execute({ type: "pushpull", face: top(s, 0, 100, 100), distance: 100 });
+    return s;
+  }
+  it.each([20, -20])(
+    "pushes/pulls a nested face on a previously raised sheet by %s",
+    (distance) => {
+      const s = raised();
+      rectangle(s, 75, 75, 50, 50, 100);
+      const m = s.getState(),
+        inner = faces(m).find(
+          (f) =>
+            !f.holes.length &&
+            f.outer.every((id) => {
+              const p = position(m, id);
+              return (
+                p.z === 100 &&
+                p.x >= 75 &&
+                p.x <= 125 &&
+                p.y >= 75 &&
+                p.y <= 125
+              );
+            }),
+        )!;
+      inverse(s, { type: "pushpull", face: inner.id, distance });
+      expect(faces(s.getState())).toHaveLength(11);
+      expect(
+        vertices(s.getState()).some(
+          (v) => Math.abs(v.position.z - (100 + distance)) < EPS,
+        ),
+      ).toBe(true);
+      expect(isClosed(faces(s.getState()))).toBe(false);
+      validate(s.getState());
+    },
+  );
+  it("repeatedly pushes and refills nested top faces while preserving the sheet perimeter", () => {
+    const s = raised();
+    for (const distance of [20, -20, 30, -30]) {
+      rectangle(s, 75, 75, 50, 50, 100);
+      const m = s.getState(),
+        inner = faces(m).find(
+          (f) =>
+            !f.holes.length &&
+            f.outer.every((id) => {
+              const p = position(m, id);
+              return (
+                p.z === 100 &&
+                p.x >= 75 &&
+                p.x <= 125 &&
+                p.y >= 75 &&
+                p.y <= 125
+              );
+            }),
+        )!;
+      s.execute({ type: "pushpull", face: inner.id, distance });
+      const cap = faces(s.getState()).find((f) =>
+        f.outer.every(
+          (id) =>
+            Math.abs(position(s.getState(), id).z - (100 + distance)) < EPS,
+        ),
+      )!;
+      s.execute({ type: "pushpull", face: cap.id, distance: -distance });
+      expect(faces(s.getState())).toHaveLength(6);
+      expect(area(s)).toBeCloseTo(80000);
+      const counts = new Map<string, number>(),
+        directions = new Map<string, number>();
+      for (const f of faces(s.getState()))
+        for (const l of loops(f))
+          l.forEach((a, i) => {
+            const b = l[(i + 1) % l.length],
+              k = edgeKey(a, b);
+            counts.set(k, (counts.get(k) ?? 0) + 1);
+            directions.set(k, (directions.get(k) ?? 0) + (a < b ? 1 : -1));
+          });
+      expect([...counts.values()].filter((n) => n === 1)).toHaveLength(4);
+      expect([...counts.values()].every((n) => n === 1 || n === 2)).toBe(true);
+      for (const [key, n] of counts)
+        if (n === 2) expect(directions.get(key)).toBe(0);
+    }
+  });
+  it("pushes a nested face on a rotated raised sheet", () => {
+    const s = raised(),
+      transform = (p: Vec3) => rotate(p, V(), V(1, 2, 3), Math.PI / 5);
+    s.execute({
+      type: "rotate",
+      ids: Object.keys(s.getState().entities),
+      center: V(),
+      axis: V(1, 2, 3),
+      angle: Math.PI / 5,
+    });
+    const ps = [
+      V(75, 75, 100),
+      V(125, 75, 100),
+      V(125, 125, 100),
+      V(75, 125, 100),
+    ].map(transform);
+    s.execute({
+      type: "draw",
+      segments: ps.map((p, i) => [p, ps[(i + 1) % 4]]),
+    });
+    const inner = faces(s.getState()).find((f) =>
+      f.outer.every((id) =>
+        ps.some((p) => near(p, position(s.getState(), id))),
+      ),
+    )!;
+    s.execute({ type: "pushpull", face: inner.id, distance: -20 });
+    expect(
+      vertices(s.getState()).some((v) =>
+        near(v.position, transform(V(75, 75, 80))),
+      ),
+    ).toBe(true);
+    validate(s.getState());
+  });
+  it("still rejects tangent extrusion without changing the model or history", () => {
+    const s = raised(),
+      before = structuredClone(s.getState());
+    expect(() =>
+      s.execute({
+        type: "pushpull",
+        face: top(s, 100, 100, 100),
+        distance: 20,
+        direction: V(1, 0, 0),
+      }),
+    ).toThrow(/leave the face plane/);
+    expect(s.getState()).toEqual(before);
+    s.undo();
+    expect(faces(s.getState())).toHaveLength(2);
+  });
+  it("retracts the entire raised top without overlapping side walls", () => {
+    const s = raised();
+    inverse(s, {
+      type: "pushpull",
+      face: top(s, 100, 100, 100),
+      distance: -40,
+    });
+    expect(area(s)).toBeCloseTo(40000 + 400 * 60);
+    expect(
+      Math.max(...vertices(s.getState()).map((v) => v.position.z)),
+    ).toBeCloseTo(60);
+    expect(faces(s.getState())).toHaveLength(6);
+  });
+  it("extends a raised top without seams in the existing walls", () => {
+    const s = raised();
+    s.execute({ type: "pushpull", face: top(s, 100, 100, 100), distance: 40 });
+    expect(area(s)).toBeCloseTo(40000 + 400 * 140);
+    expect(faces(s.getState())).toHaveLength(6);
+  });
+  it("returns a raised patch to the sheet without duplicate base faces", () => {
+    const s = raised();
+    s.execute({
+      type: "pushpull",
+      face: top(s, 100, 100, 100),
+      distance: -100,
+    });
+    expect(area(s)).toBeCloseTo(40000);
+    expect(faces(s.getState())).toHaveLength(1);
   });
 });
 describe("transactions", () => {

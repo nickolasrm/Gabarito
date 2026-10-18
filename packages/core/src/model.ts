@@ -174,16 +174,13 @@ export function rebuildFaces(m: Model, only?: Plane[]): void {
     }
   }
 }
-export function draw(m: Model, segments: Segment[]): void {
-  for (const [a, b] of segments)
-    if (!finite(a) || !finite(b) || near(a, b))
-      throw new Error("Draw a nonzero finite edge");
+export function conformEdges(m: Model, additions: Segment[] = []): void {
   const originalEdges = edges(m),
     all: Segment[] = [
       ...originalEdges.map(
         (e) => e.vertices.map((id) => position(m, id)) as Segment,
       ),
-      ...segments,
+      ...additions,
     ];
   const split = splitSegments(all),
     ids = split.points.map((p) => weld(m, p));
@@ -217,6 +214,12 @@ export function draw(m: Model, segments: Segment[]): void {
   for (const e of originalEdges)
     if (!desired.has(edgeKey(...e.vertices))) delete m.entities[e.id];
   for (const [a, b] of split.edges) addEdge(m, ids[a], ids[b]);
+}
+export function draw(m: Model, segments: Segment[]): void {
+  for (const [a, b] of segments)
+    if (!finite(a) || !finite(b) || near(a, b))
+      throw new Error("Draw a nonzero finite edge");
+  conformEdges(m, segments);
   const planes = candidatePlanes(m).filter((f) =>
     segments.some((s) => s.every((p) => onPlane(p, f))),
   );
