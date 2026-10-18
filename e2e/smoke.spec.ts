@@ -948,3 +948,120 @@ test("line axis pins reset after each segment, Escape and tool changes", async (
     await page.evaluate(() => window.__gabarito.controller.status().axis),
   ).toBe("Free");
 });
+
+async function addConstrainedReference(
+  page: Page,
+  kind: "vertex" | "edge" | "face",
+) {
+  await page.evaluate((kind) => {
+    const { store } = window.__gabarito;
+    const p = [
+      { x: 100, y: -150, z: 80 },
+      { x: 200, y: -150, z: 80 },
+      { x: 200, y: -50, z: 80 },
+      { x: 100, y: -50, z: 80 },
+    ];
+    store.execute({
+      type: "draw",
+      segments:
+        kind === "face"
+          ? p.map((a, i) => [a, p[(i + 1) % 4]])
+          : [
+              [
+                { x: 140, y: -180, z: 80 },
+                { x: 160, y: -180, z: 80 },
+              ],
+            ],
+    });
+  }, kind);
+  return kind === "face"
+    ? { x: 150, y: -100, z: 80 }
+    : { x: kind === "vertex" ? 140 : 150, y: -180, z: 80 };
+}
+for (const gesture of ["click", "drag"] as const) {
+  test(`push/pull ${gesture} aligns to an explicitly aimed face far from free depth`, async ({
+    page,
+  }) => {
+    await rectangle(page);
+    const ref = await addConstrainedReference(page, "face"),
+      before = await snapshot(page);
+    await page.getByRole("button", { name: /^Push\/Pull/ }).click();
+    const a = await screenOf(page, { x: 50, y: 80, z: 0 }),
+      b = await screenOf(page, ref);
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    if (gesture === "click") await page.mouse.up();
+    await page.mouse.move(b.x, b.y);
+    await expect(page.locator(".cursor-hint")).toContainText("Face level");
+    if (gesture === "click") await page.mouse.down();
+    await page.mouse.up();
+    const after = await snapshot(page);
+    expect(
+      Object.values(after.entities).some(
+        (e) =>
+          e.kind === "face" &&
+          e.outer.every((id) => {
+            const v = after.entities[id];
+            return (
+              v.kind === "vertex" &&
+              Math.abs(v.position.z - 80) < 0.00001 &&
+              v.position.y >= 0
+            );
+          }),
+      ),
+    ).toBe(true);
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    expect((await snapshot(page)).entities).toEqual(before.entities);
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    expect((await snapshot(page)).entities).toEqual(after.entities);
+  });
+}
+for (const [kind, axis, key] of [
+  ["vertex", "x", "ArrowRight"],
+  ["edge", "y", "ArrowLeft"],
+  ["face", "z", "ArrowUp"],
+] as const) {
+  test(`Move pinned to ${axis.toUpperCase()} matches a hovered ${kind} reference`, async ({
+    page,
+  }) => {
+    await rectangle(page);
+    const initial = await snapshot(page),
+      source = Object.values(initial.entities).find((e) => e.kind === "face")!;
+    if (source.kind !== "face") throw new Error("Expected source face");
+    const ref = await addConstrainedReference(page, kind),
+      before = await snapshot(page);
+    await page.evaluate(
+      (id) => window.__gabarito.store.select([id]),
+      source.id,
+    );
+    await page.getByRole("button", { name: /^Move/ }).click();
+    await clickWorld(page, { x: 0, y: 0, z: 0 });
+    await page.keyboard.press(key);
+    const b = await screenOf(page, ref);
+    await page.mouse.move(b.x, b.y);
+    await expect(page.locator(".cursor-hint")).toContainText(
+      `${kind[0].toUpperCase() + kind.slice(1)} level`,
+    );
+    if (kind !== "face")
+      await expect(page.locator(".snap-marker")).toBeVisible();
+    await page.mouse.click(b.x, b.y);
+    const after = await snapshot(page),
+      delta = ref[axis];
+    for (const id of source.outer) {
+      const v = after.entities[id],
+        old = before.entities[id];
+      if (v.kind !== "vertex" || old.kind !== "vertex")
+        throw new Error("Expected source vertex");
+      for (const coordinate of ["x", "y", "z"] as const)
+        expect(v.position[coordinate]).toBeCloseTo(
+          old.position[coordinate] + (coordinate === axis ? delta : 0),
+          5,
+        );
+    }
+    expect(
+      await page.evaluate(() => window.__gabarito.controller.status().axis),
+    ).toBe("Free");
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    expect((await snapshot(page)).entities).toEqual(before.entities);
+  });
+}

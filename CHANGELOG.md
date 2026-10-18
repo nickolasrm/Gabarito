@@ -1,5 +1,14 @@
 # Changelog
 
+## Constrained reference snapping — 2026-10-18
+
+- Push/Pull aligns to an explicitly hovered face plane even when the free depth is far from it.
+  The zero-level guard still prevents accidental resets to the starting plane.
+- Axis-pinned Move now shares the reference resolver: vertex, edge and ruler coordinates or a face
+  plane determine the pinned coordinate while the other two stay fixed. Feedback shows the target,
+  connector and level. Alt bypass, typed dimensions and history keep their existing behavior.
+- Spec: [0031](docs/specs/0031-constrained-reference-snapping.md).
+
 ## Tool inference and input lifecycle fixes — 2026-10-18
 
 - Tape Measure now uses shared face midpoint, diagonal and intersection snapping, with inference

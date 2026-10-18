@@ -50,9 +50,13 @@ material targets. Intersections can lock both coordinates. Feedback includes the
 reference line. `midpointEdge` resolves source provenance, so virtual midpoint hits still produce
 edge-parallel rulers. Hits carry `sourceEdge` when needed.
 
-`extrusion-snap.ts` matches a hovered vertex/edge elevation or a nearby crossing face plane along
-the existing extrusion axis. Face and zero-level snaps require proximity; the active face and
-parallel face planes are excluded. Feedback names the level and connects it to the extrusion axis.
+`axis-snap.ts` is the shared constrained reference resolver for Push/Pull and axis-pinned Move.
+Vertex/edge/ruler references contribute their coordinate along the active axis. A hovered face
+contributes the axis/plane intersection, even when the unconstrained depth is far from that plane.
+Only zero-level snaps require proximity, preventing accidental resets during free dragging. The
+active extrusion face, selected Move entities, invisible targets and parallel planes are excluded.
+Feedback shows the aimed target, connecting line, level label and distance. Preview and commit use
+the same point; Alt and exact typed values retain priority.
 
 `ToolView.visible(point)` applies scene occlusion to inferred reference points. `setSnapping(false)`
 bypasses feature picking, face/proportion/automatic-axis inference and push/pull references; it

@@ -57,6 +57,8 @@ and by decision records, so a rejected spec keeps its number forever.
 | [0029](./0029-dual-pushpull-gestures.md) | Support click and drag Push/Pull gestures together | implemented | tools, app, ui | 0012, 0027 |
 | [0030](./0030-reset-axis-pins.md) | Clear axis pins when a tool operation ends | implemented | tools | 0012, 0018 |
 
+| [0031](./0031-constrained-reference-snapping.md) | Align constrained edits to explicitly hovered references | implemented | tools | 0012, 0018, 0027 |
+
 Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 
 ## Writing one

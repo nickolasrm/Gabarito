@@ -1,5 +1,5 @@
 import { snapOnFace, midpointEdge } from "./face-snap";
-import { snapExtrusion } from "./extrusion-snap";
+import { snapAlongAxis } from "./axis-snap";
 import { rectangleRatio, snapProportion } from "./proportions";
 import {
   V,
@@ -191,7 +191,8 @@ export function createController(store: Store, view: ToolView): Controller {
               e.vertices.map((id) =>
                 selected.has(id) ? transform(position(m, id)) : position(m, id),
               ) as Segment,
-          ),
+          )
+          .concat(inferenceLines),
         guides(m)
           .filter((g) => m.selection.includes(g.id))
           .map((g) => ({
@@ -214,7 +215,10 @@ export function createController(store: Store, view: ToolView): Controller {
         ? [measurement, inferenceLabel].filter(Boolean).join(" · ")
         : [
             inferenceLabel,
-            ratio || (tool === "pushpull" && inferenceLabel ? measurement : ""),
+            ratio ||
+              ((tool === "pushpull" || tool === "move") && inferenceLabel
+                ? measurement
+                : ""),
           ]
             .filter(Boolean)
             .join(" · "),
@@ -444,14 +448,22 @@ export function createController(store: Store, view: ToolView): Controller {
         inferenceLabel = inferred.label;
       } else if (proportion) end = proportion;
     }
-    if (snapping && start && tool === "pushpull") {
-      const inferred = snapExtrusion(
+    if (
+      snapping &&
+      start &&
+      (tool === "pushpull" || (tool === "move" && axis))
+    ) {
+      const target =
+        tool === "move" && hit && store.getState().selection.includes(hit.id)
+          ? null
+          : hit;
+      const inferred = snapAlongAxis(
         store.getState(),
         start,
         end,
         direction(),
-        faceId,
-        hit,
+        tool === "pushpull" ? faceId : "",
+        target,
         view,
       );
       if (inferred) {
@@ -484,9 +496,9 @@ export function createController(store: Store, view: ToolView): Controller {
     current = end;
     view.feedback(
       hit &&
-        (tool === "pushpull"
-          ? !start || !!inferenceLabel
-          : near(end, hit.point)) &&
+        (!!inferenceLabel ||
+          near(end, hit.point) ||
+          (tool === "pushpull" && !start)) &&
         (snapping || tool === "select" || tool === "pushpull")
         ? hit
         : null,
