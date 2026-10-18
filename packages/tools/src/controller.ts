@@ -1,600 +1,469 @@
-import { poly as polyOps, ray as rayOps, vec3 } from "@gabarito/geometry";
-import type { Plane, Ray, Vec3 } from "@gabarito/geometry";
 import {
-  edgesOf,
-  facePositions,
-  facesOf,
-  findPointNear,
-  getPoint,
-  pointsOf,
-  parseAngle,
-  parseLength,
-  unitSuffix,
-  type Command,
-  type EntityId,
-  type Store,
+  V,
+  EPS,
+  add,
+  sub,
+  mul,
+  dot,
+  cross,
+  length,
+  unit,
+  normal,
+  plane,
+  project,
+  intersectPlane,
+  axisPoint,
+  axisVector,
+  rotate,
+} from "@gabarito/geometry";
+import type { Vec3, Axis, Segment } from "@gabarito/geometry";
+import {
+  parseDimensions,
+  position,
+  faces,
+  edges,
+  loops,
+  facePlane,
+  selectedVertices,
 } from "@gabarito/core";
-import { axisForArrow } from "./axis-lock";
-import { resolveSnap } from "./inference";
-import { axisPlaneBasis, axisPlaneNormal } from "./planes";
-import { createTools } from "./tools";
-import type {
-  AxisLockState,
-  DrawingPlane,
-  PickResult,
-  SnapResult,
-  Tool,
-  ToolContext,
-  ToolId,
-  ToolPointerEvent,
-  ToolPreview,
-} from "./types";
-
-/**
- * The part of the viewport the tools need. Declared here so `tools` never imports
- * `scene` or three.js; `app` passes the viewport straight in, matched structurally
- * (module boundaries).
- */
-export interface ViewportAdapter {
-  raycast(screenX: number, screenY: number): PickResult | null;
-  /** The pointer ray in world space. */
-  rayAt(screenX: number, screenY: number): Ray;
-  /** The face under the pointer, ignoring nearer points and edges. */
-  raycastFace(screenX: number, screenY: number): PickResult | null;
-  raycastPlane(screenX: number, screenY: number, plane: Plane): Vec3 | null;
-  worldToScreen(point: Vec3): { x: number; y: number; visible: boolean };
-  pixelsPerWorldUnit(at: Vec3): number;
-  /** Direction from the camera into the scene, used to build camera-facing planes. */
-  viewDirection(): Vec3;
-}
-
-export interface PointerState {
-  screenX: number;
-  screenY: number;
-  button: number;
-  buttons: number;
-  shiftKey: boolean;
-  ctrlKey: boolean;
-  altKey: boolean;
-  metaKey: boolean;
-}
-
-export interface ToolStatus {
-  toolId: ToolId;
-  label: string;
-  /** Which plane the next click will land on: "Ground", "Face", "Axis Z". */
-  planeLabel: string;
-  hint: string;
-  numberHint: string | null;
-  typed: string;
-  readout: string | null;
-  snapLabel: string;
-  axisKey: "x" | "y" | "z" | null;
-  unit: string;
-  suffix: string;
-  active: boolean;
-}
-
-export interface SnapIndicator {
-  position: Vec3;
-  kind: string;
-  axis: { origin: Vec3; direction: Vec3 } | null;
-  axisKey: "x" | "y" | "z" | null;
-}
-
-export const EMPTY_PREVIEW: ToolPreview = { segments: [], polygons: [], points: [] };
-
-const GROUND_PLANE: Plane = { origin: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 } };
-
-/**
- * An orthonormal in-plane basis with `u × v = normal`, chosen so that leaning on the
- * ground plane puts +u on +X and +v on +Y: a typed `100, 50` then grows the rectangle
- * towards the user's view of positive space instead of away from it.
- */
-function basisFor(normal: Vec3): { u: Vec3; v: Vec3 } {
-  if (Math.abs(normal.z) > 0.9) {
-    const u = { x: normal.z > 0 ? 1 : -1, y: 0, z: 0 };
-    return { u, v: { x: 0, y: 1, z: 0 } };
-  }
-  const u = vec3.normalize(vec3.cross({ x: 0, y: 0, z: 1 }, normal));
-  const v = vec3.normalize(vec3.cross(normal, u));
-  return { u, v };
-}
-
-/**
- * A plane through a point that *contains* an axis and faces the camera as squarely as
- * possible. This is what makes a locked axis usable on the third dimension: with the
- * ground plane, a point locked to Z can never leave z = 0.
- */
-function planeContainingAxis(
-  axis: Vec3,
-  origin: Vec3,
-  viewDirection: Vec3,
-  label: string,
-): DrawingPlane {
-  return { ...axisPlaneBasis(axis, axisPlaneNormal(axis, viewDirection), origin), label };
-}
-
-/**
- * Owns the tool lifecycle, pointer routing, the typed-value buffer, and the axis lock.
- * Tools declare what numbers they accept and never see raw text (decision 0012).
- */
-export class ToolController {
-  private readonly store: Store;
-  private readonly viewport: ViewportAdapter;
-  private readonly onChange: () => void;
-  private readonly tools: Map<ToolId, Tool>;
-
-  private activeId: ToolId = "select";
-  private cursor: Vec3 = { x: 0, y: 0, z: 0 };
-  private snap: SnapResult | null = null;
-  private preview: ToolPreview = EMPTY_PREVIEW;
-  private typed = "";
-  private lockSpec: { axisKey: "x" | "y" | "z"; sign: 1 | -1 } | null = null;
-  private plane: DrawingPlane = {
-    plane: GROUND_PLANE,
-    normal: GROUND_PLANE.normal,
-    u: { x: 1, y: 0, z: 0 },
-    v: { x: 0, y: 1, z: 0 },
-    label: "Ground",
+import type { Store, Unit, Command } from "@gabarito/core";
+import { TOOLS } from "./types";
+import type { Tool, ToolView, Controller } from "./types";
+export function createController(store: Store, view: ToolView): Controller {
+  let tool: Tool = "select",
+    start: Vec3 | null = null,
+    first: Vec3 | null = null,
+    current = V(),
+    drawingPlane = plane(V(), V(0, 0, 1));
+  let reference: Vec3 | null = null,
+    faceId = "",
+    axis: Axis | null = null,
+    axisSign = 1,
+    typed = "",
+    message = "",
+    measurement = "",
+    unitId: Unit = "mm";
+  let lastX = 0,
+    lastY = 0;
+  const listeners = new Set<() => void>();
+  const emit = () => {
+    for (const fn of listeners) fn();
   };
-
-  constructor(store: Store, viewport: ViewportAdapter, onChange: () => void) {
-    this.store = store;
-    this.viewport = viewport;
-    this.onChange = onChange;
-    this.tools = new Map(createTools().map((tool) => [tool.id, tool]));
-    this.tools.get(this.activeId)?.activate?.(this.context());
-  }
-
-  getActiveTool(): Tool {
-    return this.tools.get(this.activeId) as Tool;
-  }
-
-  getActiveToolId(): ToolId {
-    return this.activeId;
-  }
-
-  getToolMeta(id: ToolId): { label: string; shortcut: string } {
-    const tool = this.tools.get(id);
-    return { label: tool?.label ?? id, shortcut: tool?.shortcut ?? "" };
-  }
-
-  /** CSS cursor for the active tool. */
-  getCursor(): string {
-    return this.getActiveTool().cursor || "default";
-  }
-
-  setTool(id: ToolId): void {
-    if (id === this.activeId) return;
-    const previous = this.tools.get(this.activeId);
-    previous?.deactivate?.(this.context());
-    this.activeId = id;
-    this.reset();
-    this.getActiveTool().activate?.(this.context());
-    this.onChange();
-  }
-
-  private reset(): void {
-    this.typed = "";
-    this.lockSpec = null;
-    this.preview = EMPTY_PREVIEW;
-  }
-
-  /**
-   * A context with no axis lock. Used to ask the tool for its anchor, which is what the
-   * lock is built from — asking with a lock in place would recurse.
-   */
-  private bareContext(): ToolContext {
-    const state = this.store.getState();
-    return {
-      doc: state,
-      settings: state.settings,
-      cursor: this.cursor,
-      axisLock: null,
-      dispatch: (command: Command | Command[]) => this.store.dispatch(command),
-      preview: (next) => {
-        this.preview = next;
-      },
-      pick: (x, y) => this.viewport.raycast(x, y),
-      project: (point) => this.viewport.worldToScreen(point),
-      planeAt: (x, y) => this.planeAt(x, y),
-      viewPlaneAt: (point) => ({ origin: point, normal: vec3.neg(this.viewport.viewDirection()) }),
-      viewDirection: () => this.viewport.viewDirection(),
-      worldOnPlane: (x, y, plane) => this.viewport.raycastPlane(x, y, plane),
-      pixelsPerWorldUnit: (at) => this.viewport.pixelsPerWorldUnit(at),
-    };
-  }
-
-  private currentAnchor(): Vec3 | null {
-    return this.getActiveTool().axisAnchor?.(this.bareContext()) ?? null;
-  }
-
-  private currentLock(): AxisLockState | null {
-    if (!this.lockSpec) return null;
-    const origin = this.currentAnchor() ?? this.cursor;
-    const base =
-      this.lockSpec.axisKey === "x"
-        ? { x: 1, y: 0, z: 0 }
-        : this.lockSpec.axisKey === "y"
-          ? { x: 0, y: 1, z: 0 }
-          : { x: 0, y: 0, z: 1 };
-    return {
-      axisKey: this.lockSpec.axisKey,
-      direction: vec3.scale(base, this.lockSpec.sign),
-      origin,
-    };
-  }
-
-  private context(): ToolContext {
-    const context = this.bareContext();
-    context.axisLock = this.currentLock();
-    return context;
-  }
-
-  /**
-   * A face that touches the given point or edge. Clicking an edge or a vertex of a face
-   * means that face, so the drawing plane should follow it instead of falling back to the
-   * ground.
-   */
-  private incidentFace(entityId: EntityId): EntityId | null {
-    const doc = this.store.getState();
-    const entity = doc.entities[entityId];
-    if (!entity) return null;
-    const ids =
-      entity.kind === "point" ? [entity.id] : entity.kind === "edge" ? entity.points : null;
-    if (!ids) return null;
-    for (const face of facesOf(doc)) {
-      const loops = [face.points, ...(face.holes ?? [])];
-      if (loops.some((loop) => ids.some((id) => loop.includes(id)))) return face.id;
+  const cancel = () => {
+    start = null;
+    first = null;
+    reference = null;
+    faceId = "";
+    typed = "";
+    message = "";
+    measurement = "";
+    view.preview([]);
+    emit();
+  };
+  const direction = (): Vec3 =>
+    axis
+      ? mul(axisVector(axis), axisSign)
+      : tool === "pushpull"
+        ? normal(
+            faces(store.getState())
+              .find((f) => f.id === faceId)!
+              .outer.map((id) => position(store.getState(), id)),
+          )
+        : unit(sub(current, start ?? V()));
+  const run = (c: Command): boolean => {
+    try {
+      store.execute(c);
+      message = "";
+      return true;
+    } catch (e) {
+      message = e instanceof Error ? e.message : String(e);
+      emit();
+      return false;
     }
-    return null;
-  }
-
-  /**
-   * What the pointer is aiming at, by the same tolerances the snapper uses: a vertex first,
-   * then an edge, then a face.
-   *
-   * The plane has to come from this rather than from a face-first lookup. Querying faces
-   * first meant that as soon as any face existed under the cursor, the edge or vertex the
-   * user actually pointed at was never consulted and the plane stayed with the face.
-   */
-  private planeTarget(
-    screenX: number,
-    screenY: number,
-  ): { kind: "point" | "edge" | "face"; id: EntityId; point: Vec3 } | null {
-    const doc = this.store.getState();
-    const ray = this.viewport.rayAt(screenX, screenY);
-    const reference = this.viewport.raycastPlane(screenX, screenY, GROUND_PLANE) ?? this.cursor;
-    const tolerance = this.viewport.pixelsPerWorldUnit(reference) * 12;
-
-    let bestVertex: { id: EntityId; position: Vec3; distance: number } | null = null;
-    for (const point of pointsOf(doc)) {
-      const along = vec3.dot(vec3.sub(point.position, ray.origin), ray.direction);
-      if (along <= 0) continue;
-      const nearest = vec3.add(ray.origin, vec3.scale(ray.direction, Math.max(along, 0)));
-      const distance = vec3.dist(nearest, point.position);
-      if (distance <= tolerance * 1.4 && (!bestVertex || distance < bestVertex.distance)) {
-        bestVertex = { id: point.id, position: point.position, distance };
-      }
+  };
+  const rectangle = (end: Vec3): Vec3[] => {
+    const [x, y] = project(end, { ...drawingPlane, origin: start! });
+    return [
+      start!,
+      add(start!, mul(drawingPlane.u, x)),
+      end,
+      add(start!, mul(drawingPlane.v, y)),
+    ];
+  };
+  const polygonSegments = (ps: Vec3[]): Segment[] =>
+    ps.map((p, i) => [p, ps[(i + 1) % ps.length]]);
+  const rotatedAngle = (p: Vec3): number => {
+    const n = axis ? mul(axisVector(axis), axisSign) : drawingPlane.normal;
+    const a = unit(sub(reference ?? add(start!, drawingPlane.u), start!)),
+      b = unit(sub(p, start!));
+    return Math.atan2(dot(n, cross(a, b)), dot(a, b));
+  };
+  const updatePreview = () => {
+    if (!start) {
+      view.preview([]);
+      return;
     }
-    if (bestVertex) return { kind: "point", id: bestVertex.id, point: bestVertex.position };
-
-    let bestEdge: { id: EntityId; point: Vec3; distance: number } | null = null;
-    for (const edge of edgesOf(doc)) {
-      const a = getPoint(doc, edge.points[0]);
-      const b = getPoint(doc, edge.points[1]);
-      if (!a || !b) continue;
-      const closest = rayOps.closestPointsToSegment(ray, { a, b });
-      if (closest.dist > tolerance) continue;
-      if (!bestEdge || closest.dist < bestEdge.distance) {
-        bestEdge = { id: edge.id, point: closest.onSegment, distance: closest.dist };
-      }
-    }
-    if (bestEdge) return { kind: "edge", id: bestEdge.id, point: bestEdge.point };
-
-    const face = this.viewport.raycastFace(screenX, screenY);
-    if (face) return { kind: "face", id: face.entityId, point: face.point };
-    return null;
-  }
-
-  /** Directions of the edges attached to a point or an edge, deduplicated and unit length. */
-  private attachedEdgeDirections(entityId: EntityId): Vec3[] {
-    const doc = this.store.getState();
-    const entity = doc.entities[entityId];
-    if (!entity) return [];
-    const vertices: EntityId[] =
-      entity.kind === "point" ? [entity.id] : entity.kind === "edge" ? [...entity.points] : [];
-    const directions: Vec3[] = [];
-    for (const edge of edgesOf(doc)) {
-      if (!vertices.some((id) => edge.points.includes(id))) continue;
-      const a = getPoint(doc, edge.points[0]);
-      const b = getPoint(doc, edge.points[1]);
-      if (!a || !b) continue;
-      const direction = vec3.normalize(vec3.sub(b, a));
-      if (directions.some((existing) => Math.abs(Math.abs(vec3.dot(existing, direction)) - 1) < 0.01)) {
-        continue;
-      }
-      directions.push(direction);
-    }
-    return directions;
-  }
-
-  /**
-   * The plane implied by the targeted geometry, combined with the edges attached to the
-   * anchor.
-   *
-   * Two non-parallel edges define a plane, and both halves matter: starting at the top of an
-   * L the anchor supplies the upright edge while the pointer supplies the horizontal one, so
-   * the plane only exists once both are known.
-   */
-  private edgePlane(target: { id: EntityId; point: Vec3 }): DrawingPlane | null {
-    const doc = this.store.getState();
-    const anchor = this.currentAnchor();
-    const origin = anchor ?? target.point;
-
-    const directions: Vec3[] = [];
-    const anchorPoint = anchor ? findPointNear(doc, anchor) : null;
-    for (const direction of [
-      ...(anchorPoint ? this.attachedEdgeDirections(anchorPoint.id) : []),
-      ...this.attachedEdgeDirections(target.id),
-    ]) {
-      if (directions.some((existing) => Math.abs(Math.abs(vec3.dot(existing, direction)) - 1) < 0.01)) {
-        continue;
-      }
-      directions.push(direction);
-    }
-    if (directions.length === 0) return null;
-
-    // The plane must contain the line from the anchor to where the pointer is. That line is
-    // the rectangle's own diagonal, so containing it is what lets the shape reach the
-    // pointer. Choosing a plane that does not contain it projects one extent to zero, the
-    // preview collapses to a line, and nothing is created at all.
-    const span = vec3.sub(target.point, origin);
-    if (!vec3.isZero(span, 0.01)) {
-      const unit = vec3.normalize(span);
-      // A rectangle's axes are the plane's axes and the span is its diagonal, so the shape
-      // is healthy when the diagonal sits at about 45 degrees to each of them and both
-      // extents come out real. Perpendicular to the span zeroes one extent and parallel to
-      // it zeroes the other, so the best candidate is the one closest to 45 degrees.
-      let best: { direction: Vec3; score: number } | null = null;
-      for (const direction of directions) {
-        const alignment = Math.min(1, Math.abs(vec3.dot(direction, unit)));
-        const score = Math.min(alignment, Math.sqrt(Math.max(0, 1 - alignment * alignment)));
-        if (!best || score > best.score) best = { direction, score };
-      }
-      // Every candidate parallel or perpendicular to the drag: nothing sane to build on.
-      if (best && best.score > 0.05) {
-        const normal = vec3.cross(unit, best.direction);
-        if (!vec3.isZero(normal, 0.05)) {
-          return { ...axisPlaneBasis(best.direction, vec3.normalize(normal), origin), label: "Edges" };
-        }
-      }
-    }
-
-    // No drag yet, or every candidate is parallel to it: fall back to the edges at the point
-    // itself. A lone ground-level edge deliberately decides nothing.
-    const first = directions[0];
-    const second = directions[1];
-    if (second) {
-      const normal = vec3.cross(first, second);
-      if (!vec3.isZero(normal, 0.05)) {
-        return { ...axisPlaneBasis(first, vec3.normalize(normal), origin), label: "Edges" };
-      }
-    }
-    if (Math.abs(first.z) < 0.9) return null;
-    return planeContainingAxis(first, origin, this.viewport.viewDirection(), "Edge");
-  }
-
-  private planeAt(screenX: number, screenY: number): DrawingPlane {
-    const lock = this.currentLock();
-    if (lock) {
-      const anchor = this.currentAnchor();
-      const origin =
-        anchor ??
-        this.viewport.raycastPlane(screenX, screenY, GROUND_PLANE) ??
-        this.cursor;
-      return planeContainingAxis(
-        lock.direction,
-        origin,
-        this.viewport.viewDirection(),
-        `Axis ${lock.axisKey.toUpperCase()}`,
+    if (tool === "line") view.preview([[start, current]]);
+    else if (tool === "rectangle")
+      view.preview(polygonSegments(rectangle(current)));
+    else if (tool === "pushpull") {
+      const f = faces(store.getState()).find((f) => f.id === faceId);
+      if (!f) return;
+      const d = mul(direction(), dot(sub(current, start), direction()));
+      view.preview(
+        loops(f).flatMap((l) =>
+          l.flatMap((id, i) => {
+            const a = position(store.getState(), id),
+              b = position(store.getState(), l[(i + 1) % l.length]);
+            return [
+              [add(a, d), add(b, d)],
+              [a, add(a, d)],
+            ] as Segment[];
+          }),
+        ),
+      );
+    } else if (tool === "move" || tool === "rotate") {
+      const m = store.getState(),
+        selected = selectedVertices(m, m.selection),
+        delta = sub(current, start),
+        angle = rotatedAngle(current);
+      const transform = (p: Vec3) =>
+        tool === "move"
+          ? add(p, delta)
+          : rotate(
+              p,
+              start!,
+              axis ? mul(axisVector(axis), axisSign) : drawingPlane.normal,
+              angle,
+            );
+      view.preview(
+        edges(m)
+          .filter((e) => e.vertices.some((id) => selected.has(id)))
+          .map(
+            (e) =>
+              e.vertices.map((id) =>
+                selected.has(id) ? transform(position(m, id)) : position(m, id),
+              ) as Segment,
+          ),
       );
     }
-
-    const target = this.planeTarget(screenX, screenY);
-
-    // Aiming at a vertex or an edge decides the plane, even with a face underneath.
-    if (target && target.kind !== "face") {
-      const fromEdges = this.edgePlane(target);
-      if (fromEdges) return fromEdges;
+    const distance = length(sub(current, start));
+    measurement =
+      tool === "rotate"
+        ? `${((rotatedAngle(current) * 180) / Math.PI).toFixed(1)}°`
+        : `${distance.toFixed(2)} mm`;
+  };
+  const finish = (end: Vec3, number?: number): boolean => {
+    if (!start) return false;
+    if (tool === "line") {
+      const before = faces(store.getState()).length;
+      if (!run({ type: "draw", segments: [[start, end]] })) return false;
+      if (
+        faces(store.getState()).length > before ||
+        length(sub(end, first!)) < EPS
+      )
+        cancel();
+      else {
+        start = end;
+        current = end;
+        typed = "";
+        view.preview([]);
+        emit();
+      }
+      return true;
     }
-
-    const faceId = target?.kind === "face" ? target.id : target ? this.incidentFace(target.id) : null;
-    const hit = target;
-    if (hit && faceId) {
-      const face = this.store.getState().entities[faceId];
-      if (face && face.kind === "face") {
-        const positions = facePositions(this.store.getState(), face);
-        const normal = polyOps.normal(positions);
-        if (normal) {
-          const plane = { origin: positions[0], normal };
-          const { u, v } = basisFor(normal);
-          return { plane, normal, u, v, label: "Face" };
+    let command: Command;
+    if (tool === "rectangle")
+      command = { type: "draw", segments: polygonSegments(rectangle(end)) };
+    else if (tool === "move")
+      command = {
+        type: "move",
+        ids: store.getState().selection,
+        delta: sub(end, start),
+      };
+    else if (tool === "rotate")
+      command = {
+        type: "rotate",
+        ids: store.getState().selection,
+        center: start,
+        axis: axis ? mul(axisVector(axis), axisSign) : drawingPlane.normal,
+        angle: number ?? rotatedAngle(end),
+      };
+    else if (tool === "pushpull")
+      command = {
+        type: "pushpull",
+        face: faceId,
+        distance: number ?? dot(sub(end, start), direction()),
+        direction: direction(),
+      };
+    else return false;
+    if (!run(command)) return false;
+    cancel();
+    return true;
+  };
+  const submit = () => {
+    if (!start) {
+      message = "Click a starting point first";
+      emit();
+      return;
+    }
+    try {
+      if (tool === "rectangle") {
+        const [width, depth] = parseDimensions(typed, unitId, 2);
+        if (width <= 0 || depth <= 0)
+          throw new Error("Rectangle dimensions must be positive");
+        const [x, y] = project(current, { ...drawingPlane, origin: start });
+        finish(
+          add(
+            start,
+            add(
+              mul(drawingPlane.u, width * (x < 0 ? -1 : 1)),
+              mul(drawingPlane.v, depth * (y < 0 ? -1 : 1)),
+            ),
+          ),
+        );
+      } else if (tool === "rotate") {
+        if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(typed.trim()))
+          throw new Error("Enter an angle in degrees");
+        const angle = (Number(typed) * Math.PI) / 180;
+        if (!Number.isFinite(angle)) throw new Error("Enter a finite angle");
+        finish(current, angle);
+      } else {
+        const [distance] = parseDimensions(typed, unitId);
+        let d = direction();
+        if (length(d) < EPS) d = drawingPlane.u;
+        finish(
+          add(start, mul(d, distance)),
+          tool === "pushpull" ? distance : undefined,
+        );
+      }
+    } catch (e) {
+      message = e instanceof Error ? e.message : String(e);
+      emit();
+    }
+  };
+  const pointer = (
+    x: number,
+    y: number,
+    click = false,
+    shift = false,
+    double = false,
+  ) => {
+    lastX = x;
+    lastY = y;
+    const ray = view.ray(x, y),
+      hit = view.pick(x, y, tool === "pushpull");
+    if (!start) {
+      const aimed =
+        hit?.kind === "face" ? store.getState().entities[hit.id] : null;
+      drawingPlane =
+        aimed?.kind === "face"
+          ? facePlane(store.getState(), aimed)
+          : plane(V(), V(0, 0, 1));
+      if (axis && tool === "rectangle")
+        drawingPlane = plane(V(), axis === "z" ? V(0, -1, 0) : V(0, 0, 1));
+    }
+    let end =
+      hit && hit.kind !== "face"
+        ? hit.point
+        : intersectPlane(ray, drawingPlane);
+    if (start && axis && tool !== "rectangle" && tool !== "rotate")
+      end = axisPoint(ray, start, mul(axisVector(axis), axisSign));
+    else if (start && tool === "pushpull")
+      end = axisPoint(ray, start, direction());
+    if (start && tool === "rotate") {
+      const rotationPlane = plane(
+        start,
+        axis ? mul(axisVector(axis), axisSign) : drawingPlane.normal,
+      );
+      end = intersectPlane(ray, rotationPlane);
+    }
+    if (!end) return;
+    if (start && !axis && tool === "line" && hit?.kind !== "vertex") {
+      for (const a of ["x", "y", "z"] as Axis[]) {
+        const p = axisPoint(ray, start, axisVector(a)),
+          s = view.project(p);
+        if (
+          s.visible &&
+          Math.hypot(s.x - x, s.y - y) < 6 &&
+          length(sub(p, start)) > EPS
+        ) {
+          end = p;
+          break;
         }
       }
     }
-    const { u, v } = basisFor(GROUND_PLANE.normal);
-    return { plane: GROUND_PLANE, normal: GROUND_PLANE.normal, u, v, label: "Ground" };
-  }
-
-  private buildEvent(state: PointerState): ToolPointerEvent {
-    this.plane = this.planeAt(state.screenX, state.screenY);
-    const raw = this.viewport.raycastPlane(state.screenX, state.screenY, this.plane.plane) ?? this.cursor;
-    const tolerance = this.viewport.pixelsPerWorldUnit(raw) * 12;
-    const snap = resolveSnap({
-      doc: this.store.getState(),
-      free: raw,
-      tolerance,
-      anchor: this.currentAnchor(),
-      lock: this.currentLock(),
-      lockMode: this.getActiveTool().lockMode,
-      ray: this.viewport.rayAt(state.screenX, state.screenY),
-      screen: { x: state.screenX, y: state.screenY },
-      project: (point) => this.viewport.worldToScreen(point),
-      snapping: this.store.getState().settings.snapping,
-    });
-    this.snap = snap;
-    this.cursor = snap.point;
-    return {
-      screenX: state.screenX,
-      screenY: state.screenY,
-      world: snap.point,
-      raw,
-      snap,
-      shiftKey: state.shiftKey,
-      ctrlKey: state.ctrlKey,
-      altKey: state.altKey,
-      metaKey: state.metaKey,
-      button: state.button,
-    };
-  }
-
-  pointerMove(state: PointerState): void {
-    const event = this.buildEvent(state);
-    this.preview = EMPTY_PREVIEW;
-    this.getActiveTool().pointerMove?.(event, this.context());
-    this.onChange();
-  }
-
-  pointerDown(state: PointerState): void {
-    const event = this.buildEvent(state);
-    this.getActiveTool().pointerDown?.(event, this.context());
-    this.onChange();
-  }
-
-  pointerUp(state: PointerState): void {
-    const event = this.buildEvent(state);
-    this.getActiveTool().pointerUp?.(event, this.context());
-    this.onChange();
-  }
-
-  pointerLeave(): void {
-    this.snap = null;
-    this.preview = EMPTY_PREVIEW;
-    this.onChange();
-  }
-
-  /** Digits, separators and backspace. Returns true when the key belongs to the buffer. */
-  typedKey(key: string): boolean {
-    const tool = this.getActiveTool();
-    if (!tool.numbers) return false;
-    if (key === "Backspace") {
-      this.typed = this.typed.slice(0, -1);
-      this.onChange();
-      return true;
+    current = end;
+    if (click) {
+      message = "";
+      if (tool === "select") {
+        if (double && hit) {
+          const m = store.getState(),
+            all = new Set([hit.id]),
+            vs = selectedVertices(m, [hit.id]);
+          let changed = true;
+          while (changed) {
+            changed = false;
+            for (const e of edges(m))
+              if (e.vertices.some((id) => vs.has(id))) {
+                all.add(e.id);
+                for (const id of e.vertices)
+                  if (!vs.has(id)) {
+                    vs.add(id);
+                    changed = true;
+                  }
+              }
+          }
+          for (const f of faces(m))
+            if (f.outer.some((id) => vs.has(id))) all.add(f.id);
+          vs.forEach((id) => all.add(id));
+          store.select([...all]);
+        } else {
+          const old = store.getState().selection;
+          store.select(
+            hit
+              ? shift
+                ? old.includes(hit.id)
+                  ? old.filter((id) => id !== hit.id)
+                  : [...old, hit.id]
+                : [hit.id]
+              : [],
+          );
+        }
+      } else if (!start) {
+        if (tool === "pushpull" && hit?.kind !== "face") {
+          message = "Choose a face";
+          emit();
+          return;
+        }
+        if (
+          (tool === "move" || tool === "rotate") &&
+          !store.getState().selection.length
+        ) {
+          if (hit) store.select([hit.id]);
+          else {
+            message = "Select geometry first";
+            emit();
+            return;
+          }
+        }
+        start = end;
+        first = end;
+        reference = null;
+        drawingPlane = { ...drawingPlane, origin: end };
+        if (tool === "pushpull") {
+          faceId = hit!.id;
+          start = hit!.point;
+          current = start;
+        }
+      } else if (tool === "rotate" && !reference) {
+        if (length(sub(end, start)) > EPS) reference = end;
+      } else finish(end);
     }
-    if (key === "," && this.typed.includes(",")) {
-      this.typed += ",";
-      this.onChange();
-      return true;
-    }
-    if (/^[0-9.,-]$/.test(key)) {
-      this.typed += key;
-      this.onChange();
-      return true;
-    }
-    return false;
-  }
-
-  /** Enter: parse the buffer in the current unit and hand resolved values to the tool. */
-  commitTyped(): boolean {
-    const tool = this.getActiveTool();
-    if (!tool.numbers || this.typed.trim() === "") return false;
-    const parts = this.typed
-      .split(",")
-      .map((part) => part.trim())
-      .filter((part) => part !== "");
-    if (parts.length === 0 || parts.length > tool.numbers.max) return false;
-
-    const unit = this.store.getState().settings.unit;
-    const values: number[] = [];
-    for (const part of parts) {
-      const value = tool.numbers.kind === "angle" ? parseAngle(part) : parseLength(part, unit);
-      if (value === null) return false;
-      values.push(value);
-    }
-
-    tool.commitNumbers?.(values, this.context());
-    this.typed = "";
-    this.preview = EMPTY_PREVIEW;
-    this.onChange();
-    return true;
-  }
-
-  /** Arrow keys pin an axis; `↓` clears it. Returns true when the key was consumed. */
-  pressKey(key: string, shift: boolean): boolean {
-    if (key === "Escape") {
-      this.cancel();
-      return true;
-    }
-    if (key === "ArrowDown") {
-      this.lockSpec = null;
-      this.getActiveTool().invertDirection?.(this.context());
-      this.onChange();
-      return true;
-    }
-    const arrow = axisForArrow(key, shift);
-    if (arrow) {
-      this.lockSpec = { axisKey: arrow.axisKey, sign: arrow.sign };
-      this.onChange();
-      return true;
-    }
-    return false;
-  }
-
-  cancel(): void {
-    this.typed = "";
-    this.lockSpec = null;
-    this.preview = EMPTY_PREVIEW;
-    this.getActiveTool().cancel?.(this.context());
-    this.onChange();
-  }
-
-  getPreview(): ToolPreview {
-    return this.preview;
-  }
-
-  getSnapIndicator(): SnapIndicator | null {
-    if (!this.snap) return null;
-    if (this.snap.kind === "free" || this.snap.kind === "face") {
-      if (!this.snap.axis) return null;
-    }
-    return {
-      position: this.snap.point,
-      kind: this.snap.axisKey ?? this.snap.kind,
-      axis: this.snap.axis,
-      axisKey: this.snap.axisKey,
-    };
-  }
-
-  getStatus(): ToolStatus {
-    const tool = this.getActiveTool();
-    const state = this.store.getState();
-    const context = this.context();
-    return {
-      toolId: tool.id,
-      label: tool.label,
-      planeLabel: this.plane.label,
-      hint: tool.hint,
-      numberHint: tool.numbers?.example ?? null,
-      typed: this.typed,
-      readout: tool.readout?.(context) ?? null,
-      snapLabel: this.snap?.label ?? "",
-      axisKey: this.lockSpec?.axisKey ?? null,
-      unit: state.settings.unit,
-      suffix: unitSuffix(state.settings.unit),
-      active: tool.isActive?.(context) ?? false,
-    };
-  }
+    updatePreview();
+    emit();
+  };
+  return {
+    status: () => ({
+      tool,
+      active: !!start,
+      typed,
+      axis: axis ? `${axis.toUpperCase()}${axisSign < 0 ? " −" : ""}` : "Free",
+      message,
+      unit: unitId,
+      measurement,
+    }),
+    subscribe(fn) {
+      listeners.add(fn);
+      return () => {
+        listeners.delete(fn);
+      };
+    },
+    setTool(t) {
+      cancel();
+      tool = t;
+      axis = null;
+      axisSign = 1;
+      emit();
+    },
+    setUnit(u) {
+      unitId = u;
+      emit();
+    },
+    setTyped(s) {
+      typed = s;
+      emit();
+    },
+    submit,
+    pointer,
+    cancel,
+    key(key, ctrl = false, shift = false) {
+      if (ctrl && (key.toLowerCase() === "z" || key.toLowerCase() === "y")) {
+        cancel();
+        if (key.toLowerCase() === "y" || shift) store.redo();
+        else store.undo();
+        return true;
+      }
+      if (key === "Escape") {
+        if (start) cancel();
+        else {
+          tool = "select";
+          axis = null;
+          emit();
+        }
+        return true;
+      }
+      if (key === "Enter") {
+        submit();
+        return true;
+      }
+      if (key === "Delete" || (key === "Backspace" && !typed)) {
+        if (!start) run({ type: "delete", ids: store.getState().selection });
+        return true;
+      }
+      if (key === "Backspace") {
+        typed = typed.slice(0, -1);
+        emit();
+        return true;
+      }
+      const mapping: Record<string, Axis> = {
+        ArrowUp: "z",
+        ArrowDown: "z",
+        ArrowRight: "x",
+        ArrowLeft: "y",
+      };
+      if (mapping[key]) {
+        const next = mapping[key],
+          sign = key === "ArrowDown" ? -1 : 1;
+        axis = axis === next && axisSign === sign ? null : next;
+        axisSign = sign;
+        pointer(lastX, lastY);
+        emit();
+        return true;
+      }
+      if (
+        start &&
+        (/^[0-9.,;+\-]$/.test(key) || (typed && /^[a-z]$/i.test(key)))
+      ) {
+        typed += key;
+        emit();
+        return true;
+      }
+      if (!ctrl) {
+        const next = TOOLS.find(
+          (t) =>
+            t.key.toLowerCase() === key.toLowerCase() ||
+            (key === " " && t.id === "select"),
+        );
+        if (next) {
+          cancel();
+          tool = next.id;
+          axis = null;
+          emit();
+          return true;
+        }
+      }
+      return false;
+    },
+  };
 }

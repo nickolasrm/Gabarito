@@ -4,9 +4,12 @@ One shared vocabulary. If a term is missing, add it here in the same commit that
 
 | Term | Meaning in Gabarito |
 |---|---|
-| **Document** | The whole user-authored model: entities, materials, units, settings. Serializable and portable. |
-| **Entity** | A single addressable object in the document (a group, component instance, face, edge, light, camera). Has a stable ID. |
-| **Entity graph** | The parent/child tree of entities. The canonical representation of the document's content. |
+| **Document** | The user-authored topology, selection and edit bookkeeping. File persistence is not implemented. |
+| **Entity** | A vertex, edge or face with an opaque stable ID. Other entity kinds are future work. |
+| **Entity graph** | The shared topology: edges reference vertices; faces reference ordered outer and hole loops. |
+| **Vertex** | A shared point in model space, stored in millimetres. |
+| **Edge** | An undirected segment between two shared vertices. |
+| **Face** | A bounded planar region, excluding its hole loops. Triangles are derived, not entities. |
 | **Command** | A serialisable, invertible operation that mutates the document. The only legal mutation path. |
 | **Tool** | A state machine translating pointer/keyboard input into commands. Never touches the document directly. |
 | **Plugin** | A module implementing the contract in `plugin-api`, activated at runtime by `plugin-host`. |
@@ -20,8 +23,8 @@ One shared vocabulary. If a term is missing, add it here in the same commit that
 | **CSG** | Constructive solid geometry: combining solids with union, difference, intersection. |
 | **Scene graph** | The Three.js object tree. A *derived view* of the entity graph, rebuilt from it and never authoritative. |
 | **Shell** | The closed set of faces bounding one solid, computed from shared-edge and coplanar adjacency rather than stored. The unit a cut operates on. |
-| **Hole (in a face)** | A closed loop of points inside a face's outer loop, part of the same face. A face holds every hole it gets; there is no limit. |
-| **Project file** | The portable, versioned container the user saves: `.gabarito`. |
+| **Hole (in a face)** | A closed loop of vertex IDs inside a face's outer loop, part of the same face. A face holds every hole it gets; there is no limit. |
+| **Project file** | Planned portable, versioned `.gabarito` container; saving is not implemented. |
 | **Local-first** | The device holds the authoritative copy; the network is optional and never required to edit. |
 | **Static bundle** | The build output that GitHub Pages serves. No server code, no runtime secrets. |
 | **Spec** | A small plan for one change, in `docs/specs/`. Written before the change, closed after it. |

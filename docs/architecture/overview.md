@@ -36,28 +36,36 @@ package import it; it imports nothing from them.
 1. `boot` creates the document store, the viewport, and the tool controller, then mounts the UI.
 2. `scene` subscribes to the document and keeps a derived Three.js scene in sync.
 3. `tools` converts pointer and keyboard input into **commands**.
-4. `core` applies the command, pushes an undo entry, and notifies subscribers.
+4. `core` applies the command, validates the transaction, pushes a snapshot undo entry, and notifies subscribers.
 5. `ui` renders React chrome from the same store; the viewport is a canvas React never renders into.
 6. `persistence` snapshots the document to local storage or to a `.gabarito` project file. *(Not built
    yet.)*
 
 React never owns geometry. The viewport never owns state. Tools never touch Three.js objects — the
-viewport reaches them as a structurally matched `ViewportAdapter` interface.
+viewport reaches them through the `ToolView` interface.
 
 ## Modules
 
 | Package | Owns | Depends on | Status |
 |---|---|---|---|
 | `core` | document, entities, selection, commands, undo, units, events | geometry | built |
-| `geometry` | vectors, planes, curves, meshes, solid ops, inference math | — | built |
+| `geometry` | vectors, planes, planes, planar arrangements, triangulation, solid sweeps | — | built |
 | `scene` | WebGL renderer, camera, grid, picking, materials, highlighting | core, geometry | built |
 | `tools` | interaction state machines: select, line, rectangle, push/pull, move, rotate… | core, geometry | built |
-| `ui` | React shell: menus, panels, inspectors, dialogs, command palette | core, plugin-api | built |
+| `ui` | React shell: toolbar, units, dimensions, status and model counts | core, plugin-api | built |
 | `persistence` | IndexedDB/OPFS storage, project file I/O, import/export | core, geometry | planned |
 | `plugin-api` | the versioned contracts plugins implement | — | planned |
 | `plugin-host` | manifest, registration, activation lifecycle, capability checks | plugin-api | planned |
 | `app` | composition root, wiring, keymaps, boot | all of the above | built |
 | `features/*` | domain plugins | plugin-api only | planned |
+
+## Current modeling implementation
+
+Drawing splits segments and walks bounded planar regions, so nested drawings partition a face.
+Closed-shell push/pull goes through Manifold. Open planar sheets use a selected-patch extrusion.
+Snapshot transactions validate before publishing and provide undo/redo. See
+[0027](../decisions/0027-topology-rewrite.md) and the owning package READMEs for implementation.
+The old implementation's specs remain historical; spec 0021 describes the replacement.
 
 ## Why this shape
 

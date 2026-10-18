@@ -3,6 +3,24 @@
 This repository is written and maintained by AI agents. Humans steer, review, and merge.
 Read this file first. Everything else in `docs/` is loaded on demand, in layers.
 
+## Mandatory skills and project scope
+
+Before every work section, load (once per context) and apply:
+- [caveman](.opencode/skills/caveman/SKILL.md), with the
+  [ultracave](.opencode/skills/ultracave/SKILL.md) repository setting.
+- [ponytail](.opencode/skills/ponytail/SKILL.md), at the level specified in
+  [.opencode/instructions/01-agent-mode.md](.opencode/instructions/01-agent-mode.md).
+
+These paths apply to all agents, including Codex; loading is not specific to OpenCode.
+Read the precedence and mode files beside the skills. Preserve technical detail and correctness.
+If a mandatory skill is missing, locate it in the repository before asking the owner.
+
+The owner's rewrite brief is authoritative: discover requirements in old code, but design the
+replacement independently. Build a client-only modeler with shared vertices, edges and faces;
+closed planar edge regions create faces, drawings partition surfaces, and push/pull edits topology.
+Keep modules small, document changes in indexed specs, test every feature and bug fix, and provide
+an active local preview and a PR for human verification before any merge.
+
 ## The one rule
 
 **No change lands without a spec.** Code, docs, config, a dependency bump — every change starts

@@ -1,5 +1,17 @@
 # Changelog
 
+## Topology rewrite — 2026-10-17
+
+- Replaced the modeler runtime with shared vertices/edges and planar face partitions. Nested drawings
+  cut the parent surface before extrusion. General polygon/rotated-solid push/pull uses Manifold.
+- Rebuilt the six basic editing tools plus camera navigation, numeric input, axis locks and undo/redo.
+- Replaced relative-depth picking with forward-depth and per-candidate occlusion checks.
+- Added mandatory skill loading to AGENTS.md and behavioral regressions for geometry and browser input.
+- Scoped the toolbar to the requested basics; circle, guides and annotations are deferred. No saved
+  document migration is needed because persistence had not shipped.
+- Spec: [0021](docs/specs/0021-rewrite-modeler.md); decision: [0027](docs/decisions/0027-topology-rewrite.md).
+
+
 Every notable change to this repository is recorded here. This file is a **summary**; the
 authoritative record of a change is its spec in [`docs/specs/`](./docs/specs/README.md).
 
