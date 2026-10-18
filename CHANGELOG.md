@@ -1,5 +1,15 @@
 # Changelog
 
+## Scale selection — 2026-10-18
+
+- Added Scale (`S`) with a tight bounding box and draggable corner, edge and face handles. Face
+  handles stretch one dimension, edges two independently, and corners scale proportionally about
+  their opposite anchor. Flat and line selections retain their actual dimensions.
+- Drag/release, click/move/click and positive typed factors preview before one undoable commit.
+  Hidden handles cannot be grabbed; overlays follow navigation and clear on tool changes.
+  Cancellation, selection/history refresh and atomic topology validation protect pending edits.
+- Spec: [0034](docs/specs/0034-scale-selection.md).
+
 ## Rotation face-reference hints — 2026-10-18
 
 - Rotate shares face midpoint alignment, center-intersection and diagonal inference while choosing

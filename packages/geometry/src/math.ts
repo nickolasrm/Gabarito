@@ -128,3 +128,10 @@ export function planeKey(f: Plane): string {
     .map((x) => Math.round(x / EPS))
     .join(",");
 }
+
+export const scale = (p: Vec3, anchor: Vec3, factors: Vec3): Vec3 =>
+  V(
+    anchor.x + (p.x - anchor.x) * factors.x,
+    anchor.y + (p.y - anchor.y) * factors.y,
+    anchor.z + (p.z - anchor.z) * factors.z,
+  );

@@ -40,3 +40,10 @@ Midpoint hits retain `sourceEdge`; coincident virtual intersections cannot repla
 vertex hit. `visible(point)` exposes the same camera/occlusion check to headless tool inference.
 Face alignment/diagonal hits show labeled markers. Infinite preview rulers render dashed, while
 finite measurement and inference segments remain solid. Preview objects never enter picking.
+
+`handles(points, activeId?)` renders transient scale grips as fixed-size, pointer-transparent DOM
+squares over world positions. IDs/labels come from tools. Camera changes, resizing and document
+updates reproject them; forward-depth and surface occlusion hide ineligible grips. The active drag
+grip remains visible through the original mesh so shrinking previews remain readable. These
+markers never enter document geometry or entity picking. Empty input and viewport disposal remove
+their DOM nodes and listeners. The ordinary `preview` API renders the box and transformed edges.

@@ -1,11 +1,11 @@
 # tools
 
 `createController(store, view)` is a headless interaction state machine. No Three.js or scene import.
-`types.ts` exports `ToolView`, `Controller`, `Status` and the seven editing and measuring tools in `TOOLS`.
+`types.ts` exports `ToolView`, `Controller`, `Status` and the editing and measuring tools in `TOOLS`.
 Camera navigation belongs to scene.
 
 Public calls: `setTool`, `pointer`, `key`, `setTyped`, `submit`, `setUnit`, `cancel`, `status`,
-`subscribe`, `press`, `release`, `leave`, `setSnapping`. A view supplies visible picking, projection/rays, transient
+`subscribe`, `press`, `release`, `leave`, `setSnapping`, `dispose`. A view supplies visible picking, projection/rays, transient
 preview segments and `feedback(hit)` for the eligible hover/snap target. `pointer` accepts a native
 click count; app routes held gestures through `press` and `release`.
 
@@ -89,3 +89,19 @@ rotation plane constrains inference,
 including axis overrides, so hints cannot reorient a rotation after B. Eligible explicit geometry
 retains priority. Named cursor hints, markers and reference lines identify the same exact point used
 by preview and commit. Alt bypasses these references.
+
+Scale (`S`) uses `scale-box.ts` for world-axis bounds, box segments, grips and factor resolution;
+`scale-tool.ts` owns its independent gesture and preview state. Three-dimensional selections have
+26 grips; bounds with one zero world extent have eight, and one nonzero extent has two.
+Tilted faces and diagonal lines follow their world-axis bounds. Face grips stretch one coordinate, edge grips two in
+their plane, and corners scale proportionally. The opposite grip anchors each edit. A single point
+or guide-only selection has no scalable extent. Arrow pins do not override the chosen grip's axes.
+
+`ToolView.handles(points, activeId?)` renders optional transient grips; each point carries an ID,
+world point and label. Production scene supplies it; headless views may omit rendering. Tools pick
+only forward, unoccluded grips within nine pixels, using camera distance for coincident targets.
+Scale supports drag/release and click/move/click, typed positive factors and Enter, plus cancellation.
+Selection/history changes discard stale previews and rebuild idle bounds. `dispose()` releases the
+controller's store subscription and overlays; app calls it on unmount. Preview and command share
+geometry's scale formula. Core rejects invalid factors or topology atomically. No mirroring or
+zero-factor collapse is supported. `scale.test.ts` covers state, grips, exact history and constraints.

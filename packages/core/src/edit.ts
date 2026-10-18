@@ -1,3 +1,4 @@
+import { scaleSelection } from "./scale";
 import { erase } from "./erase";
 import {
   EPS,
@@ -34,6 +35,7 @@ export type Command =
   | { type: "delete"; ids: string[] }
   | { type: "move"; ids: string[]; delta: Vec3 }
   | { type: "rotate"; ids: string[]; center: Vec3; axis: Vec3; angle: number }
+  | { type: "scale"; ids: string[]; anchor: Vec3; factors: Vec3 }
   | { type: "pushpull"; face: string; distance: number; direction?: Vec3 };
 function component(m: Model, seed: Face): Face[] {
   const byEdge = new Map<string, Face[]>();
@@ -242,6 +244,9 @@ export function apply(m: Model, c: Command): void {
       }
       break;
     }
+    case "scale":
+      scaleSelection(m, c.ids, c.anchor, c.factors);
+      break;
     case "delete":
       erase(m, c.ids);
       break;

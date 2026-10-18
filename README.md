@@ -17,7 +17,7 @@ continuation of anything it draws on, and not a replacement for any of it.
 ## Status
 
 **Rewritten basic modeler.** Camera orbit/pan/zoom, rectangle, polygon line builder, selection,
-move, push/pull and rotate. Typed dimensions, axis locks, visible-geometry snapping and undo/redo.
+move, scale, push/pull, rotate and tape measure. Typed dimensions, axis locks, visible-geometry snapping and undo/redo.
 Drawings partition shared surfaces; closed-solid edits use bundled Manifold WASM.
 
 Lengths are stored in millimetres. Input supports mm, cm, m, in and ft. While drawing, type values
@@ -25,12 +25,13 @@ and press Enter: rectangle `100,100`, line `10`. For push/pull, hold a face, dra
 distance (or `-10` to cut inward).
 Arrow Up pins height/Z, Right width/X, Left depth/Y; press the same key again to release.
 Middle mouse orbits; Shift+middle pans; wheel zooms. `F` frames the model.
+Scale (`S`) draws a bounding box around selected geometry. Drag face or edge handles to stretch,
+corner handles to scale proportionally, or click a handle and type a positive factor such as `2`.
 Modeling tools use a crosshair; visible vertex/edge targets get labeled snap markers. Select a face
 with one click, its boundary with two clicks, or connected geometry with three clicks.
 
 No persistence yet: reload clears the document. No plugin host, lighting or woodworking tools.
-The rewrite intentionally limits the toolbar to the requested basic tools; the previous circle,
-ruler and annotation tools are deferred. See [spec 0021](docs/specs/0021-rewrite-modeler.md).
+The toolbar covers basic modeling and construction rulers; circle and annotation tools remain deferred. See [spec 0021](docs/specs/0021-rewrite-modeler.md).
 
 ```bash
 npm ci

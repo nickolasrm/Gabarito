@@ -27,3 +27,7 @@ both gestures without a separate mode selector. Tape labels include active face-
 
 Rotate guidance describes anchor A and zero-angle B before the final angle click or typed degrees.
 Its status bar also names the supporting plane; the cursor shows the signed angle in degrees.
+
+Scale (`S`) adds bounding-box handles through the viewport contract. Guidance explains face/edge
+stretches and proportional corners. Numeric entry is labeled Factor with a unitless multiplier,
+while the cursor names the hovered grip or displays live factors during a resize.

@@ -22,6 +22,10 @@ export interface Viewport {
   visible(p: Vec3): boolean;
   pick(x: number, y: number, faceOnly?: boolean): Hit | null;
   preview(lines: Segment[], rulers?: ReferenceLine[]): void;
+  handles(
+    points: { id: string; point: Vec3; label: string }[],
+    activeId?: string,
+  ): void;
   cursorHint(text: string, x: number, y: number): void;
   feedback(hit: Hit | null): void;
   frame(): void;
@@ -230,6 +234,7 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
     drawReferences();
+    drawHandles();
   });
   observer.observe(host);
   const asVec = (p: THREE.Vector3): Vec3 => V(p.x, p.y, p.z);
@@ -354,6 +359,44 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
                       : "Ruler"
                     : "Edge";
   }
+  let handleData: { id: string; point: Vec3; label: string }[] = [],
+    activeHandle: string | undefined;
+  const handleElements = new Map<string, HTMLDivElement>();
+  const drawHandles = () => {
+    camera.updateMatrixWorld();
+    const ids = new Set(handleData.map((h) => h.id));
+    for (const [id, element] of handleElements)
+      if (!ids.has(id)) {
+        element.remove();
+        handleElements.delete(id);
+      }
+    for (const h of handleData) {
+      let element = handleElements.get(h.id);
+      if (!element) {
+        element = document.createElement("div");
+        element.className = "scale-handle";
+        element.dataset.scaleHandle = h.id;
+        host.append(element);
+        handleElements.set(h.id, element);
+      }
+      const p = project(h.point);
+      element.hidden =
+        !p.visible ||
+        (h.id !== activeHandle &&
+          !visible(
+            store.getState(),
+            { origin: asVec(camera.position), project, ray },
+            h.point,
+          ));
+      element.style.left = `${p.x}px`;
+      element.style.top = `${p.y}px`;
+      element.classList.toggle("active", h.id === activeHandle);
+      element.setAttribute("aria-label", h.label);
+      element.title = h.label;
+    }
+  };
+  controls.addEventListener("change", drawHandles);
+  const unsubscribeHandles = store.subscribe(drawHandles);
   let active = true;
   const render = () => {
     if (!active) return;
@@ -397,6 +440,11 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
       if (clipped.length)
         previewGroup.add(lineObject(clipped, 0x69dfcc, false, true));
     },
+    handles(points, activeId) {
+      handleData = points;
+      activeHandle = activeId;
+      drawHandles();
+    },
     frame() {
       feedback(null);
       const vs = vertices(store.getState());
@@ -427,9 +475,13 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
     dispose() {
       active = false;
       unsubscribe();
+      unsubscribeHandles();
+      for (const e of handleElements.values()) e.remove();
+      handleElements.clear();
       observer.disconnect();
       controls.removeEventListener("start", clearFeedback);
       controls.removeEventListener("change", drawReferences);
+      controls.removeEventListener("change", drawHandles);
       controls.dispose();
       canvas.removeEventListener("pointerdown", navigation, true);
       canvas.removeEventListener("contextmenu", noMenu);

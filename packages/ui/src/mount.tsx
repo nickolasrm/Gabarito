@@ -165,12 +165,16 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
                 (status.active
                   ? status.tool === "pushpull"
                     ? "Move or type a distance; click or release to finish"
-                    : status.tool === "rotate"
-                      ? "Choose B, then rotate and click; or enter degrees"
-                      : "Choose destination or enter dimensions"
+                    : status.tool === "scale"
+                      ? "Drag or click to scale; enter a positive factor"
+                      : status.tool === "rotate"
+                        ? "Choose B, then rotate and click; or enter degrees"
+                        : "Choose destination or enter dimensions"
                   : status.tool === "pushpull"
                     ? "Click or drag a face to start"
-                    : "Choose a starting point")}
+                    : status.tool === "scale"
+                      ? "Drag a scale handle"
+                      : "Choose a starting point")}
             </span>
           </div>
           <form
@@ -180,7 +184,11 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
             }}
           >
             <label htmlFor="dimensions">
-              {status.tool === "rotate" ? "Angle" : "Dimensions"}
+              {status.tool === "rotate"
+                ? "Angle"
+                : status.tool === "scale"
+                  ? "Factor"
+                  : "Dimensions"}
             </label>
             <input
               id="dimensions"
@@ -190,7 +198,11 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
               value={status.typed}
               placeholder={
                 status.measurement ||
-                (status.tool === "rectangle" ? "100,100" : "10")
+                (status.tool === "rectangle"
+                  ? "100,100"
+                  : status.tool === "scale"
+                    ? "1"
+                    : "10")
               }
               onChange={(e) => api.setTyped(e.target.value)}
               onKeyDown={(e) => {
@@ -199,7 +211,13 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
                 }
               }}
             />
-            <span>{status.tool === "rotate" ? "deg" : status.unit}</span>
+            <span>
+              {status.tool === "rotate"
+                ? "deg"
+                : status.tool === "scale"
+                  ? "×"
+                  : status.unit}
+            </span>
           </form>
         </footer>
       </main>

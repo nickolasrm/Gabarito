@@ -1,7 +1,14 @@
 import type { Vec3, Ray, Segment } from "@gabarito/geometry";
 import type { Unit, ReferenceLine } from "@gabarito/core";
 export type Tool =
-  "select" | "line" | "rectangle" | "move" | "pushpull" | "rotate" | "tape";
+  | "select"
+  | "line"
+  | "rectangle"
+  | "move"
+  | "pushpull"
+  | "rotate"
+  | "tape"
+  | "scale";
 export const TOOLS: { id: Tool; label: string; key: string; hint: string }[] = [
   {
     id: "select",
@@ -34,6 +41,12 @@ export const TOOLS: { id: Tool; label: string; key: string; hint: string }[] = [
     hint: "Select geometry, click a reference, then a destination. Type a distance, Enter.",
   },
   {
+    id: "scale",
+    label: "Scale",
+    key: "S",
+    hint: "Select geometry, then drag a box handle. Faces stretch one dimension, edges two; corners scale proportionally. The opposite handle stays fixed. Or click a handle, move and click; type a positive scale factor, Enter.",
+  },
+  {
     id: "pushpull",
     label: "Push/Pull",
     key: "P",
@@ -59,6 +72,10 @@ export interface ToolView {
   project(p: Vec3): { x: number; y: number; visible: boolean };
   pick(x: number, y: number, faceOnly?: boolean): ToolHit | null;
   preview(lines: Segment[], rulers?: ReferenceLine[]): void;
+  handles?(
+    points: { id: string; point: Vec3; label: string }[],
+    activeId?: string,
+  ): void;
   cursorHint(text: string, x: number, y: number): void;
   feedback(hit: ToolHit | null): void;
 }
@@ -74,6 +91,7 @@ export interface Status {
   snapping: boolean;
 }
 export interface Controller {
+  dispose(): void;
   status(): Status;
   subscribe(fn: () => void): () => void;
   setTool(t: Tool): void;

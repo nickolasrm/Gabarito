@@ -14,3 +14,6 @@ positions and indexed triangles. No kernel object crosses the boundary.
 
 Run `npm test` for geometry behavior through core topology/volume tests.
 See [0027](../../docs/decisions/0027-topology-rewrite.md) for the topology decision.
+
+`scale(point, anchor, factors)` applies component-wise factors about a fixed anchor. Core scale
+commands and tools previews use the same formula; command validation belongs to core.
