@@ -1,5 +1,16 @@
 # Changelog
 
+## Modeling input and feedback — 2026-10-18
+
+- Modeling tools use precise crosshair cursors. Vertex and edge targets show labeled markers at
+  their actual snap positions; hovered faces are tinted without changing selection.
+- Push/pull now uses hold, drag and release, with pointer capture, cancellation and exact typed
+  dimensions while held. Release makes one undoable edit; stationary clicks are no-ops.
+- Face selection now expands in three stages: face, face boundary, connected geometry. Boundary
+  selection includes hole loops and preserves Shift selection behavior.
+- Added controller and browser regressions; updated earlier push/pull tests to the new gesture.
+- Spec: [0023](docs/specs/0023-modeling-input-feedback.md).
+
 ## Raised-sheet push/pull fix — 2026-10-18
 
 - Fixed pushing or pulling a face drawn on top of an already raised sheet. The first extrusion

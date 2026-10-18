@@ -15,6 +15,7 @@ import {
   axisPoint,
   axisVector,
   rotate,
+  near,
 } from "@gabarito/geometry";
 import type { Vec3, Axis, Segment } from "@gabarito/geometry";
 import {
@@ -27,6 +28,7 @@ import {
   selectedVertices,
 } from "@gabarito/core";
 import type { Store, Unit, Command } from "@gabarito/core";
+import { selectionAt } from "./selection";
 import { TOOLS } from "./types";
 import type { Tool, ToolView, Controller } from "./types";
 export function createController(store: Store, view: ToolView): Controller {
@@ -58,6 +60,7 @@ export function createController(store: Store, view: ToolView): Controller {
     message = "";
     measurement = "";
     view.preview([]);
+    view.feedback(null);
     emit();
   };
   const direction = (): Vec3 =>
@@ -247,7 +250,7 @@ export function createController(store: Store, view: ToolView): Controller {
     y: number,
     click = false,
     shift = false,
-    double = false,
+    clicks = 1,
   ) => {
     lastX = x;
     lastY = y;
@@ -278,7 +281,10 @@ export function createController(store: Store, view: ToolView): Controller {
       );
       end = intersectPlane(ray, rotationPlane);
     }
-    if (!end) return;
+    if (!end) {
+      view.feedback(null);
+      return;
+    }
     if (start && !axis && tool === "line" && hit?.kind !== "vertex") {
       for (const a of ["x", "y", "z"] as Axis[]) {
         const p = axisPoint(ray, start, axisVector(a)),
@@ -294,42 +300,25 @@ export function createController(store: Store, view: ToolView): Controller {
       }
     }
     current = end;
+    view.feedback(
+      hit && (!start || (tool !== "pushpull" && near(end, hit.point)))
+        ? hit
+        : null,
+    );
     if (click) {
       message = "";
       if (tool === "select") {
-        if (double && hit) {
-          const m = store.getState(),
-            all = new Set([hit.id]),
-            vs = selectedVertices(m, [hit.id]);
-          let changed = true;
-          while (changed) {
-            changed = false;
-            for (const e of edges(m))
-              if (e.vertices.some((id) => vs.has(id))) {
-                all.add(e.id);
-                for (const id of e.vertices)
-                  if (!vs.has(id)) {
-                    vs.add(id);
-                    changed = true;
-                  }
-              }
-          }
-          for (const f of faces(m))
-            if (f.outer.some((id) => vs.has(id))) all.add(f.id);
-          vs.forEach((id) => all.add(id));
-          store.select([...all]);
-        } else {
-          const old = store.getState().selection;
-          store.select(
-            hit
-              ? shift
-                ? old.includes(hit.id)
-                  ? old.filter((id) => id !== hit.id)
-                  : [...old, hit.id]
-                : [hit.id]
-              : [],
-          );
-        }
+        const old = store.getState().selection;
+        const targets = hit
+          ? selectionAt(store.getState(), hit.id, clicks)
+          : [];
+        store.select(
+          shift && hit
+            ? clicks === 1 && old.includes(hit.id)
+              ? old.filter((id) => id !== hit.id)
+              : [...old, ...targets]
+            : targets,
+        );
       } else if (!start) {
         if (tool === "pushpull" && hit?.kind !== "face") {
           message = "Choose a face";
@@ -396,6 +385,28 @@ export function createController(store: Store, view: ToolView): Controller {
     },
     submit,
     pointer,
+    press(x, y) {
+      if (tool !== "pushpull") return;
+      cancel();
+      pointer(x, y, true);
+    },
+    release(x, y) {
+      if (tool !== "pushpull" || !start) return;
+      pointer(x, y);
+      if (typed) submit();
+      else if (length(sub(current, start)) <= EPS) cancel();
+      else finish(current);
+      // Release always ends the gesture, including invalid input or a refused operation.
+      if (start) {
+        const error = message;
+        cancel();
+        message = error;
+        emit();
+      }
+    },
+    leave() {
+      view.feedback(null);
+    },
     cancel,
     key(key, ctrl = false, shift = false) {
       if (ctrl && (key.toLowerCase() === "z" || key.toLowerCase() === "y")) {

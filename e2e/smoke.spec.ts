@@ -50,8 +50,11 @@ async function rectangle(
 }
 async function push(page: Page, p: Vec3, distance: string) {
   await page.getByRole("button", { name: /^Push\/Pull/ }).click();
-  await clickWorld(page, p);
-  await type(page, distance);
+  const start = await screenOf(page, p);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.keyboard.type(distance);
+  await page.mouse.up();
 }
 const errors = new WeakMap<Page, string[]>();
 test.beforeEach(async ({ page }) => {
@@ -128,14 +131,16 @@ for (const distance of [20, -20])
         await push(page, { x: 100, y: 100, z: 100 }, String(distance));
       else {
         await page.getByRole("button", { name: /^Push\/Pull/ }).click();
-        await clickWorld(page, { x: 100, y: 100, z: 100 });
+        const start = await screenOf(page, { x: 100, y: 100, z: 100 });
+        await page.mouse.move(start.x, start.y);
+        await page.mouse.down();
         const target = await screenOf(page, {
           x: 100,
           y: 100,
           z: 100 + distance,
         });
         await page.mouse.move(target.x, target.y, { steps: 8 });
-        await page.mouse.click(target.x, target.y);
+        await page.mouse.up();
       }
       await expect(page.getByRole("status")).not.toContainText("Repair");
       expect(await count(page, "face")).toBe(11);
@@ -242,4 +247,190 @@ test("orbits with middle mouse, pans with Shift+middle, zooms with wheel", async
     .poll(async () => JSON.stringify((await state()).position))
     .not.toBe(JSON.stringify(pan.position));
   expect(await count(page, "vertex")).toBe(0);
+});
+
+test("modeling tools use a precise crosshair cursor", async ({ page }) => {
+  for (const name of ["Line", "Rectangle", "Move", "Push/Pull", "Rotate"]) {
+    await page
+      .getByRole("button", { name: new RegExp("^" + name.replace("/", "\\/")) })
+      .click();
+    await expect(page.locator("canvas")).toHaveCSS("cursor", "crosshair");
+  }
+  await page.getByRole("button", { name: /^Select/ }).click();
+  await expect(page.locator("canvas")).toHaveCSS("cursor", "auto");
+});
+test("push/pull previews while held and commits once on release", async ({
+  page,
+}) => {
+  await rectangle(page);
+  const before = (await snapshot(page)).entities;
+  await page.getByRole("button", { name: /^Push\/Pull/ }).click();
+  const a = await screenOf(page, { x: 50, y: 50, z: 0 }),
+    b = await screenOf(page, { x: 50, y: 50, z: 40 });
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 8 });
+  expect(await count(page, "face")).toBe(1);
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().active),
+  ).toBe(true);
+  await page.mouse.up();
+  expect(await count(page, "face")).toBe(6);
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().active),
+  ).toBe(false);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect((await snapshot(page)).entities).toEqual(before);
+});
+test("release outside the canvas finishes the captured extrusion", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await page.getByRole("button", { name: /^Push\/Pull/ }).click();
+  const a = await screenOf(page, { x: 50, y: 50, z: 0 });
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(a.x, 20, { steps: 8 });
+  await page.mouse.up();
+  expect(await count(page, "face")).toBe(6);
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().active),
+  ).toBe(false);
+});
+test("a stationary push/pull click is a no-op", async ({ page }) => {
+  await rectangle(page);
+  const before = await snapshot(page);
+  await page.getByRole("button", { name: /^Push\/Pull/ }).click();
+  await clickWorld(page, { x: 50, y: 50, z: 0 });
+  expect(await snapshot(page)).toEqual(before);
+  await expect(page.getByRole("status")).toHaveText("Hold a face to start");
+});
+test("typed dimensions and axis locks work during a held extrusion", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await page.getByRole("button", { name: /^Push\/Pull/ }).click();
+  const a = await screenOf(page, { x: 50, y: 50, z: 0 });
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.type("25");
+  await page.mouse.up();
+  expect(await count(page, "face")).toBe(6);
+  const zs = Object.values((await snapshot(page)).entities)
+    .filter((e) => e.kind === "vertex")
+    .map((v) => v.position.z);
+  expect(Math.max(...zs)).toBeCloseTo(25);
+});
+for (const event of ["Escape", "pointercancel", "lostpointercapture", "blur"]) {
+  test(`${event} cancels a held push/pull without changing geometry`, async ({
+    page,
+  }) => {
+    await rectangle(page);
+    const before = (await snapshot(page)).entities;
+    await page.getByRole("button", { name: /^Push\/Pull/ }).click();
+    await page.locator("canvas").evaluate((el) =>
+      el.addEventListener(
+        "pointerdown",
+        (e) => {
+          el.dataset.pointerId = String((e as PointerEvent).pointerId);
+        },
+        { once: true },
+      ),
+    );
+    const a = await screenOf(page, { x: 50, y: 50, z: 0 });
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    await page.keyboard.type("25");
+    if (event === "Escape") await page.keyboard.press("Escape");
+    else if (event === "blur")
+      await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+    else {
+      const pointerId = Number(
+        await page.locator("canvas").getAttribute("data-pointer-id"),
+      );
+      if (event === "lostpointercapture") {
+        await page
+          .locator("canvas")
+          .evaluate((el, id) => el.releasePointerCapture(id), pointerId);
+        // Browsers process a pending capture change at the next pointer event.
+        await page.mouse.move(a.x + 1, a.y);
+      } else
+        await page
+          .locator("canvas")
+          .dispatchEvent("pointercancel", { pointerId, pointerType: "mouse" });
+    }
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.__gabarito.controller.status().active),
+      )
+      .toBe(false);
+    await page.mouse.up();
+    expect((await snapshot(page)).entities).toEqual(before);
+  });
+}
+test("vertex and edge markers show the actual snap position and clear on leave", async ({
+  page,
+}) => {
+  await rectangle(page);
+  const before = await snapshot(page);
+  await page.getByRole("button", { name: /^Line/ }).click();
+  const v = await screenOf(page, { x: 0, y: 0, z: 0 });
+  await page.mouse.move(v.x + 3, v.y + 3);
+  const marker = page.locator(".snap-marker");
+  await expect(marker).toBeVisible();
+  await expect(marker).toHaveAttribute("data-kind", "vertex");
+  await expect(marker).toHaveText("Vertex");
+  const box = (await marker.boundingBox())!;
+  expect(box.x + box.width / 2).toBeCloseTo(v.x, 0);
+  expect(box.y + box.height / 2).toBeCloseTo(v.y, 0);
+  const e = await screenOf(page, { x: 50, y: 0, z: 0 });
+  await page.mouse.move(e.x, e.y);
+  await expect(marker).toBeVisible();
+  await expect(marker).toHaveAttribute("data-kind", "edge");
+  await expect(marker).toHaveText("Edge");
+  expect(await snapshot(page)).toEqual(before);
+  await page.mouse.move(10, 10);
+  await expect(marker).toBeHidden();
+});
+test("axis-constrained drawing hides a vertex that cannot be snapped", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await page.getByRole("button", { name: /^Line/ }).click();
+  await clickWorld(page, { x: 0, y: 0, z: 0 });
+  await page.keyboard.press("ArrowRight");
+  const p = await screenOf(page, { x: 0, y: 100, z: 0 });
+  await page.mouse.move(p.x, p.y);
+  await expect(page.locator(".snap-marker")).toBeHidden();
+});
+test("single, double and triple face clicks expand selection in three stages", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await push(page, { x: 50, y: 50, z: 0 }, "100");
+  await page.getByRole("button", { name: /^Select/ }).click();
+  const p = await screenOf(page, { x: 50, y: 50, z: 100 });
+  await page.mouse.click(p.x, p.y);
+  expect((await snapshot(page)).selection).toHaveLength(1);
+  await page.mouse.click(p.x, p.y, { clickCount: 2 });
+  const twice = await snapshot(page);
+  expect(twice.selection).toHaveLength(9);
+  expect(
+    twice.selection
+      .map((id) => twice.entities[id])
+      .filter((e) => e.kind === "face"),
+  ).toHaveLength(1);
+  expect(
+    twice.selection
+      .map((id) => twice.entities[id])
+      .filter((e) => e.kind === "edge"),
+  ).toHaveLength(4);
+  expect(
+    twice.selection
+      .map((id) => twice.entities[id])
+      .filter((e) => e.kind === "vertex"),
+  ).toHaveLength(4);
+  await page.mouse.click(p.x, p.y, { clickCount: 3 });
+  expect((await snapshot(page)).selection).toHaveLength(26);
 });

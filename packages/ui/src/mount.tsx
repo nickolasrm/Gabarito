@@ -55,7 +55,7 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
     useEffect(() => api.attach(host.current!), []);
     const active = api.tools.find((t) => t.id === status.tool)!;
     return (
-      <main>
+      <main data-tool={status.tool}>
         <header>
           <div className="brand">
             <span className="brand-mark">G</span>
@@ -139,8 +139,8 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
               Press again to release
             </p>
             <p className="muted">
-              Double-click to select connected geometry. Esc cancels the current
-              action.
+              Double-click selects a face and its boundary. Triple-click selects
+              connected geometry. Esc cancels.
             </p>
           </aside>
         </section>
@@ -151,8 +151,12 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
             <span role="status" className={status.message ? "error" : ""}>
               {status.message ||
                 (status.active
-                  ? "Choose destination or enter dimensions"
-                  : "Choose a starting point")}
+                  ? status.tool === "pushpull"
+                    ? "Drag or type a distance; release to finish"
+                    : "Choose destination or enter dimensions"
+                  : status.tool === "pushpull"
+                    ? "Hold a face to start"
+                    : "Choose a starting point")}
             </span>
           </div>
           <form

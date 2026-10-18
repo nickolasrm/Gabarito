@@ -21,9 +21,12 @@ move, push/pull and rotate. Typed dimensions, axis locks, visible-geometry snapp
 Drawings partition shared surfaces; closed-solid edits use bundled Manifold WASM.
 
 Lengths are stored in millimetres. Input supports mm, cm, m, in and ft. While drawing, type values
-and press Enter: rectangle `100,100`, line `10`, push/pull `10` (or `-10` to cut inward).
+and press Enter: rectangle `100,100`, line `10`. For push/pull, hold a face, drag, and release; type `10` while holding for an exact
+distance (or `-10` to cut inward).
 Arrow Up pins height/Z, Right width/X, Left depth/Y; press the same key again to release.
 Middle mouse orbits; Shift+middle pans; wheel zooms. `F` frames the model.
+Modeling tools use a crosshair; visible vertex/edge targets get labeled snap markers. Select a face
+with one click, its boundary with two clicks, or connected geometry with three clicks.
 
 No persistence yet: reload clears the document. No plugin host, lighting or woodworking tools.
 The rewrite intentionally limits the toolbar to the requested basic tools; the previous circle,

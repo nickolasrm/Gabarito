@@ -7,7 +7,7 @@ export const TOOLS: { id: Tool; label: string; key: string; hint: string }[] = [
     id: "select",
     label: "Select",
     key: "Space",
-    hint: "Click an entity. Shift adds or removes. Double-click selects connected geometry.",
+    hint: "Click an entity. Shift adds or removes. Double-click selects a face and its boundary; triple-click selects connected geometry.",
   },
   {
     id: "line",
@@ -31,7 +31,7 @@ export const TOOLS: { id: Tool; label: string; key: string; hint: string }[] = [
     id: "pushpull",
     label: "Push/Pull",
     key: "P",
-    hint: "Click a face, then a depth. Type a signed distance, Enter. Negative cuts inward.",
+    hint: "Hold a face, drag, then release. Type a signed distance while holding for an exact size. Negative cuts inward.",
   },
   {
     id: "rotate",
@@ -50,6 +50,7 @@ export interface ToolView {
   project(p: Vec3): { x: number; y: number; visible: boolean };
   pick(x: number, y: number, faceOnly?: boolean): ToolHit | null;
   preview(lines: Segment[]): void;
+  feedback(hit: ToolHit | null): void;
 }
 export interface Status {
   tool: Tool;
@@ -72,8 +73,11 @@ export interface Controller {
     y: number,
     click?: boolean,
     shift?: boolean,
-    double?: boolean,
+    clicks?: number,
   ): void;
   key(key: string, ctrl?: boolean, shift?: boolean): boolean;
+  press(x: number, y: number): void;
+  release(x: number, y: number): void;
+  leave(): void;
   cancel(): void;
 }
