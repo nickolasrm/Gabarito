@@ -1,5 +1,33 @@
 # Changelog
 
+## Coplanar divider deletion — 2026-10-18
+
+- Deleting a shared coplanar edge merges its faces, preserving the parent surface and other holes.
+- Unselected sketch edges remain. Explicit face/vertex and perimeter/crease deletion retain their
+  removal behavior; mixed deletions never recreate a selected perimeter.
+- Added core deletion/history regressions and a filled vertical recess browser regression.
+- Spec: [0025](docs/specs/0025-erase-coplanar-dividers.md).
+
+## Rectangle opening repair — 2026-10-18
+
+- Rectangles infer their plane and edge alignment from snapped boundary targets, including vertical
+  and rotated openings. Preview and commit share four planar corners; the active plane is shown.
+- Explicitly tracing an opening restores one face without a diagonal document edge. Deleted regions
+  track split boundary loops, so unrelated drawing continues to leave holes and deletions intact.
+- Added vertical recess/fill browser coverage and headless plane/restoration/history regressions.
+- Spec: [0024](docs/specs/0024-fill-openings-with-rectangle.md).
+
+## Modeling input and feedback — 2026-10-18
+
+- Modeling tools use precise crosshair cursors. Vertex and edge targets show labeled markers at
+  their actual snap positions; hovered faces are tinted without changing selection.
+- Push/pull now uses hold, drag and release, with pointer capture, cancellation and exact typed
+  dimensions while held. Release makes one undoable edit; stationary clicks are no-ops.
+- Face selection now expands in three stages: face, face boundary, connected geometry. Boundary
+  selection includes hole loops and preserves Shift selection behavior.
+- Added controller and browser regressions; updated earlier push/pull tests to the new gesture.
+- Spec: [0023](docs/specs/0023-modeling-input-feedback.md).
+
 ## Raised-sheet push/pull fix — 2026-10-18
 
 - Fixed pushing or pulling a face drawn on top of an already raised sheet. The first extrusion

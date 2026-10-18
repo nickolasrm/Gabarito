@@ -4,6 +4,7 @@ import { createViewport } from "@gabarito/scene";
 import type { Viewport } from "@gabarito/scene";
 import { createController, TOOLS } from "@gabarito/tools";
 import type { Controller, Tool } from "@gabarito/tools";
+import { attachInput } from "./input";
 import { mountUi } from "@gabarito/ui";
 export async function boot({ root }: { root: HTMLElement }): Promise<void> {
   try {
@@ -21,6 +22,7 @@ export async function boot({ root }: { root: HTMLElement }): Promise<void> {
         message: "",
         unit: "mm" as const,
         measurement: "",
+        plane: "Ground",
       };
     const listeners = new Set<() => void>();
     mountUi(root, {
@@ -40,42 +42,9 @@ export async function boot({ root }: { root: HTMLElement }): Promise<void> {
           for (const fn of listeners) fn();
         });
         const canvas = viewport.canvas;
-        const local = (e: MouseEvent) => {
-          const box = canvas.getBoundingClientRect();
-          return { x: e.clientX - box.left, y: e.clientY - box.top };
-        };
-        const move = (e: PointerEvent) => {
-          if (e.buttons === 0) {
-            const { x, y } = local(e);
-            controller.pointer(x, y);
-          }
-        };
-        const click = (e: MouseEvent) => {
-          if (e.button === 0) {
-            canvas.focus();
-            const { x, y } = local(e);
-            controller.pointer(x, y, true, e.shiftKey, e.detail === 2);
-          }
-        };
-        const key = (e: KeyboardEvent) => {
-          const element = e.target as HTMLElement;
-          if (element.closest("input,select,textarea") || e.altKey) return;
-          if (
-            e.key.toLowerCase() === "f" &&
-            !e.ctrlKey &&
-            !e.metaKey &&
-            !controller.status().typed
-          ) {
-            viewport.frame();
-            e.preventDefault();
-            return;
-          }
-          if (controller.key(e.key, e.ctrlKey || e.metaKey, e.shiftKey))
-            e.preventDefault();
-        };
-        canvas.addEventListener("pointermove", move);
-        canvas.addEventListener("click", click);
-        window.addEventListener("keydown", key);
+        const detachInput = attachInput(canvas, controller, () =>
+          viewport.frame(),
+        );
         if (import.meta.env.DEV)
           (window as unknown as { __gabarito: unknown }).__gabarito = {
             store,
@@ -85,9 +54,7 @@ export async function boot({ root }: { root: HTMLElement }): Promise<void> {
         for (const fn of listeners) fn();
         return () => {
           unsubscribe();
-          canvas.removeEventListener("pointermove", move);
-          canvas.removeEventListener("click", click);
-          window.removeEventListener("keydown", key);
+          detachInput();
           viewport.dispose();
         };
       },

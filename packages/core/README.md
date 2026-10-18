@@ -6,6 +6,9 @@ The authoritative model and reversible editing API. No DOM, Three.js or React.
   planar face reconstruction, `conformEdges` (split shared boundaries without creating faces) and validation. Face loops reference vertex IDs; edges are undirected.
 - `edit.ts`: serializable `Command` union and geometry editing, including shell orientation,
   extrusion/booleans, deletion and shared-vertex transforms.
+- `erase.ts`: deletion merges faces across selected coplanar dividers using polygon union.
+  Unselected sketch edges remain; perimeter, explicit face/vertex and noncoplanar edge deletion
+  retain their removal semantics. Mixed selections never restore a deleted perimeter.
 - `store.ts`: `createStore`, atomic `execute`, `select`, `undo`, `redo`, subscriptions and history.
   Commands run on a copy and publish only after validation. Before/after snapshots are the inverse.
   Entity IDs remain monotonic through undo. Selection itself is not an undo entry.
@@ -24,3 +27,8 @@ See [spec 0022](../../docs/specs/0022-open-sheet-pushpull.md).
 
 `npm test` checks region area, holes, welded intersections, solid volume and closedness, repeated
 edits, rollback and history. See [spec 0021](../../docs/specs/0021-rewrite-modeler.md).
+
+A draw command may include `fillLoop`: an explicitly requested closed contour. It clears a deleted
+region only when its rebuilt outer boundary matches that contour, including collinear split points.
+Other deleted regions remain suppressed. `Model.erased` stores boundary loops so `conformEdges`
+updates deletion markers alongside face loops when an edge is split; their signatures stay valid.

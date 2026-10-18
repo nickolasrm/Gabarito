@@ -1,3 +1,4 @@
+import { erase } from "./erase";
 import {
   EPS,
   add,
@@ -25,7 +26,7 @@ import {
 } from "./model";
 import type { Model, Face } from "./model";
 export type Command =
-  | { type: "draw"; segments: Segment[] }
+  | { type: "draw"; segments: Segment[]; fillLoop?: Vec3[] }
   | { type: "delete"; ids: string[] }
   | { type: "move"; ids: string[]; delta: Vec3 }
   | { type: "rotate"; ids: string[]; center: Vec3; axis: Vec3; angle: number }
@@ -178,14 +179,14 @@ function extrude(
             faceKey({ outer: hole, holes: [] }),
         )
       )
-        m.erased.push(faceKey({ outer: hole, holes: [] }));
+        m.erased.push({ outer: [...hole], holes: [] });
     }
   m.selection = [];
 }
 export function apply(m: Model, c: Command): void {
   switch (c.type) {
     case "draw":
-      draw(m, c.segments);
+      draw(m, c.segments, c.fillLoop);
       break;
     case "pushpull":
       extrude(m, c.face, c.distance, c.direction);
@@ -210,32 +211,8 @@ export function apply(m: Model, c: Command): void {
       }
       break;
     }
-    case "delete": {
-      const remove = new Set(c.ids),
-        deletedEdges = new Set<string>();
-      for (const e of edges(m))
-        if (remove.has(e.id) || e.vertices.some((id) => remove.has(id))) {
-          remove.add(e.id);
-          deletedEdges.add(edgeKey(...e.vertices));
-        }
-      for (const f of faces(m))
-        if (
-          remove.has(f.id) ||
-          loops(f)
-            .flat()
-            .some((id) => remove.has(id)) ||
-          loops(f).some((l) =>
-            l.some((a, i) =>
-              deletedEdges.has(edgeKey(a, l[(i + 1) % l.length])),
-            ),
-          )
-        ) {
-          m.erased.push(faceKey(f));
-          remove.add(f.id);
-        }
-      for (const id of remove) delete m.entities[id];
-      m.selection = [];
+    case "delete":
+      erase(m, c.ids);
       break;
-    }
   }
 }

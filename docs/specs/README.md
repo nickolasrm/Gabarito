@@ -43,6 +43,12 @@ and by decision records, so a rejected spec keeps its number forever.
 
 | [0022](./0022-open-sheet-pushpull.md) | Continue push/pull on raised open sheets | implemented | core, geometry | 0027 |
 
+| [0023](./0023-modeling-input-feedback.md) | Add precise modeling input and target feedback | implemented | tools, scene, app, ui | 0012, 0027 |
+
+| [0024](./0024-fill-openings-with-rectangle.md) | Infer rectangle planes from opening boundaries and restore filled faces | implemented | tools, core | 0020, 0027 |
+
+| [0025](./0025-erase-coplanar-dividers.md) | Preserve surfaces when deleting coplanar dividers | implemented | core | 0027 |
+
 Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 
 ## Writing one

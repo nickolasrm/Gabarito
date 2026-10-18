@@ -307,3 +307,42 @@ input {
     width: 130px;
   }
 }
+
+main:not([data-tool="select"]) .viewport canvas {
+  cursor: crosshair;
+}
+.snap-marker {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  color: #8cffe3;
+}
+.snap-marker[hidden] {
+  display: none;
+}
+.snap-marker::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid currentColor;
+  background: #102b28b3;
+  box-shadow: 0 0 0 1px #102024;
+}
+.snap-marker[data-kind="edge"]::before {
+  transform: rotate(45deg);
+}
+.snap-label {
+  position: absolute;
+  left: 17px;
+  top: 10px;
+  padding: 2px 6px;
+  border: 1px solid #417567;
+  border-radius: 3px;
+  background: #102b28;
+  color: #b1ffe9;
+  font-size: 11px;
+  white-space: nowrap;
+}

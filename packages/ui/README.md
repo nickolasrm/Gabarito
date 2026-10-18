@@ -11,3 +11,6 @@ It owns no geometry or camera. React mounts the viewport container; app attaches
 Keyboard entry and focused dimension input share the controller's typed buffer.
 
 Tests: browser behavior in `npm run test:e2e`; no snapshot tests for presentation-only components.
+
+The root's `data-tool` selects a crosshair cursor for modeling tools and the default cursor for
+Select. Snap marker styles belong to this shell; scene positions their DOM overlay at world targets.

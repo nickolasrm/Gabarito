@@ -15,6 +15,8 @@ import {
   axisPoint,
   axisVector,
   rotate,
+  near,
+  onPlane,
 } from "@gabarito/geometry";
 import type { Vec3, Axis, Segment } from "@gabarito/geometry";
 import {
@@ -27,6 +29,8 @@ import {
   selectedVertices,
 } from "@gabarito/core";
 import type { Store, Unit, Command } from "@gabarito/core";
+import { inferRectanglePlane, defaultDrawingPlane } from "./drawing-plane";
+import { selectionAt } from "./selection";
 import { TOOLS } from "./types";
 import type { Tool, ToolView, Controller } from "./types";
 export function createController(store: Store, view: ToolView): Controller {
@@ -43,6 +47,7 @@ export function createController(store: Store, view: ToolView): Controller {
     message = "",
     measurement = "",
     unitId: Unit = "mm";
+  let planeLabel = "Ground";
   let lastX = 0,
     lastY = 0;
   const listeners = new Set<() => void>();
@@ -58,6 +63,7 @@ export function createController(store: Store, view: ToolView): Controller {
     message = "";
     measurement = "";
     view.preview([]);
+    view.feedback(null);
     emit();
   };
   const direction = (): Vec3 =>
@@ -86,7 +92,7 @@ export function createController(store: Store, view: ToolView): Controller {
     return [
       start!,
       add(start!, mul(drawingPlane.u, x)),
-      end,
+      add(start!, add(mul(drawingPlane.u, x), mul(drawingPlane.v, y))),
       add(start!, mul(drawingPlane.v, y)),
     ];
   };
@@ -173,9 +179,19 @@ export function createController(store: Store, view: ToolView): Controller {
       return true;
     }
     let command: Command;
-    if (tool === "rectangle")
-      command = { type: "draw", segments: polygonSegments(rectangle(end)) };
-    else if (tool === "move")
+    if (tool === "rectangle") {
+      const corners = rectangle(end);
+      if (near(corners[0], corners[1]) || near(corners[0], corners[3])) {
+        message = "Choose an opposite corner with width and height";
+        emit();
+        return false;
+      }
+      command = {
+        type: "draw",
+        segments: polygonSegments(corners),
+        fillLoop: corners,
+      };
+    } else if (tool === "move")
       command = {
         type: "move",
         ids: store.getState().selection,
@@ -247,7 +263,7 @@ export function createController(store: Store, view: ToolView): Controller {
     y: number,
     click = false,
     shift = false,
-    double = false,
+    clicks = 1,
   ) => {
     lastX = x;
     lastY = y;
@@ -263,8 +279,29 @@ export function createController(store: Store, view: ToolView): Controller {
       if (axis && tool === "rectangle")
         drawingPlane = plane(V(), axis === "z" ? V(0, -1, 0) : V(0, 0, 1));
     }
+    if (tool === "rectangle") {
+      const inferred = axis
+        ? {
+            frame: plane(start ?? V(), axis === "z" ? V(0, -1, 0) : V(0, 0, 1)),
+            label: `Axis ${axis.toUpperCase()}`,
+          }
+        : inferRectanglePlane(
+            store.getState(),
+            hit,
+            start,
+            ray,
+            start
+              ? { frame: drawingPlane, label: planeLabel }
+              : defaultDrawingPlane(hit?.point),
+          );
+      drawingPlane = inferred.frame;
+      planeLabel = inferred.label;
+      if (start) drawingPlane = { ...drawingPlane, origin: start };
+    }
     let end =
-      hit && hit.kind !== "face"
+      hit &&
+      hit.kind !== "face" &&
+      (tool !== "rectangle" || onPlane(hit.point, drawingPlane))
         ? hit.point
         : intersectPlane(ray, drawingPlane);
     if (start && axis && tool !== "rectangle" && tool !== "rotate")
@@ -278,7 +315,10 @@ export function createController(store: Store, view: ToolView): Controller {
       );
       end = intersectPlane(ray, rotationPlane);
     }
-    if (!end) return;
+    if (!end) {
+      view.feedback(null);
+      return;
+    }
     if (start && !axis && tool === "line" && hit?.kind !== "vertex") {
       for (const a of ["x", "y", "z"] as Axis[]) {
         const p = axisPoint(ray, start, axisVector(a)),
@@ -294,42 +334,23 @@ export function createController(store: Store, view: ToolView): Controller {
       }
     }
     current = end;
+    view.feedback(
+      hit && (tool === "pushpull" ? !start : near(end, hit.point)) ? hit : null,
+    );
     if (click) {
       message = "";
       if (tool === "select") {
-        if (double && hit) {
-          const m = store.getState(),
-            all = new Set([hit.id]),
-            vs = selectedVertices(m, [hit.id]);
-          let changed = true;
-          while (changed) {
-            changed = false;
-            for (const e of edges(m))
-              if (e.vertices.some((id) => vs.has(id))) {
-                all.add(e.id);
-                for (const id of e.vertices)
-                  if (!vs.has(id)) {
-                    vs.add(id);
-                    changed = true;
-                  }
-              }
-          }
-          for (const f of faces(m))
-            if (f.outer.some((id) => vs.has(id))) all.add(f.id);
-          vs.forEach((id) => all.add(id));
-          store.select([...all]);
-        } else {
-          const old = store.getState().selection;
-          store.select(
-            hit
-              ? shift
-                ? old.includes(hit.id)
-                  ? old.filter((id) => id !== hit.id)
-                  : [...old, hit.id]
-                : [hit.id]
-              : [],
-          );
-        }
+        const old = store.getState().selection;
+        const targets = hit
+          ? selectionAt(store.getState(), hit.id, clicks)
+          : [];
+        store.select(
+          shift && hit
+            ? clicks === 1 && old.includes(hit.id)
+              ? old.filter((id) => id !== hit.id)
+              : [...old, ...targets]
+            : targets,
+        );
       } else if (!start) {
         if (tool === "pushpull" && hit?.kind !== "face") {
           message = "Choose a face";
@@ -372,6 +393,7 @@ export function createController(store: Store, view: ToolView): Controller {
       message,
       unit: unitId,
       measurement,
+      plane: planeLabel,
     }),
     subscribe(fn) {
       listeners.add(fn);
@@ -396,6 +418,28 @@ export function createController(store: Store, view: ToolView): Controller {
     },
     submit,
     pointer,
+    press(x, y) {
+      if (tool !== "pushpull") return;
+      cancel();
+      pointer(x, y, true);
+    },
+    release(x, y) {
+      if (tool !== "pushpull" || !start) return;
+      pointer(x, y);
+      if (typed) submit();
+      else if (length(sub(current, start)) <= EPS) cancel();
+      else finish(current);
+      // Release always ends the gesture, including invalid input or a refused operation.
+      if (start) {
+        const error = message;
+        cancel();
+        message = error;
+        emit();
+      }
+    },
+    leave() {
+      view.feedback(null);
+    },
     cancel,
     key(key, ctrl = false, shift = false) {
       if (ctrl && (key.toLowerCase() === "z" || key.toLowerCase() === "y")) {
