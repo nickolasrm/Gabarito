@@ -1065,3 +1065,106 @@ for (const [kind, axis, key] of [
     expect((await snapshot(page)).entities).toEqual(before.entities);
   });
 }
+
+for (const side of ["top", "side"] as const) {
+  test(`Rotate uses A and B on a cube ${side} face for zero, signed preview and one-step history`, async ({
+    page,
+  }) => {
+    await rectangle(page);
+    await push(page, { x: 50, y: 50, z: 0 }, "100");
+    await page.keyboard.press("f");
+    const before = await snapshot(page);
+    const a =
+      side === "top" ? { x: 50, y: 50, z: 100 } : { x: 50, y: 0, z: 50 };
+    const b =
+      side === "top" ? { x: 100, y: 50, z: 100 } : { x: 100, y: 0, z: 50 };
+    // Select the whole solid; rotation must preserve a rigid cube.
+    await page.evaluate(() => {
+      const { store } = window.__gabarito;
+      store.select(Object.keys(store.getState().entities));
+    });
+    await page.getByRole("button", { name: /^Rotate/ }).click();
+    await clickWorld(page, a);
+    const bp = await screenOf(page, b);
+    await page.mouse.move(bp.x, bp.y);
+    await expect(page.locator(".cursor-hint")).toContainText("0.0°");
+    expect((await snapshot(page)).entities).toEqual(before.entities);
+    await page.mouse.click(bp.x, bp.y);
+    await expect(page.locator(".cursor-hint")).toContainText("0.0°");
+    const positive =
+      side === "top" ? { x: 50, y: 100, z: 100 } : { x: 50, y: 0, z: 0 };
+    const negative =
+      side === "top" ? { x: 50, y: 0, z: 100 } : { x: 50, y: 0, z: 100 };
+    const cp = await screenOf(page, positive),
+      dp = await screenOf(page, negative);
+    await page.mouse.move(dp.x, dp.y);
+    expect(
+      Math.abs(parseFloat(await page.locator(".cursor-hint").innerText()) + 90),
+    ).toBeLessThan(1);
+    await page.mouse.move(cp.x, cp.y);
+    expect(
+      Math.abs(parseFloat(await page.locator(".cursor-hint").innerText()) - 90),
+    ).toBeLessThan(1);
+    expect((await snapshot(page)).entities).toEqual(before.entities);
+    await page.mouse.click(cp.x, cp.y);
+    const after = await snapshot(page);
+    // The face-interior anchor comes from pixel-precision clicks; headless tests assert exact angles and coordinates.
+    for (const entity of Object.values(before.entities)) {
+      if (entity.kind !== "vertex") continue;
+      const q = entity.position,
+        result = after.entities[entity.id];
+      if (result.kind !== "vertex")
+        throw new Error("Missing transformed vertex");
+      const expected =
+        side === "top"
+          ? { x: a.x - (q.y - a.y), y: a.y + (q.x - a.x), z: q.z }
+          : { x: a.x + (q.z - a.z), y: q.y, z: a.z - (q.x - a.x) };
+      for (const axis of ["x", "y", "z"] as const)
+        expect(Math.abs(result.position[axis] - expected[axis])).toBeLessThan(
+          1,
+        );
+    }
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    expect((await snapshot(page)).entities).toEqual(before.entities);
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    expect((await snapshot(page)).entities).toEqual(after.entities);
+  });
+}
+
+test("Rotate cancels after B and accepts signed typed degrees on its next use", async ({
+  page,
+}) => {
+  await rectangle(page);
+  const before = await snapshot(page);
+  await page.evaluate(() => {
+    const { store } = window.__gabarito;
+    store.select(
+      Object.values(store.getState().entities)
+        .filter((e) => e.kind === "face")
+        .map((e) => e.id),
+    );
+  });
+  await page.getByRole("button", { name: /^Rotate/ }).click();
+  await clickWorld(page, { x: 0, y: 0, z: 0 });
+  await clickWorld(page, { x: 100, y: 0, z: 0 });
+  const q = await screenOf(page, { x: 0, y: 100, z: 0 });
+  await page.mouse.move(q.x, q.y);
+  await expect(page.locator(".cursor-hint")).toContainText("90.0°");
+  await page.keyboard.press("Escape");
+  expect((await snapshot(page)).entities).toEqual(before.entities);
+  await expect(page.locator(".cursor-hint")).not.toBeVisible();
+  await clickWorld(page, { x: 0, y: 0, z: 0 });
+  await clickWorld(page, { x: 100, y: 0, z: 0 });
+  await type(page, "-90");
+  const after = await snapshot(page);
+  for (const e of Object.values(before.entities)) {
+    if (e.kind !== "vertex") continue;
+    const actual = after.entities[e.id];
+    if (actual.kind !== "vertex") throw new Error("Missing rotated vertex");
+    expect(actual.position.x).toBeCloseTo(e.position.y);
+    expect(actual.position.y).toBeCloseTo(-e.position.x);
+    expect(actual.position.z).toBeCloseTo(e.position.z);
+  }
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect((await snapshot(page)).entities).toEqual(before.entities);
+});

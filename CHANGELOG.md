@@ -1,5 +1,14 @@
 # Changelog
 
+## Rotation anchor and orientation — 2026-10-18
+
+- Rotate uses anchor A and zero-angle point B to infer its supporting face or boundary plane, then
+  freezes that plane. Geometry stays at zero rotation until B is chosen; movement afterward shows
+  signed degrees and reference rays before a final click commits.
+- On-plane snapped points stay exact. Explicit axes, Alt bypass, typed degrees, cancellation and
+  one-step history remain available. Rotate guidance and the plane indicator describe the new flow.
+- Spec: [0032](docs/specs/0032-rotate-anchor-orientation.md).
+
 ## Constrained reference snapping — 2026-10-18
 
 - Push/Pull aligns to an explicitly hovered face plane even when the free depth is far from it.

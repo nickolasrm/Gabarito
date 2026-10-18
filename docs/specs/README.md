@@ -58,6 +58,7 @@ and by decision records, so a rejected spec keeps its number forever.
 | [0030](./0030-reset-axis-pins.md) | Clear axis pins when a tool operation ends | implemented | tools | 0012, 0018 |
 
 | [0031](./0031-constrained-reference-snapping.md) | Align constrained edits to explicitly hovered references | implemented | tools | 0012, 0018, 0027 |
+| [0032](./0032-rotate-anchor-orientation.md) | Orient rotation from an anchor and zero-angle reference | implemented | tools, ui | 0012, 0018, 0020 |
 
 Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 

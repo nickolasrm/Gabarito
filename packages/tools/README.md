@@ -12,7 +12,7 @@ click count; app routes held gestures through `press` and `release`.
 - Select: single-click face; double-click face plus all boundary edges/vertices (including holes);
   triple-click connected geometry. Shift-single toggles; Shift-multiple adds.
 - Line chains edges until a planar face closes. Rectangle infers its plane from the aimed face or boundary, including rotated openings.
-- Move transforms selected shared vertices. Rotate accepts pivot/reference/angle or typed degrees.
+- Move transforms selected shared vertices. Rotate uses anchor A, zero-angle reference B, then a final angle click or typed degrees.
 - Push/pull supports click/move/click and press/drag/release together. A stationary first release
   arms click mode without editing; a drag release or second click commits once. Signed input and
   arrow locks work in both modes; Enter can commit early. Zero-depth completion is a no-op.
@@ -72,3 +72,13 @@ face inference, while explicit geometry priority and Alt bypass remain shared.
 The gesture discriminator is shared by tape and push/pull. Completion and cancellation clear both
 axis and sign. Each committed line segment clears its own pin while retaining the polygon chain;
 this prevents the next segment or tool use from inheriting an earlier lock.
+
+Rotate reuses the supporting-plane resolver while choosing A and B, including incident face planes
+at edges/vertices and tilted faces. A remains fixed; B freezes the plane and sets zero. Before B,
+preview geometry stays unchanged. After B, signed angles use the frozen plane normal and the
+A-to-B direction; an off-plane target falls back to the ray/plane intersection. Eligible on-plane
+hits retain their exact coordinates. Cursor feedback shows degrees and preview rays show the zero
+and current directions. Explicit arrows override the rotation axis; B is projected into a changed
+plane, or cleared when it collapses onto A. Typed degrees after A remain supported. Preview and
+commit share the plane, pivot and angle; Escape or changing tools clears the reference. Tests in
+`rotation.test.ts` cover orientation, both signs, exact history, snapping, overrides and cancellation.

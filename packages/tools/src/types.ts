@@ -43,7 +43,7 @@ export const TOOLS: { id: Tool; label: string; key: string; hint: string }[] = [
     id: "rotate",
     label: "Rotate",
     key: "Q",
-    hint: "Select geometry. Click pivot, reference, then angle. Or type degrees after pivot.",
+    hint: "Select geometry. Click anchor A, then zero-angle point B on the supporting face. Move to rotate, then click to finish, or type degrees.",
   },
 ];
 export interface ToolHit {

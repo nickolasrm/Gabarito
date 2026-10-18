@@ -117,10 +117,20 @@ export function createController(store: Store, view: ToolView): Controller {
   };
   const polygonSegments = (ps: Vec3[]): Segment[] =>
     ps.map((p, i) => [p, ps[(i + 1) % ps.length]]);
+  const rotationPlane = () =>
+    axis
+      ? plane(start ?? drawingPlane.origin, mul(axisVector(axis), axisSign))
+      : { ...drawingPlane, origin: start ?? drawingPlane.origin };
+  const rotationVector = (p: Vec3): Vec3 => {
+    const d = sub(p, start!),
+      n = rotationPlane().normal;
+    return sub(d, mul(n, dot(d, n)));
+  };
   const rotatedAngle = (p: Vec3): number => {
-    const n = axis ? mul(axisVector(axis), axisSign) : drawingPlane.normal;
-    const a = unit(sub(reference ?? add(start!, drawingPlane.u), start!)),
-      b = unit(sub(p, start!));
+    if (!reference || near(p, start!)) return 0;
+    const n = rotationPlane().normal,
+      a = unit(rotationVector(reference)),
+      b = unit(rotationVector(p));
     return Math.atan2(dot(n, cross(a, b)), dot(a, b));
   };
   const updatePreview = () => {
@@ -177,12 +187,7 @@ export function createController(store: Store, view: ToolView): Controller {
       const transform = (p: Vec3) =>
         tool === "move"
           ? add(p, delta)
-          : rotate(
-              p,
-              start!,
-              axis ? mul(axisVector(axis), axisSign) : drawingPlane.normal,
-              angle,
-            );
+          : rotate(p, start!, rotationPlane().normal, angle);
       view.preview(
         edges(m)
           .filter((e) => e.vertices.some((id) => selected.has(id)))
@@ -192,7 +197,17 @@ export function createController(store: Store, view: ToolView): Controller {
                 selected.has(id) ? transform(position(m, id)) : position(m, id),
               ) as Segment,
           )
-          .concat(inferenceLines),
+          .concat(inferenceLines)
+          .concat(
+            tool === "rotate"
+              ? reference
+                ? [
+                    [start, reference],
+                    [start, current],
+                  ]
+                : [[start, current]]
+              : [],
+          ),
         guides(m)
           .filter((g) => m.selection.includes(g.id))
           .map((g) => ({
@@ -208,10 +223,10 @@ export function createController(store: Store, view: ToolView): Controller {
     const distance = length(sub(current, start));
     measurement =
       tool === "rotate"
-        ? `${((rotatedAngle(current) * 180) / Math.PI).toFixed(1)}°`
+        ? `${(Math.round((rotatedAngle(current) * 1800) / Math.PI) / 10).toFixed(1)}°`
         : `${(distance / UNITS[unitId]).toFixed(2)} ${unitId}`;
     view.cursorHint(
-      tool === "tape"
+      tool === "tape" || tool === "rotate"
         ? [measurement, inferenceLabel].filter(Boolean).join(" · ")
         : [
             inferenceLabel,
@@ -289,7 +304,7 @@ export function createController(store: Store, view: ToolView): Controller {
         type: "rotate",
         ids: store.getState().selection,
         center: start,
-        axis: axis ? mul(axisVector(axis), axisSign) : drawingPlane.normal,
+        axis: rotationPlane().normal,
         angle: number ?? rotatedAngle(end),
       };
     else if (tool === "pushpull")
@@ -391,6 +406,24 @@ export function createController(store: Store, view: ToolView): Controller {
       planeLabel = inferred.label;
       if (start) drawingPlane = { ...drawingPlane, origin: start };
     }
+    if (tool === "rotate" && !reference) {
+      const inferred = axis
+        ? { frame: rotationPlane(), label: `Axis ${axis.toUpperCase()}` }
+        : inferRectanglePlane(
+            store.getState(),
+            hit,
+            start,
+            ray,
+            start
+              ? { frame: drawingPlane, label: planeLabel }
+              : defaultDrawingPlane(hit?.point),
+          );
+      drawingPlane = {
+        ...inferred.frame,
+        origin: start ?? inferred.frame.origin,
+      };
+      planeLabel = inferred.label;
+    }
     let end =
       hit &&
       (hit.kind !== "face" || tool === "tape") &&
@@ -402,11 +435,11 @@ export function createController(store: Store, view: ToolView): Controller {
     else if (start && tool === "pushpull")
       end = axisPoint(ray, start, direction());
     if (start && tool === "rotate") {
-      const rotationPlane = plane(
-        start,
-        axis ? mul(axisVector(axis), axisSign) : drawingPlane.normal,
-      );
-      end = intersectPlane(ray, rotationPlane);
+      const frame = rotationPlane();
+      end =
+        snapping && hit && onPlane(hit.point, frame)
+          ? hit.point
+          : intersectPlane(ray, frame);
     }
     if (!end) {
       view.cursorHint("", x, y);
@@ -685,6 +718,10 @@ export function createController(store: Store, view: ToolView): Controller {
           sign = key === "ArrowDown" ? -1 : 1;
         axis = axis === next && axisSign === sign ? null : next;
         axisSign = sign;
+        if (tool === "rotate" && start && reference) {
+          const d = rotationVector(reference);
+          reference = length(d) > EPS ? add(start, d) : null;
+        }
         pointer(lastX, lastY);
         emit();
         return true;
