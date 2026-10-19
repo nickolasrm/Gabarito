@@ -40,3 +40,9 @@ The Components section creates a definition from the selection, edits names on b
 shows the current context path with an Exit component action. Its draggable definition grips use
 `application/x-gabarito-component` and UiApi's transient drag callback. The viewport drop is handled
 by app; React never copies geometry. Errors appear inline. Empty/overlong names are rejected in core.
+
+Component entries include memoized isometric SVG thumbnails, nested geometry and face holes, an
+Unused badge, and an explicit definition Delete button. Its tooltip states that deletion removes
+all instances and can be undone. Purge unused reports the document-wide unused count; Highlight
+components is a view-only toggle. `component-preview.ts` derives bounded paths from definition
+geometry without extra WebGL contexts; empty definitions have a visible placeholder.

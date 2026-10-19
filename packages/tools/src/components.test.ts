@@ -122,3 +122,33 @@ it("Escape cancels a tool first and exits the component only on the next Escape"
   expect(store.getContext().path).toEqual([]);
   c.dispose();
 });
+it("Delete removes only the selected scene instance and undo restores it", () => {
+  const { store, c, id } = setup();
+  const before = structuredClone(store.getState());
+  c.pointer(50, 50, true);
+  c.key("Delete");
+  expect(store.getState().entities[id]).toBeUndefined();
+  expect(store.getState().definitions).toEqual(before.definitions);
+  c.key("z", true);
+  expect(store.getState().entities).toEqual(before.entities);
+  c.dispose();
+});
+it("double-click outside geometry or empty space exits one context without changing definitions", () => {
+  const { store, c, id, aim } = setup();
+  const definition = Object.keys(store.getState().definitions)[0];
+  store.execute({ type: "place-component", definition, point: V(200) });
+  store.enterComponent(id);
+  const before = structuredClone(store.getState().definitions);
+  const outside = faces(store.getScene()).find((f) => f.id.includes("/"))!;
+  aim({ id: outside.id, kind: "face", point: V(250, 50) });
+  c.pointer(250, 50, true, false, 2);
+  expect(store.getContext().path).toEqual([]);
+  expect(store.getState().definitions).toEqual(before);
+  store.enterComponent(id);
+  aim(null);
+  c.pointer(500, 500, true, false, 1);
+  expect(store.getContext().path).toEqual([id]);
+  c.pointer(500, 500, true, false, 2);
+  expect(store.getContext().path).toEqual([]);
+  c.dispose();
+});

@@ -427,12 +427,14 @@ main:not([data-tool="select"]) .viewport canvas {
   font-size: 11px;
 }
 .component-entry {
-  display: flex;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) 24px;
+  align-items: center;
   gap: 6px;
 }
 .component-entry button {
   cursor: grab;
-  padding: 3px 8px;
+  padding: 0;
 }
 .components [role="alert"] {
   color: #ffb18c;
@@ -440,4 +442,22 @@ main:not([data-tool="select"]) .viewport canvas {
 .context-path {
   color: #69dfcc;
   overflow-wrap: anywhere;
+}
+
+.component-thumbnail {
+  width: 56px;
+  height: 56px;
+  display: block;
+  pointer-events: none;
+}
+.component-details {
+  min-width: 0;
+}
+.unused-component {
+  color: #eac58e;
+  font-size: 10px;
+}
+.component-entry .delete-component {
+  cursor: pointer;
+  padding: 3px;
 }

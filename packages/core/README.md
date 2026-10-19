@@ -68,3 +68,11 @@ metadata. Use it for references/rendering, never as editable document geometry. 
 resolves a picked primitive to a direct instance or active entity, returning null for other scopes.
 `selectionGeometry(model)` expands an active selection for bounds and transform previews. History
 restores the edit context with the exact document snapshot; IDs stay monotonic across undo.
+
+Component library commands operate on the whole document, regardless of the active edit scope.
+`{type: "delete-component", definition}` removes the definition and every referencing instance,
+including occurrences in other definitions. Ordinary `delete` still removes only selected instances.
+`{type: "purge-components"}` removes definitions unreachable from root scene instances, following
+nested references transitively. `Store.getUnusedComponents()` reports that same document-wide set.
+No-op purge adds no history. Library deletion repairs a removed context path; undo/redo restores the
+appropriate before/after context with its geometry. `component-library.ts` contains these operations.

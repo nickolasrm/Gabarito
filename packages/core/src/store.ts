@@ -1,3 +1,4 @@
+import { unusedComponents } from "./component-library";
 import { createModel, validate } from "./model";
 import type { Model } from "./model";
 import { apply } from "./edit";
@@ -16,6 +17,7 @@ export { isClosed } from "./edit";
 export interface Store {
   getState(): Model;
   getScene(): SceneModel;
+  getUnusedComponents(): string[];
   getContext(): { path: string[]; names: string[] };
   selectionTarget(id: string): string | null;
   enterComponent(id: string): void;
@@ -33,8 +35,14 @@ export function createStore(): Store {
     path: string[] = [],
     nextId = 1;
   let state: Model = documentModel,
-    scene: SceneModel = expandModel(documentModel);
-  const history: { before: Model; after: Model; path: string[] }[] = [],
+    scene: SceneModel = expandModel(documentModel),
+    unused: string[] = [];
+  const history: {
+      before: Model;
+      after: Model;
+      beforePath: string[];
+      afterPath: string[];
+    }[] = [],
     future: typeof history = [];
   const listeners = new Set<() => void>();
   const scopeAt = (doc: Model, context: string[]) => {
@@ -56,6 +64,7 @@ export function createStore(): Store {
     const { scope, transform } = scopeAt(documentModel, path);
     state = { ...documentModel, ...mapScope(scope, transform) };
     scene = expandModel(documentModel, path);
+    unused = unusedComponents(documentModel);
     scene.selection = Object.keys(scene.entities).filter((id) =>
       state.selection.includes(scene.owners[id] ?? ""),
     );
@@ -72,6 +81,7 @@ export function createStore(): Store {
   return {
     getState: () => state,
     getScene: () => scene,
+    getUnusedComponents: () => [...unused],
     getContext: () => ({
       path: [...path],
       names: scopeAt(documentModel, path).names,
@@ -96,17 +106,34 @@ export function createStore(): Store {
       };
     },
     execute(command) {
-      const next = structuredClone(state);
-      apply(next, command);
-      validate(next);
+      const libraryCommand =
+        command.type === "delete-component" ||
+        command.type === "purge-components";
       const doc = structuredClone(documentModel);
-      doc.definitions = next.definitions;
-      const { scope, transform } = scopeAt(doc, path),
-        local = mapScope(next, inverseTransform(transform));
-      scope.entities = local.entities;
-      scope.erased = local.erased;
-      doc.nextId = next.nextId;
-      doc.selection = next.selection;
+      let afterPath = [...path];
+      if (libraryCommand) {
+        apply(doc, command);
+        while (afterPath.length) {
+          try {
+            scopeAt(doc, afterPath);
+            break;
+          } catch {
+            afterPath.pop();
+          }
+        }
+      } else {
+        const next = structuredClone(state);
+        apply(next, command);
+        validate(next);
+        doc.definitions = next.definitions;
+        const { scope, transform } = scopeAt(doc, path),
+          local = mapScope(next, inverseTransform(transform));
+        scope.entities = local.entities;
+        scope.erased = local.erased;
+        doc.nextId = next.nextId;
+        doc.selection = next.selection;
+      }
+      validate(doc);
       validateComponents(doc);
       for (const d of Object.values(doc.definitions))
         validate({ ...createModel(), ...d.geometry });
@@ -116,10 +143,11 @@ export function createStore(): Store {
       history.push({
         before: structuredClone(documentModel),
         after: structuredClone(doc),
-        path: [...path],
+        beforePath: [...path],
+        afterPath,
       });
       future.length = 0;
-      publish(doc);
+      publish(doc, afterPath);
     },
     select(ids) {
       publish({
@@ -131,14 +159,14 @@ export function createStore(): Store {
       const h = history.pop();
       if (h) {
         future.push(h);
-        publish(structuredClone(h.before), h.path);
+        publish(structuredClone(h.before), h.beforePath);
       }
     },
     redo() {
       const h = future.pop();
       if (h) {
         history.push(h);
-        publish(structuredClone(h.after), h.path);
+        publish(structuredClone(h.after), h.afterPath);
       }
     },
     canUndo: () => history.length > 0,

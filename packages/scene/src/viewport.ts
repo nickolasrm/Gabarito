@@ -29,6 +29,7 @@ export interface Viewport {
   cursorHint(text: string, x: number, y: number): void;
   feedback(hit: Hit | null): void;
   frame(): void;
+  setHighlightComponents(enabled: boolean): void;
   dispose(): void;
   cameraState(): { position: Vec3; target: Vec3 };
 }
@@ -145,7 +146,12 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
       const clipped = clipReference(line, frustum.planes);
       if (!clipped) continue;
       const axis = line.id.startsWith("world:"),
-        selected = store.getScene().selection.includes(line.id);
+        selected =
+          store.getScene().selection.includes(line.id) ||
+          (store.getScene().componentEntities.includes(line.id) &&
+            (highlightComponents ||
+              (store.getContext().path.length > 0 &&
+                !store.getScene().inactive.includes(line.id))));
       const color = selected
         ? 0xffbd69
         : axis
@@ -158,6 +164,7 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
     }
   };
   controls.addEventListener("change", drawReferences);
+  let highlightComponents = false;
   const rebuild = () => {
     feedback(null);
     drawReferences();
@@ -167,6 +174,13 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
       selectedPoints = new Set(
         m.selection.filter((id) => m.entities[id]?.kind === "vertex"),
       );
+    const componentEntities = new Set(m.componentEntities),
+      inactive = new Set(m.inactive),
+      editing = store.getContext().path.length > 0;
+    const highlighted = (id: string) =>
+      selected.has(id) ||
+      (highlightComponents && componentEntities.has(id)) ||
+      (editing && !inactive.has(id));
     for (const f of faces(m)) {
       const mesh = triangulate(surface(m, f)),
         g = new THREE.BufferGeometry();
@@ -185,9 +199,10 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
           new THREE.MeshStandardMaterial({
             color: selected.has(f.id)
               ? 0xe8ad59
-              : store.getContext().path.length && !m.inactive.includes(f.id)
+              : (editing && !inactive.has(f.id)) ||
+                  (highlightComponents && componentEntities.has(f.id))
                 ? 0x86dcca
-                : m.inactive.includes(f.id) && store.getContext().path.length
+                : editing
                   ? 0x677782
                   : 0xb7c8cf,
             side: THREE.DoubleSide,
@@ -204,14 +219,18 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
     const regular: Segment[] = [],
       highlight: Segment[] = [];
     for (const e of edges(m))
-      (selected.has(e.id) ? highlight : regular).push(
+      (highlighted(e.id) ? highlight : regular).push(
         e.vertices.map((id) => position(m, id)) as Segment,
       );
     modelGroup.add(
       lineObject(regular, 0x13191e),
       lineObject(highlight, 0xffbd69),
     );
-    const points = vertices(m).filter((v) => selectedPoints.has(v.id));
+    const points = vertices(m).filter(
+      (v) =>
+        selectedPoints.has(v.id) ||
+        (componentEntities.has(v.id) && highlighted(v.id)),
+    );
     if (points.length) {
       const g = new THREE.BufferGeometry().setFromPoints(
         points.map(
@@ -450,6 +469,11 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
       handleData = points;
       activeHandle = activeId;
       drawHandles();
+    },
+    setHighlightComponents(enabled) {
+      highlightComponents = enabled;
+      canvas.dataset.highlightComponents = String(enabled);
+      rebuild();
     },
     frame() {
       feedback(null);

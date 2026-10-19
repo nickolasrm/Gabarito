@@ -670,6 +670,12 @@ export function createController(store: Store, view: ToolView): Controller {
       if (tool === "select") {
         const old = store.getState().selection;
         const target = hit ? store.selectionTarget(hit.id) : null;
+        if (clicks === 2 && !target && store.getContext().path.length) {
+          cancel();
+          store.exitComponent();
+          emit();
+          return;
+        }
         if (
           target &&
           clicks >= 2 &&

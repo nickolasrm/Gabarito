@@ -1,6 +1,13 @@
+import { componentPreview } from "./component-preview";
 import { createRoot } from "react-dom/client";
-import { useSyncExternalStore, useEffect, useRef, useState } from "react";
-import type { Store, Unit } from "@gabarito/core";
+import {
+  useSyncExternalStore,
+  useEffect,
+  useRef,
+  useState,
+  useMemo,
+} from "react";
+import type { Store, Unit, Model } from "@gabarito/core";
 import { UNITS, vertices, edges, faces, guides } from "@gabarito/core";
 import "./styles.css";
 export interface ToolButton {
@@ -41,6 +48,51 @@ export interface UiApi {
   exitComponent(): void;
   dragComponent(id: string | null): void;
   placementError(): string;
+  deleteComponent(id: string): void;
+  purgeComponents(): void;
+  highlightComponents(enabled: boolean): void;
+}
+function ComponentThumbnail({
+  definitions,
+  id,
+  name,
+}: {
+  definitions: Model["definitions"];
+  id: string;
+  name: string;
+}) {
+  const preview = useMemo(
+    () => componentPreview(definitions, id),
+    [definitions, id],
+  );
+  return (
+    <svg
+      className="component-thumbnail"
+      viewBox="0 0 72 72"
+      role="img"
+      aria-label={`Preview of ${name}`}
+    >
+      {preview.faces.map((d, i) => (
+        <path
+          key={i}
+          d={d}
+          fill="#9dbcc3"
+          stroke="#304a54"
+          strokeWidth="1"
+          fillRule="evenodd"
+        />
+      ))}
+      <path d={preview.lines} fill="none" stroke="#9debdc" strokeWidth="1.5" />
+      {preview.points.map((p, i) => (
+        <circle key={i} cx={p.x} cy={p.y} r="2" fill="#9debdc" />
+      ))}
+      {!preview.faces.length && !preview.lines && !preview.points.length && (
+        <text x="36" y="39" textAnchor="middle" fill="#9eafbb" fontSize="10">
+          Empty
+        </text>
+      )}
+    </svg>
+  );
 }
 export function mountUi(root: HTMLElement, api: UiApi): () => void {
   let revision = 0;
@@ -70,8 +122,10 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
     );
     useEffect(() => api.attach(host.current!), []);
     const [componentName, setComponentName] = useState("Component 1"),
-      [componentError, setComponentError] = useState("");
-    const context = api.store.getContext();
+      [componentError, setComponentError] = useState(""),
+      [highlighted, setHighlighted] = useState(false);
+    const context = api.store.getContext(),
+      unused = new Set(api.store.getUnusedComponents());
     const perform = (fn: () => void) => {
       try {
         fn();
@@ -196,6 +250,21 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
               >
                 Make component
               </button>
+              <button
+                aria-pressed={highlighted}
+                onClick={() => {
+                  api.highlightComponents(!highlighted);
+                  setHighlighted(!highlighted);
+                }}
+              >
+                Highlight components
+              </button>
+              <button
+                disabled={!unused.size}
+                onClick={() => perform(api.purgeComponents)}
+              >
+                Purge unused ({unused.size})
+              </button>
               {Object.values(m.definitions).map((d) => (
                 <div key={d.id} className="component-entry">
                   <button
@@ -212,23 +281,40 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
                     aria-label={`Drag ${d.name} into scene`}
                     title="Drag into the viewport to place a linked instance"
                   >
-                    ⠿
+                    <ComponentThumbnail
+                      definitions={m.definitions}
+                      id={d.id}
+                      name={d.name}
+                    />
                   </button>
-                  <input
-                    aria-label={`Component name: ${d.name}`}
-                    defaultValue={d.name}
-                    key={d.name}
-                    maxLength={120}
-                    onBlur={(e) => {
-                      if (e.target.value !== d.name)
-                        perform(() =>
-                          api.renameComponent(d.id, e.target.value),
-                        );
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") e.currentTarget.blur();
-                    }}
-                  />
+                  <div className="component-details">
+                    <input
+                      aria-label={`Component name: ${d.name}`}
+                      defaultValue={d.name}
+                      key={d.name}
+                      maxLength={120}
+                      onBlur={(e) => {
+                        if (e.target.value !== d.name)
+                          perform(() =>
+                            api.renameComponent(d.id, e.target.value),
+                          );
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                      }}
+                    />
+                    {unused.has(d.id) && (
+                      <small className="unused-component">Unused</small>
+                    )}
+                  </div>
+                  <button
+                    className="delete-component"
+                    aria-label={`Delete component ${d.name}`}
+                    title="Delete this definition and all of its instances; Undo restores them"
+                    onClick={() => perform(() => api.deleteComponent(d.id))}
+                  >
+                    ×
+                  </button>
                 </div>
               ))}
               {(componentError || api.placementError()) && (

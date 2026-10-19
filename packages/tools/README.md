@@ -127,3 +127,7 @@ instance; double-click enters it instead of selecting boundary primitives. Escap
 action first, then exits one context when idle. Move/Rotate previews and Scale bounds expand selected
 instances through `selectionGeometry`, while their commands retain instance IDs. Push/Pull and
 Offset require a face owned by the current scope. Tests in `components.test.ts` cover this boundary.
+
+Select double-clicks outside the active context, including empty space, exit exactly one level.
+Single outside clicks only clear selection; double-clicks on editable primitives retain their
+boundary behavior. Scene-instance Delete and its inverse are covered separately from library deletion.

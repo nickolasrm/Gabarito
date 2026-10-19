@@ -53,3 +53,8 @@ transforms. This preserves primitive snap targets and occlusion across context b
 making them editable topology. Selection ownership is resolved by core, not renderer object IDs.
 While editing, active faces are mint and the surrounding contexts are dimmed. Face/edge markers,
 framing, reference lines and scale handles all use the same world geometry.
+
+`setHighlightComponents(enabled)` colors all derived component faces, edges, vertices and rulers without changing
+selection or history. `SceneModel.componentEntities` identifies component geometry; `inactive` now
+means outside the active context and all of its descendants, so nested pieces highlight with their
+parent while remaining atomic selections until entered. Other linked instances remain outside.

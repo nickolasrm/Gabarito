@@ -233,6 +233,7 @@ export function validateComponents(m: Model): void {
 export interface SceneModel extends Model {
   owners: Record<string, string | null>;
   inactive: string[];
+  componentEntities: string[];
 }
 /** Flatten only for rendering/references; derived entities never enter topology commands. */
 export function expandModel(m: Model, activePath: string[] = []): SceneModel {
@@ -242,6 +243,7 @@ export function expandModel(m: Model, activePath: string[] = []): SceneModel {
     revision: m.revision,
     owners: {},
     inactive: [],
+    componentEntities: [],
   };
   const walk = (
     scope: GeometryScope,
@@ -274,7 +276,9 @@ export function expandModel(m: Model, activePath: string[] = []): SceneModel {
       }
       result.entities[e.id] = e;
       result.owners[e.id] = active ? original.id : owner;
-      if (!active) result.inactive.push(e.id);
+      if (path.length) result.componentEntities.push(e.id);
+      if (!activePath.every((id, i) => path[i] === id))
+        result.inactive.push(e.id);
     }
   };
   walk(m, identity(), [], null);

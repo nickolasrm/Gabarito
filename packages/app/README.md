@@ -42,3 +42,6 @@ vertex, midpoint, ruler and ground placement use the viewport's existing picking
 primitive snapping. Only a successful drop sends `place-component`. Leaving/cancelling a drag clears
 the overlay. The sidebar invokes component creation, naming and context exit through UiApi; app
 cancels tool previews when changing geometry scopes. Placement errors return to the sidebar.
+
+UiApi routes library deletion/purge through core commands and cancels pending tool previews first.
+Highlight components delegates to viewport presentation state. Sidebar errors remain inline.

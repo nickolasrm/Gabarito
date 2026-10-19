@@ -1,3 +1,4 @@
+import { unusedComponents, deleteComponent } from "./component-library";
 import {
   identity,
   componentName,
@@ -39,6 +40,8 @@ import {
 } from "./model";
 import type { Model, Face } from "./model";
 export type Command =
+  | { type: "delete-component"; definition: string }
+  | { type: "purge-components" }
   | { type: "make-component"; ids: string[]; name: string }
   | { type: "rename-component"; definition: string; name: string }
   | { type: "place-component"; definition: string; point: Vec3 }
@@ -236,6 +239,12 @@ export function apply(m: Model, c: Command): void {
       return;
   }
   switch (c.type) {
+    case "delete-component":
+      deleteComponent(m, c.definition);
+      break;
+    case "purge-components":
+      for (const id of unusedComponents(m)) delete m.definitions[id];
+      break;
     case "make-component":
       makeComponent(m, c.ids, c.name);
       break;

@@ -42,6 +42,26 @@ async function makePanel(page: Page) {
     page.getByLabel("Component name: Panel", { exact: true }),
   ).toBeVisible();
 }
+async function seedPanel(page: Page) {
+  await page.evaluate(() => {
+    const s = window.__gabarito.store,
+      p = [
+        { x: 0, y: 0, z: 0 },
+        { x: 100, y: 0, z: 0 },
+        { x: 100, y: 100, z: 0 },
+        { x: 0, y: 100, z: 0 },
+      ];
+    s.execute({ type: "draw", segments: p.map((a, i) => [a, p[(i + 1) % 4]]) });
+    s.execute({
+      type: "make-component",
+      ids: Object.keys(s.getState().entities),
+      name: "Panel",
+    });
+  });
+  await expect(
+    page.getByLabel("Component name: Panel", { exact: true }),
+  ).toBeVisible();
+}
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("canvas")).toBeVisible();
@@ -79,7 +99,7 @@ test("creates and names a component, selects atomically, enters and exits its co
 test("sidebar drag previews and drops a linked instance, then a real drawing updates both", async ({
   page,
 }) => {
-  await makePanel(page);
+  await seedPanel(page);
   const drag = page.getByRole("button", {
     name: "Drag Panel into scene",
     exact: true,
@@ -207,7 +227,7 @@ test("scale handles and move transform instances; editing a moved clone propagat
 test("cancelling a component drag clears its preview without creating an instance", async ({
   page,
 }) => {
-  await makePanel(page);
+  await seedPanel(page);
   const drag = page.getByRole("button", {
     name: "Drag Panel into scene",
     exact: true,
@@ -228,4 +248,141 @@ test("cancelling a component drag clears its preview without creating an instanc
   await page.mouse.up();
   await expect(page.locator(".cursor-hint")).toBeHidden();
   expect(await components(page)).toHaveLength(1);
+});
+
+test("deletes selected scene instances and detects, purges and restores unused definitions", async ({
+  page,
+}) => {
+  await makePanel(page);
+  await expect(
+    page.getByRole("img", { name: "Preview of Panel", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("img", { name: "Preview of Panel", exact: true })
+      .locator("path")
+      .first(),
+  ).toHaveAttribute("d", /^M/);
+  const p = await screen(page, { x: 50, y: 50, z: 0 });
+  await page.mouse.click(p.x, p.y);
+  await page.keyboard.press("Delete");
+  expect(await components(page)).toHaveLength(0);
+  await expect(page.getByText("Unused", { exact: true })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Purge unused (1)", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Component name: Panel", { exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(
+    page.getByLabel("Component name: Panel", { exact: true }),
+  ).toBeVisible();
+  expect(await components(page)).toHaveLength(0);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect(await components(page)).toHaveLength(1);
+  await expect(
+    page.getByRole("button", { name: "Purge unused (0)", exact: true }),
+  ).toBeDisabled();
+});
+test("library deletion removes all linked instances and undo restores an active context", async ({
+  page,
+}) => {
+  await makePanel(page);
+  const definition = Object.keys((await state(page)).definitions)[0];
+  await page.evaluate(
+    (definition) =>
+      window.__gabarito.store.execute({
+        type: "place-component",
+        definition,
+        point: { x: 200, y: 0, z: 0 },
+      }),
+    definition,
+  );
+  const p = await screen(page, { x: 50, y: 50, z: 0 });
+  await page.mouse.dblclick(p.x, p.y);
+  await expect(page.getByLabel("Editing context")).toHaveText("Model / Panel");
+  await page
+    .getByRole("button", { name: "Delete component Panel", exact: true })
+    .click();
+  await expect(page.getByLabel("Editing context")).toHaveText("Model");
+  expect(await components(page)).toHaveLength(0);
+  await expect(
+    page.getByLabel("Component name: Panel", { exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.getByLabel("Editing context")).toHaveText("Model / Panel");
+  expect(
+    await page.evaluate(
+      () =>
+        Object.values(window.__gabarito.store.getScene().entities).filter(
+          (e) => e.kind === "face",
+        ).length,
+    ),
+  ).toBe(2);
+});
+test("nested components have previews and highlight with their parent; outside double-click exits", async ({
+  page,
+}) => {
+  await makePanel(page);
+  await page.getByLabel("New component name", { exact: true }).fill("Parent");
+  await page
+    .getByRole("button", { name: "Make component", exact: true })
+    .click();
+  const parent = (await components(page))[0];
+  await page.evaluate((definition) => {
+    window.__gabarito.store.execute({
+      type: "place-component",
+      definition,
+      point: { x: 200, y: 0, z: 0 },
+    });
+    window.__gabarito.viewport.frame();
+  }, parent.definition);
+  await expect(
+    page.getByRole("button", { name: "Purge unused (0)", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page
+      .getByRole("img", { name: "Preview of Parent", exact: true })
+      .locator("path")
+      .first(),
+  ).toHaveAttribute("d", /^M/);
+  let p = await screen(page, { x: 50, y: 50, z: 0 });
+  await page.mouse.dblclick(p.x, p.y);
+  await expect(page.getByLabel("Editing context")).toHaveText("Model / Parent");
+  const active = await page.evaluate(() => {
+    const scene = window.__gabarito.store.getScene(),
+      path = window.__gabarito.store.getContext().path;
+    const face = Object.values(scene.entities).find(
+      (e) => e.kind === "face" && e.id.startsWith(path.join("/") + "/"),
+    )!;
+    return !scene.inactive.includes(face.id);
+  });
+  expect(active).toBe(true);
+  const before = await state(page),
+    highlight = page.getByRole("button", {
+      name: "Highlight components",
+      exact: true,
+    });
+  await highlight.click();
+  await expect(highlight).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("canvas")).toHaveAttribute(
+    "data-highlight-components",
+    "true",
+  );
+  expect(await state(page)).toEqual(before);
+  await highlight.click();
+  await expect(page.locator("canvas")).toHaveAttribute(
+    "data-highlight-components",
+    "false",
+  );
+  p = await screen(page, { x: 250, y: 50, z: 0 });
+  await page.mouse.dblclick(p.x, p.y);
+  await expect(page.getByLabel("Editing context")).toHaveText("Model");
+  p = await screen(page, { x: 50, y: 50, z: 0 });
+  await page.mouse.dblclick(p.x, p.y);
+  await expect(page.getByLabel("Editing context")).toHaveText("Model / Parent");
+  p = await screen(page, { x: 200, y: -100, z: 0 });
+  await page.mouse.dblclick(p.x, p.y);
+  await expect(page.getByLabel("Editing context")).toHaveText("Model");
 });

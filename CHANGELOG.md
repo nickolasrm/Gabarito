@@ -315,3 +315,13 @@ Keep the entries above the fold. When a change ships:
 - Added headless and browser regressions for isolation, shared boundaries, linked topology, nested
   contexts, transformed edits, cycle rejection, history, naming and placement.
 - Spec: [0038](docs/specs/0038-linked-components.md); decision: [0028](docs/decisions/0028-component-contexts.md).
+
+## 2026-10-19 — Component library and context feedback
+
+- Added explicit library deletion of definitions and all their linked/nested instances, with Undo.
+  Scene Delete retains its single-instance behavior.
+- Added scene-reachability detection, Unused badges and undoable Purge unused.
+- Added live isometric library thumbnails and a Highlight components view toggle.
+- Double-clicking outside a component exits one edit level; nested geometry now highlights with its parent.
+- Added core, thumbnail and browser regressions for these owner-reported cases.
+- Spec: [0039](docs/specs/0039-component-library-and-context-feedback.md).
