@@ -36,6 +36,11 @@ export interface UiApi {
   redo(): void;
   remove(): void;
   frame(): void;
+  makeComponent(name: string): void;
+  renameComponent(id: string, name: string): void;
+  exitComponent(): void;
+  dragComponent(id: string | null): void;
+  placementError(): string;
 }
 export function mountUi(root: HTMLElement, api: UiApi): () => void {
   let revision = 0;
@@ -64,6 +69,17 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
       [status.circleSegments, status.tool],
     );
     useEffect(() => api.attach(host.current!), []);
+    const [componentName, setComponentName] = useState("Component 1"),
+      [componentError, setComponentError] = useState("");
+    const context = api.store.getContext();
+    const perform = (fn: () => void) => {
+      try {
+        fn();
+        setComponentError("");
+      } catch (e) {
+        setComponentError(e instanceof Error ? e.message : String(e));
+      }
+    };
     const active = api.tools.find((t) => t.id === status.tool)!;
     return (
       <main data-tool={status.tool}>
@@ -149,6 +165,80 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
                 />
               </label>
             )}
+            <div className="rule" />
+            <section aria-label="Components" className="components">
+              <span className="eyebrow">COMPONENTS</span>
+              <p className="context-path" aria-label="Editing context">
+                {["Model", ...context.names].join(" / ")}
+              </p>
+              {context.path.length > 0 && (
+                <button onClick={api.exitComponent}>Exit component</button>
+              )}
+              <label>
+                New component name
+                <input
+                  aria-label="New component name"
+                  value={componentName}
+                  maxLength={120}
+                  onChange={(e) => setComponentName(e.target.value)}
+                />
+              </label>
+              <button
+                disabled={!m.selection.length}
+                onClick={() =>
+                  perform(() => {
+                    api.makeComponent(componentName);
+                    setComponentName(
+                      `Component ${Object.keys(api.store.getState().definitions).length + 1}`,
+                    );
+                  })
+                }
+              >
+                Make component
+              </button>
+              {Object.values(m.definitions).map((d) => (
+                <div key={d.id} className="component-entry">
+                  <button
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(
+                        "application/x-gabarito-component",
+                        d.id,
+                      );
+                      e.dataTransfer.effectAllowed = "copy";
+                      api.dragComponent(d.id);
+                    }}
+                    onDragEnd={() => api.dragComponent(null)}
+                    aria-label={`Drag ${d.name} into scene`}
+                    title="Drag into the viewport to place a linked instance"
+                  >
+                    ⠿
+                  </button>
+                  <input
+                    aria-label={`Component name: ${d.name}`}
+                    defaultValue={d.name}
+                    key={d.name}
+                    maxLength={120}
+                    onBlur={(e) => {
+                      if (e.target.value !== d.name)
+                        perform(() =>
+                          api.renameComponent(d.id, e.target.value),
+                        );
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                    }}
+                  />
+                </div>
+              ))}
+              {(componentError || api.placementError()) && (
+                <p role="alert">{componentError || api.placementError()}</p>
+              )}
+              <p className="muted">
+                Drag a component into the scene for a linked instance.
+                Double-click an instance to edit all its copies.
+              </p>
+            </section>
             <div className="rule" />
             <span className="eyebrow">MODEL</span>
             <dl>

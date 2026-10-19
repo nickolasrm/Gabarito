@@ -382,10 +382,20 @@ main:not([data-tool="select"]) .viewport canvas {
   pointer-events: none;
   z-index: 4;
 }
-.scale-handle.active { background: #ffbd69; box-shadow: 0 0 0 2px #fff0c9; }
-.scale-handle[hidden] { display: none; }
+.scale-handle.active {
+  background: #ffbd69;
+  box-shadow: 0 0 0 2px #fff0c9;
+}
+.scale-handle[hidden] {
+  display: none;
+}
 
-.tool-option { display: flex; align-items: center; gap: 10px; color: #acbbc5; }
+.tool-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #acbbc5;
+}
 .tool-option input {
   width: 72px;
   padding: 5px 8px;
@@ -393,4 +403,41 @@ main:not([data-tool="select"]) .viewport canvas {
   color: #dce4e8;
   border: 1px solid #425461;
   border-radius: 4px;
+}
+
+.components {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.components p {
+  margin: 0;
+}
+.components input {
+  width: 100%;
+  min-width: 0;
+  color: inherit;
+  background: #151b22;
+  border: 1px solid #425461;
+  border-radius: 4px;
+  padding: 5px;
+}
+.components label {
+  color: #9eafbb;
+  font-size: 11px;
+}
+.component-entry {
+  display: flex;
+  gap: 6px;
+}
+.component-entry button {
+  cursor: grab;
+  padding: 3px 8px;
+}
+.components [role="alert"] {
+  color: #ffb18c;
+}
+.context-path {
+  color: #69dfcc;
+  overflow-wrap: anywhere;
 }

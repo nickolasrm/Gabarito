@@ -129,7 +129,7 @@ export function createOffsetTool(
     let lines: Segment[] = [],
       label = "";
     if (point && snapping() && (!hit || hit.kind === "face")) {
-      const inferred = snapOnFace(store.getState(), source.frame, point, view);
+      const inferred = snapOnFace(store.getScene(), source.frame, point, view);
       if (inferred) {
         point = inferred.point;
         hit = inferred.hit;

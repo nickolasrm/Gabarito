@@ -141,11 +141,11 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
         camera.matrixWorldInverse,
       ),
     );
-    for (const line of referenceLines(store.getState())) {
+    for (const line of referenceLines(store.getScene())) {
       const clipped = clipReference(line, frustum.planes);
       if (!clipped) continue;
       const axis = line.id.startsWith("world:"),
-        selected = store.getState().selection.includes(line.id);
+        selected = store.getScene().selection.includes(line.id);
       const color = selected
         ? 0xffbd69
         : axis
@@ -162,7 +162,7 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
     feedback(null);
     drawReferences();
     disposeGroup(modelGroup);
-    const m = store.getState(),
+    const m = store.getScene(),
       selected = new Set(m.selection),
       selectedPoints = new Set(
         m.selection.filter((id) => m.entities[id]?.kind === "vertex"),
@@ -183,7 +183,13 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
         new THREE.Mesh(
           g,
           new THREE.MeshStandardMaterial({
-            color: selected.has(f.id) ? 0xe8ad59 : 0xb7c8cf,
+            color: selected.has(f.id)
+              ? 0xe8ad59
+              : store.getContext().path.length && !m.inactive.includes(f.id)
+                ? 0x86dcca
+                : m.inactive.includes(f.id) && store.getContext().path.length
+                  ? 0x677782
+                  : 0xb7c8cf,
             side: THREE.DoubleSide,
             roughness: 0.85,
             polygonOffset: true,
@@ -274,20 +280,20 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
     if (hit.id !== hoverId) {
       hoverId = hit.id;
       disposeGroup(hoverGroup);
-      const entity = store.getState().entities[hit.id];
+      const entity = store.getScene().entities[hit.id];
       if (entity?.kind === "edge")
         hoverGroup.add(
           lineObject(
             [
               entity.vertices.map((id) =>
-                position(store.getState(), id),
+                position(store.getScene(), id),
               ) as Segment,
             ],
             0x8cffe3,
           ),
         );
       if (entity?.kind === "face") {
-        const m = store.getState(),
+        const m = store.getScene(),
           points = loops(entity)
             .flatMap((l) =>
               l.map((id, i) =>
@@ -384,7 +390,7 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
         !p.visible ||
         (h.id !== activeHandle &&
           !visible(
-            store.getState(),
+            store.getScene(),
             { origin: asVec(camera.position), project, ray },
             h.point,
           ));
@@ -412,12 +418,12 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
     project,
     visible: (p) =>
       visible(
-        store.getState(),
+        store.getScene(),
         { origin: asVec(camera.position), project, ray },
         p,
       ),
     pick(x, y, faceOnly = false) {
-      const m = store.getState();
+      const m = store.getScene();
       return faceOnly
         ? faceHit(m, ray(x, y))
         : pick(m, { origin: asVec(camera.position), project, ray }, x, y);
@@ -447,7 +453,7 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
     },
     frame() {
       feedback(null);
-      const vs = vertices(store.getState());
+      const vs = vertices(store.getScene());
       if (!vs.length) return;
       const box = new THREE.Box3().setFromPoints(
         vs.map(

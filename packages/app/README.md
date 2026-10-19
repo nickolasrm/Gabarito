@@ -36,3 +36,9 @@ subscriptions before destroying the viewport.
 
 Circle and Offset use ordinary click input. Window blur also cancels their pending operations.
 App exposes Circle's creation segment setting through the controller; it adds no geometry state.
+
+`component-placement.ts` routes native sidebar drags into transient world-space previews. Surface,
+vertex, midpoint, ruler and ground placement use the viewport's existing picking; Alt bypasses
+primitive snapping. Only a successful drop sends `place-component`. Leaving/cancelling a drag clears
+the overlay. The sidebar invokes component creation, naming and context exit through UiApi; app
+cancels tool previews when changing geometry scopes. Placement errors return to the sidebar.

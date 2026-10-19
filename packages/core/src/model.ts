@@ -1,3 +1,4 @@
+import type { Component, ComponentDefinition } from "./components";
 import {
   EPS,
   sub,
@@ -40,8 +41,9 @@ export interface Guide {
   origin: Vec3;
   direction: Vec3;
 }
-export type Entity = Vertex | Edge | Face | Guide;
+export type Entity = Vertex | Edge | Face | Guide | Component;
 export interface Model {
+  definitions: Record<string, ComponentDefinition>;
   entities: Record<string, Entity>;
   selection: string[];
   erased: Pick<Face, "outer" | "holes">[];
@@ -49,6 +51,7 @@ export interface Model {
   revision: number;
 }
 export const createModel = (): Model => ({
+  definitions: {},
   entities: {},
   selection: [],
   erased: [],

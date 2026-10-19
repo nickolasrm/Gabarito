@@ -47,3 +47,9 @@ updates reproject them; forward-depth and surface occlusion hide ineligible grip
 grip remains visible through the original mesh so shrinking previews remain readable. These
 markers never enter document geometry or entity picking. Empty input and viewport disposal remove
 their DOM nodes and listeners. The ordinary `preview` API renders the box and transformed edges.
+
+The viewport renders/picks `Store.getScene()`, a derived flattening of definitions and instance
+transforms. This preserves primitive snap targets and occlusion across context boundaries without
+making them editable topology. Selection ownership is resolved by core, not renderer object IDs.
+While editing, active faces are mint and the surrounding contexts are dimmed. Face/edge markers,
+framing, reference lines and scale handles all use the same world geometry.

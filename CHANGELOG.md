@@ -304,3 +304,14 @@ Keep the entries above the fold. When a change ships:
   - Added / Changed / Deprecated / Removed / Fixed / Security
   - append `- <what changed>. — spec NNNN` with a relative link to the spec file
 -->
+
+## 2026-10-18 — Linked component contexts
+
+- Added named shared component definitions and independently transformed linked instances.
+- Selections become components without cutting or welding surrounding contexts. Double-click opens
+  their geometry; edits propagate to every linked instance. Exit or idle Escape returns outward.
+- Added a Components sidebar with naming and drag-to-place previews for linked instances.
+- Kept snapping across contexts and existing Move/Rotate/Scale behavior for atomic instances.
+- Added headless and browser regressions for isolation, shared boundaries, linked topology, nested
+  contexts, transformed edits, cycle rejection, history, naming and placement.
+- Spec: [0038](docs/specs/0038-linked-components.md); decision: [0028](docs/decisions/0028-component-contexts.md).

@@ -17,7 +17,7 @@ continuation of anything it draws on, and not a replacement for any of it.
 ## Status
 
 **Rewritten basic modeler.** Camera orbit/pan/zoom, rectangle, circle, face offset, polygon line builder, selection,
-move, scale, push/pull, rotate and tape measure. Typed dimensions, axis locks, visible-geometry snapping and undo/redo.
+move, scale, push/pull, rotate, tape measure and linked components. Typed dimensions, axis locks, visible-geometry snapping and undo/redo.
 Drawings partition shared surfaces; closed-solid edits use bundled Manifold WASM.
 
 Lengths are stored in millimetres. Input supports mm, cm, m, in and ft. While drawing, type values
@@ -30,6 +30,9 @@ corner handles to scale proportionally, or click a handle and type a positive fa
 Circle (`C`) uses a center and radius; type `10` for a 10-unit radius. Circle segments default to 24.
 Offset (`O`) uses a face and inward edge distance; type `10` for a 10-unit border on every side.
 Both partition parent faces, keeping inner regions available for further modeling.
+Select geometry and use Make component in the Components sidebar. Name the definition, drag its
+grip into the viewport to place a linked instance, and double-click an instance to edit it. Edits
+update every instance; outside drawings stay separate. Exit component or idle Escape returns outward.
 Modeling tools use a crosshair; visible vertex/edge targets get labeled snap markers. Select a face
 with one click, its boundary with two clicks, or connected geometry with three clicks.
 

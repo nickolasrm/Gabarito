@@ -23,7 +23,7 @@ The core is done when a user can build a small building without fighting the too
 | Undo/redo everywhere | ✅ | Every tool operation is a command with an inverse ([decision 0006](../decisions/0006-document-model-and-commands.md)). |
 | Arc, polygon, erase, offset, follow-me | — | Not started. |
 | Scale / move copy / array | — | Not started. |
-| Groups and components | — | The basis of any real workflow; not started. |
+| Linked components | ✅ | Named definitions, linked instances, isolated nested editing contexts, sidebar placement and history ([spec 0038](../specs/0038-linked-components.md)). Independent groups remain deferred. |
 | Materials and styles | — | Not started. |
 | Outliner and entity info | — | Not started. |
 | Sections and shadows | — | Not started. |
@@ -56,8 +56,8 @@ The first slices are done: tooling and the static build
 The geometry kernel question is settled: the cut runs on `manifold-3d` behind `geometry`'s `solid`
 interface ([decision 0022](../decisions/0022-cuts-run-on-manifold.md)); there is no in-house kernel.
 Persistence is not started.
-Next slices, in the order that unblocks the most: **save and load**, then **groups and components**,
-then **erase, offset and follow-me**.
+Linked component contexts are implemented in [spec 0038](../specs/0038-linked-components.md).
+Persistence and the other unimplemented capabilities above remain separate work.
 
 Related: [module boundaries](../architecture/module-boundaries.md),
 [glossary](../glossary.md).

@@ -1,3 +1,9 @@
+import {
+  identity,
+  componentName,
+  makeComponent,
+  mapTransform,
+} from "./components";
 import { scaleSelection } from "./scale";
 import { erase } from "./erase";
 import {
@@ -10,6 +16,8 @@ import {
   dot,
   normal,
   rotate,
+  scale,
+  finite,
   sweep,
   surfacesOf,
   mergeCoplanar,
@@ -31,6 +39,9 @@ import {
 } from "./model";
 import type { Model, Face } from "./model";
 export type Command =
+  | { type: "make-component"; ids: string[]; name: string }
+  | { type: "rename-component"; definition: string; name: string }
+  | { type: "place-component"; definition: string; point: Vec3 }
   | { type: "guide"; origin: Vec3; direction: Vec3 }
   | { type: "draw"; segments: Segment[]; fillLoop?: Vec3[] }
   | { type: "delete"; ids: string[] }
@@ -192,7 +203,61 @@ function extrude(
   m.selection = [];
 }
 export function apply(m: Model, c: Command): void {
+  if (c.type === "move" || c.type === "rotate" || c.type === "scale") {
+    if (
+      c.type === "scale" &&
+      (!finite(c.factors) ||
+        Math.min(c.factors.x, c.factors.y, c.factors.z) <= 0)
+    )
+      throw new Error("Scale factors must be finite and positive");
+    if (
+      c.type === "rotate" &&
+      (!Number.isFinite(c.angle) ||
+        Math.hypot(c.axis.x, c.axis.y, c.axis.z) < EPS)
+    )
+      throw new Error("Enter a finite angle and a valid axis");
+    let transformed = false;
+    for (const id of new Set(c.ids)) {
+      const e = m.entities[id];
+      if (e?.kind !== "component") continue;
+      transformed = true;
+      e.transform = mapTransform(e.transform, (p) =>
+        c.type === "move"
+          ? add(p, c.delta)
+          : c.type === "rotate"
+            ? rotate(p, c.center, c.axis, c.angle)
+            : scale(p, c.anchor, c.factors),
+      );
+    }
+    if (
+      transformed &&
+      c.ids.every((id) => m.entities[id]?.kind === "component")
+    )
+      return;
+  }
   switch (c.type) {
+    case "make-component":
+      makeComponent(m, c.ids, c.name);
+      break;
+    case "rename-component": {
+      const d = m.definitions[c.definition];
+      if (!d) throw new Error("Missing component definition");
+      d.name = componentName(c.name);
+      break;
+    }
+    case "place-component": {
+      if (!m.definitions[c.definition] || !finite(c.point))
+        throw new Error("Choose a component and a finite placement point");
+      const id = alloc(m, "c");
+      m.entities[id] = {
+        id,
+        kind: "component",
+        definition: c.definition,
+        transform: { ...identity(), origin: { ...c.point } },
+      };
+      m.selection = [id];
+      break;
+    }
     case "guide": {
       const id = alloc(m, "g");
       m.entities[id] = {
