@@ -43,6 +43,6 @@ by app; React never copies geometry. Errors appear inline. Empty/overlong names 
 
 Component entries include memoized isometric SVG thumbnails, nested geometry and face holes, an
 Unused badge, and an explicit definition Delete button. Its tooltip states that deletion removes
-all instances and can be undone. Purge unused reports the document-wide unused count; Highlight
-components is a view-only toggle. `component-preview.ts` derives bounded paths from definition
+all instances and can be undone. Purge unused reports the document-wide unused count; Clicking a preview toggles highlighting of that component type; clicking another switches types.
+There is no general highlight toggle. Dragging the same preview still places an instance. `component-preview.ts` derives bounded paths from definition
 geometry without extra WebGL contexts; empty definitions have a visible placeholder.

@@ -129,3 +129,45 @@ it("rejects unknown library deletion without changing the document or context", 
   expect(s.getState()).toEqual(before);
   expect(s.getContext().path).toEqual([parent.id]);
 });
+it("tracks definition ancestry for type highlighting across nested, linked and unrelated instances", () => {
+  const { s, parent, child } = setup();
+  s.execute({
+    type: "place-component",
+    definition: parent.definition,
+    point: V(200),
+  });
+  s.execute({
+    type: "place-component",
+    definition: child.definition,
+    point: V(400),
+  });
+  s.execute({ type: "draw", segments: [[V(600), V(700)]] });
+  const loose = Object.values(s.getState().entities).find(
+    (e) => e.kind === "edge",
+  )!;
+  s.execute({ type: "make-component", ids: [loose.id], name: "Other" });
+  const other = Object.values(s.getState().definitions).find(
+    (d) => d.name === "Other",
+  )!;
+  s.execute({ type: "draw", segments: [[V(800), V(900)]] });
+  const scene = s.getScene(),
+    types = scene.componentDefinitions;
+  expect(
+    faces(scene).filter((f) => types[f.id]?.includes(parent.definition)),
+  ).toHaveLength(2);
+  expect(
+    faces(scene).filter((f) => types[f.id]?.includes(child.definition)),
+  ).toHaveLength(3);
+  expect(
+    Object.values(types)
+      .filter((ids) => ids.includes(other.id))
+      .every(
+        (ids) =>
+          !ids.includes(parent.definition) && !ids.includes(child.definition),
+      ),
+  ).toBe(true);
+  const rootEdge = Object.values(s.getState().entities).find(
+    (e) => e.kind === "edge",
+  )!;
+  expect(types[rootEdge.id]).toBeUndefined();
+});

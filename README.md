@@ -33,7 +33,8 @@ Both partition parent faces, keeping inner regions available for further modelin
 Select geometry and use Make component in the Components sidebar. Name the definition, drag its
 grip into the viewport to place a linked instance, and double-click an instance to edit it. Edits
 update every instance; outside drawings stay separate. Exit component, idle Escape or an outside
-double-click returns outward. The sidebar includes component previews, highlighting, definition
+double-click returns outward. Click a sidebar preview to highlight that component type; drag it
+to place an instance. The sidebar also includes definition
 deletion and Purge unused. Deleting a selected scene instance leaves its definition available.
 Modeling tools use a crosshair; visible vertex/edge targets get labeled snap markers. Select a face
 with one click, its boundary with two clicks, or connected geometry with three clicks.

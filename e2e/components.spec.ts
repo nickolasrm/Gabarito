@@ -101,7 +101,7 @@ test("sidebar drag previews and drops a linked instance, then a real drawing upd
 }) => {
   await seedPanel(page);
   const drag = page.getByRole("button", {
-    name: "Drag Panel into scene",
+    name: "Component preview: Panel",
     exact: true,
   });
   const target = await screen(page, { x: 200, y: 0, z: 0 }),
@@ -229,7 +229,7 @@ test("cancelling a component drag clears its preview without creating an instanc
 }) => {
   await seedPanel(page);
   const drag = page.getByRole("button", {
-    name: "Drag Panel into scene",
+    name: "Component preview: Panel",
     exact: true,
   });
   await drag.scrollIntoViewIfNeeded();
@@ -361,20 +361,20 @@ test("nested components have previews and highlight with their parent; outside d
   expect(active).toBe(true);
   const before = await state(page),
     highlight = page.getByRole("button", {
-      name: "Highlight components",
+      name: "Component preview: Parent",
       exact: true,
     });
   await highlight.click();
   await expect(highlight).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("canvas")).toHaveAttribute(
-    "data-highlight-components",
-    "true",
+    "data-highlight-component",
+    parent.definition,
   );
   expect(await state(page)).toEqual(before);
   await highlight.click();
   await expect(page.locator("canvas")).toHaveAttribute(
-    "data-highlight-components",
-    "false",
+    "data-highlight-component",
+    "",
   );
   p = await screen(page, { x: 250, y: 50, z: 0 });
   await page.mouse.dblclick(p.x, p.y);
@@ -385,4 +385,76 @@ test("nested components have previews and highlight with their parent; outside d
   p = await screen(page, { x: 200, y: -100, z: 0 });
   await page.mouse.dblclick(p.x, p.y);
   await expect(page.getByLabel("Editing context")).toHaveText("Model");
+});
+test("preview clicks highlight one component type, switch or clear it, and deletion clears stale highlighting", async ({
+  page,
+}) => {
+  await seedPanel(page);
+  const first = Object.keys((await state(page)).definitions)[0];
+  await page.evaluate(() => {
+    const s = window.__gabarito.store,
+      definition = Object.keys(s.getState().definitions)[0];
+    s.execute({
+      type: "place-component",
+      definition,
+      point: { x: 200, y: 0, z: 0 },
+    });
+    s.execute({
+      type: "draw",
+      segments: [
+        [
+          { x: 400, y: 0, z: 0 },
+          { x: 500, y: 0, z: 0 },
+        ],
+      ],
+    });
+    const edge = Object.values(s.getState().entities).find(
+      (e) => e.kind === "edge",
+    )!;
+    s.execute({ type: "make-component", ids: [edge.id], name: "Other" });
+    s.select([]);
+  });
+  const second = Object.values((await state(page)).definitions).find(
+      (d) => d.name === "Other",
+    )!.id,
+    before = await state(page);
+  await expect(
+    page.getByRole("button", { name: "Highlight components", exact: true }),
+  ).toHaveCount(0);
+  const panel = page.getByRole("button", {
+      name: "Component preview: Panel",
+      exact: true,
+    }),
+    other = page.getByRole("button", {
+      name: "Component preview: Other",
+      exact: true,
+    });
+  await panel.click();
+  await expect(panel).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("canvas")).toHaveAttribute(
+    "data-highlight-component",
+    first,
+  );
+  await other.click();
+  await expect(other).toHaveAttribute("aria-pressed", "true");
+  await expect(panel).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("canvas")).toHaveAttribute(
+    "data-highlight-component",
+    second,
+  );
+  await other.click();
+  await expect(other).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("canvas")).toHaveAttribute(
+    "data-highlight-component",
+    "",
+  );
+  expect(await state(page)).toEqual(before);
+  await panel.click();
+  await page
+    .getByRole("button", { name: "Delete component Panel", exact: true })
+    .click();
+  await expect(page.locator("canvas")).toHaveAttribute(
+    "data-highlight-component",
+    "",
+  );
 });

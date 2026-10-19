@@ -50,7 +50,7 @@ export interface UiApi {
   placementError(): string;
   deleteComponent(id: string): void;
   purgeComponents(): void;
-  highlightComponents(enabled: boolean): void;
+  highlightComponent(definition: string | null): void;
 }
 function ComponentThumbnail({
   definitions,
@@ -123,9 +123,15 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
     useEffect(() => api.attach(host.current!), []);
     const [componentName, setComponentName] = useState("Component 1"),
       [componentError, setComponentError] = useState(""),
-      [highlighted, setHighlighted] = useState(false);
+      [highlighted, setHighlighted] = useState<string | null>(null);
     const context = api.store.getContext(),
       unused = new Set(api.store.getUnusedComponents());
+    useEffect(() => {
+      if (highlighted && !m.definitions[highlighted]) {
+        api.highlightComponent(null);
+        setHighlighted(null);
+      }
+    }, [highlighted, m.definitions]);
     const perform = (fn: () => void) => {
       try {
         fn();
@@ -251,15 +257,6 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
                 Make component
               </button>
               <button
-                aria-pressed={highlighted}
-                onClick={() => {
-                  api.highlightComponents(!highlighted);
-                  setHighlighted(!highlighted);
-                }}
-              >
-                Highlight components
-              </button>
-              <button
                 disabled={!unused.size}
                 onClick={() => perform(api.purgeComponents)}
               >
@@ -269,6 +266,12 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
                 <div key={d.id} className="component-entry">
                   <button
                     draggable
+                    aria-pressed={highlighted === d.id}
+                    onClick={() => {
+                      const next = highlighted === d.id ? null : d.id;
+                      api.highlightComponent(next);
+                      setHighlighted(next);
+                    }}
                     onDragStart={(e) => {
                       e.dataTransfer.setData(
                         "application/x-gabarito-component",
@@ -278,8 +281,8 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
                       api.dragComponent(d.id);
                     }}
                     onDragEnd={() => api.dragComponent(null)}
-                    aria-label={`Drag ${d.name} into scene`}
-                    title="Drag into the viewport to place a linked instance"
+                    aria-label={`Component preview: ${d.name}`}
+                    title="Click to highlight this component type; click again to clear. Drag into the viewport to place a linked instance."
                   >
                     <ComponentThumbnail
                       definitions={m.definitions}

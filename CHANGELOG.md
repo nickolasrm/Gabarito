@@ -325,3 +325,10 @@ Keep the entries above the fold. When a change ships:
 - Double-clicking outside a component exits one edit level; nested geometry now highlights with its parent.
 - Added core, thumbnail and browser regressions for these owner-reported cases.
 - Spec: [0039](docs/specs/0039-component-library-and-context-feedback.md).
+
+## 2026-10-19 — Highlight a component type from its preview
+
+- Replaced the general highlight toggle with per-definition preview clicks. Click again to clear,
+  or another preview to switch. Matching linked/nested instances highlight without changing selection.
+- Kept preview drag placement and active-context highlighting; deletion clears stale highlights.
+- Added ancestry and browser regressions. Spec: [0040](docs/specs/0040-component-type-highlighting.md).

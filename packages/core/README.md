@@ -76,3 +76,6 @@ including occurrences in other definitions. Ordinary `delete` still removes only
 nested references transitively. `Store.getUnusedComponents()` reports that same document-wide set.
 No-op purge adds no history. Library deletion repairs a removed context path; undo/redo restores the
 appropriate before/after context with its geometry. `component-library.ts` contains these operations.
+
+Derived scene geometry also carries `componentDefinitions`: each primitive maps to its definition
+ancestry, so a preview can highlight one type across direct, linked and nested instances.

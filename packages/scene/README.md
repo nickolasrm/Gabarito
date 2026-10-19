@@ -54,7 +54,8 @@ making them editable topology. Selection ownership is resolved by core, not rend
 While editing, active faces are mint and the surrounding contexts are dimmed. Face/edge markers,
 framing, reference lines and scale handles all use the same world geometry.
 
-`setHighlightComponents(enabled)` colors all derived component faces, edges, vertices and rulers without changing
-selection or history. `SceneModel.componentEntities` identifies component geometry; `inactive` now
+`setHighlightComponent(definitionOrNull)` highlights all occurrences of one definition, including
+their nested contents, without changing selection or history. Null clears the highlight.
+`SceneModel.componentDefinitions` records each primitive’s definition ancestry for this filter. `SceneModel.componentEntities` identifies component geometry; `inactive` now
 means outside the active context and all of its descendants, so nested pieces highlight with their
 parent while remaining atomic selections until entered. Other linked instances remain outside.

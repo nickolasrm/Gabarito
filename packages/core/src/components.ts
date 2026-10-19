@@ -234,6 +234,7 @@ export interface SceneModel extends Model {
   owners: Record<string, string | null>;
   inactive: string[];
   componentEntities: string[];
+  componentDefinitions: Record<string, string[]>;
 }
 /** Flatten only for rendering/references; derived entities never enter topology commands. */
 export function expandModel(m: Model, activePath: string[] = []): SceneModel {
@@ -244,12 +245,14 @@ export function expandModel(m: Model, activePath: string[] = []): SceneModel {
     owners: {},
     inactive: [],
     componentEntities: [],
+    componentDefinitions: {},
   };
   const walk = (
     scope: GeometryScope,
     t: Transform,
     path: string[],
     owner: string | null,
+    definitions: string[],
   ) => {
     const active = path.join("/") === activePath.join("/");
     const prefix = active ? "" : `${path.join("/") || "root"}/`;
@@ -263,6 +266,7 @@ export function expandModel(m: Model, activePath: string[] = []): SceneModel {
             original.transform,
             [...path, original.id],
             active ? original.id : owner,
+            [...definitions, original.definition],
           );
         continue;
       }
@@ -276,12 +280,15 @@ export function expandModel(m: Model, activePath: string[] = []): SceneModel {
       }
       result.entities[e.id] = e;
       result.owners[e.id] = active ? original.id : owner;
-      if (path.length) result.componentEntities.push(e.id);
+      if (path.length) {
+        result.componentEntities.push(e.id);
+        result.componentDefinitions[e.id] = definitions;
+      }
       if (!activePath.every((id, i) => path[i] === id))
         result.inactive.push(e.id);
     }
   };
-  walk(m, identity(), [], null);
+  walk(m, identity(), [], null, []);
   return result;
 }
 /** Expand an active scope for bounds and transform previews, retaining atomic selection. */

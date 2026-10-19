@@ -44,4 +44,4 @@ the overlay. The sidebar invokes component creation, naming and context exit thr
 cancels tool previews when changing geometry scopes. Placement errors return to the sidebar.
 
 UiApi routes library deletion/purge through core commands and cancels pending tool previews first.
-Highlight components delegates to viewport presentation state. Sidebar errors remain inline.
+Preview-click type highlighting delegates to viewport presentation state. Sidebar errors remain inline.

@@ -461,3 +461,8 @@ main:not([data-tool="select"]) .viewport canvas {
   cursor: pointer;
   padding: 3px;
 }
+
+.component-entry button[aria-pressed="true"] {
+  border-color: #69dfcc;
+  background: #294a45;
+}

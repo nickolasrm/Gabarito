@@ -133,8 +133,8 @@ export async function boot({ root }: { root: HTMLElement }): Promise<void> {
         controller.cancel();
         store.execute({ type: "purge-components" });
       },
-      highlightComponents(enabled) {
-        viewport.setHighlightComponents(enabled);
+      highlightComponent(definition) {
+        viewport.setHighlightComponent(definition);
       },
       dragComponent(id) {
         draggedComponent = id;

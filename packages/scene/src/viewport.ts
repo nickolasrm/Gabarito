@@ -29,7 +29,7 @@ export interface Viewport {
   cursorHint(text: string, x: number, y: number): void;
   feedback(hit: Hit | null): void;
   frame(): void;
-  setHighlightComponents(enabled: boolean): void;
+  setHighlightComponent(definition: string | null): void;
   dispose(): void;
   cameraState(): { position: Vec3; target: Vec3 };
 }
@@ -149,7 +149,7 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
         selected =
           store.getScene().selection.includes(line.id) ||
           (store.getScene().componentEntities.includes(line.id) &&
-            (highlightComponents ||
+            (highlightedType(line.id) ||
               (store.getContext().path.length > 0 &&
                 !store.getScene().inactive.includes(line.id))));
       const color = selected
@@ -164,7 +164,11 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
     }
   };
   controls.addEventListener("change", drawReferences);
-  let highlightComponents = false;
+  let highlightDefinition: string | null = null;
+  const highlightedType = (id: string) =>
+    highlightDefinition !== null &&
+    (store.getScene().componentDefinitions[id]?.includes(highlightDefinition) ??
+      false);
   const rebuild = () => {
     feedback(null);
     drawReferences();
@@ -178,9 +182,7 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
       inactive = new Set(m.inactive),
       editing = store.getContext().path.length > 0;
     const highlighted = (id: string) =>
-      selected.has(id) ||
-      (highlightComponents && componentEntities.has(id)) ||
-      (editing && !inactive.has(id));
+      selected.has(id) || highlightedType(id) || (editing && !inactive.has(id));
     for (const f of faces(m)) {
       const mesh = triangulate(surface(m, f)),
         g = new THREE.BufferGeometry();
@@ -199,8 +201,7 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
           new THREE.MeshStandardMaterial({
             color: selected.has(f.id)
               ? 0xe8ad59
-              : (editing && !inactive.has(f.id)) ||
-                  (highlightComponents && componentEntities.has(f.id))
+              : (editing && !inactive.has(f.id)) || highlightedType(f.id)
                 ? 0x86dcca
                 : editing
                   ? 0x677782
@@ -470,9 +471,9 @@ export function createViewport(host: HTMLElement, store: Store): Viewport {
       activeHandle = activeId;
       drawHandles();
     },
-    setHighlightComponents(enabled) {
-      highlightComponents = enabled;
-      canvas.dataset.highlightComponents = String(enabled);
+    setHighlightComponent(definition) {
+      highlightDefinition = definition;
+      canvas.dataset.highlightComponent = definition ?? "";
       rebuild();
     },
     frame() {
