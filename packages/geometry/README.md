@@ -17,3 +17,14 @@ See [0027](../../docs/decisions/0027-topology-rewrite.md) for the topology decis
 
 `scale(point, anchor, factors)` applies component-wise factors about a fixed anchor. Core scale
 commands and tools previews use the same formula; command validation belongs to core.
+
+`circlePoints(center, frame, radius, segments = 24, radial = frame.u)` returns a regular planar loop
+with exact vertex radii. The projected radial direction fixes its first vertex; degenerate input
+uses frame U. Positive finite radius and 3–256 segments are validated. Curves remain ordinary edges.
+
+`insetContours(surface, distance)` erodes face material with Manifold CrossSection miter joins in
+face-local coordinates. It normalizes outer/hole winding, returns every world-space contour (including
+split islands and expanded holes), and deletes all temporary WASM sections. Distances must exceed
+EPS and complete collapse throws. `insetDistance(surface, point)` returns the minimum perpendicular
+boundary distance for a material point, or null off-plane/outside/in a hole. Preview and core use
+these helpers. Angled offsets use boundary distance, not bounding-box scaling or radial shrinkage.

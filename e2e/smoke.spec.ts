@@ -75,6 +75,8 @@ test("boots with all modeling tools and creates exact typed geometry with undo/r
     "Select",
     "Line",
     "Rectangle",
+    "Circle",
+    "Offset",
     "Tape Measure",
     "Move",
     "Scale",
@@ -1377,4 +1379,194 @@ test("Scale edge grips distort two dimensions and changing tools during drag doe
     await page.evaluate(() => window.__gabarito.controller.status().active),
   ).toBe(false);
   await expect(page.locator(".scale-handle")).toHaveCount(0);
+});
+
+test("Circle uses radius, applies segment settings only to new geometry, and supports exact history", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: /^Circle/ }).click();
+  await expect(
+    page.getByRole("spinbutton", { name: "Circle segments" }),
+  ).toHaveValue("24");
+  const setting = page.getByRole("spinbutton", { name: "Circle segments" });
+  await setting.fill("");
+  await setting.pressSequentially("16");
+  await expect(setting).toHaveValue("16");
+  expect(
+    await page.evaluate(
+      () => window.__gabarito.controller.status().circleSegments,
+    ),
+  ).toBe(16);
+  await page.getByRole("spinbutton", { name: "Circle segments" }).fill("32");
+  await clickWorld(page, { x: 0, y: 0, z: 0 });
+  await expect(
+    page.getByRole("textbox", { name: "Radius", exact: true }),
+  ).toBeVisible();
+  await type(page, "25");
+  const first = await snapshot(page),
+    ps = Object.values(first.entities).filter((e) => e.kind === "vertex");
+  expect(ps).toHaveLength(32);
+  for (const p of ps)
+    expect(Math.hypot(p.position.x, p.position.y, p.position.z)).toBeCloseTo(
+      25,
+      5,
+    );
+  await page.getByRole("spinbutton", { name: "Circle segments" }).fill("24");
+  expect((await snapshot(page)).entities).toEqual(first.entities);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect(await count(page, "face")).toBe(0);
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  expect((await snapshot(page)).entities).toEqual(first.entities);
+});
+test("Circle shares face-center hints, partitions cube faces and remains extrudable", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await push(page, { x: 50, y: 50, z: 0 }, "100");
+  await page.keyboard.press("f");
+  const before = await snapshot(page);
+  await page.keyboard.press("c");
+  const a = await screenOf(page, { x: 49, y: 49, z: 100 });
+  await page.mouse.move(a.x, a.y);
+  await expect(page.locator(".cursor-hint")).toContainText(
+    "Reference intersection",
+  );
+  await expect(page.locator(".snap-marker")).toBeVisible();
+  await page.mouse.click(a.x, a.y);
+  await type(page, "20");
+  const after = await snapshot(page),
+    circle = Object.values(after.entities).find(
+      (e) => e.kind === "face" && e.outer.length === 24,
+    )!;
+  if (circle.kind !== "face") throw new Error("Missing circle face");
+  for (const id of circle.outer) {
+    const v = after.entities[id];
+    if (v.kind !== "vertex") throw new Error("Missing vertex");
+    expect(v.position.z).toBeCloseTo(100, 5);
+    expect(Math.hypot(v.position.x - 50, v.position.y - 50)).toBeCloseTo(20, 5);
+  }
+  expect(await count(page, "face")).toBe(7);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect((await snapshot(page)).entities).toEqual(before.entities);
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  expect((await snapshot(page)).entities).toEqual(after.entities);
+  await push(page, { x: 50, y: 50, z: 100 }, "10");
+  expect(
+    Object.values((await snapshot(page)).entities).some(
+      (e) => e.kind === "vertex" && Math.abs(e.position.z - 110) < 1e-5,
+    ),
+  ).toBe(true);
+});
+test("Circle mouse radius on a vertical face freezes its plane and cancels on blur", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await push(page, { x: 50, y: 50, z: 0 }, "100");
+  await page.keyboard.press("f");
+  const before = await snapshot(page);
+  await page.keyboard.press("c");
+  await clickWorld(page, { x: 50, y: 0, z: 50 });
+  const b = await screenOf(page, { x: 70, y: 0, z: 50 });
+  await page.mouse.move(b.x, b.y);
+  await expect(page.locator(".cursor-hint")).toContainText("Radius 20.00");
+  expect((await snapshot(page)).entities).toEqual(before.entities);
+  await page.mouse.click(b.x, b.y);
+  const after = await snapshot(page),
+    circle = Object.values(after.entities).find(
+      (e) => e.kind === "face" && e.outer.length === 24,
+    )!;
+  if (circle.kind !== "face") throw new Error("Missing circle face");
+  expect(
+    circle.outer.every((id) => {
+      const v = after.entities[id];
+      return v.kind === "vertex" && Math.abs(v.position.y) < 1e-5;
+    }),
+  ).toBe(true);
+  await clickWorld(page, { x: 50, y: 0, z: 50 });
+  await page.mouse.move(b.x, b.y);
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  expect((await snapshot(page)).entities).toEqual(after.entities);
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().active),
+  ).toBe(false);
+});
+for (const typed of [true, false]) {
+  test(`Offset ${typed ? "typed distance" : "mouse distance"} makes an equal rectangle border and one history entry`, async ({
+    page,
+  }) => {
+    await rectangle(page, { x: 0, y: 0, z: 0 }, "100,80");
+    await page.keyboard.press("f");
+    const before = await snapshot(page);
+    await page.keyboard.press("o");
+    await clickWorld(page, { x: 30, y: 30, z: 0 });
+    if (typed) await type(page, "10");
+    else {
+      const b = await screenOf(page, { x: 10, y: 40, z: 0 });
+      await page.mouse.move(b.x, b.y);
+      await expect(page.locator(".cursor-hint")).toContainText("Offset 10.00");
+      expect((await snapshot(page)).entities).toEqual(before.entities);
+      await page.mouse.click(b.x, b.y);
+    }
+    const after = await snapshot(page),
+      inner = Object.values(after.entities).find(
+        (e) => e.kind === "face" && !e.holes.length,
+      )!;
+    if (inner.kind !== "face") throw new Error("Missing inner face");
+    const ps = inner.outer
+      .map((id) => after.entities[id])
+      .filter((e) => e.kind === "vertex")
+      .map((e) => e.position);
+    expect(await count(page, "face")).toBe(2);
+    const applied = Math.min(...ps.map((p) => p.x));
+    expect(Math.abs(applied - 10)).toBeLessThan(typed ? 0.0001 : 1);
+    expect(Math.max(...ps.map((p) => p.x))).toBeCloseTo(100 - applied, 5);
+    expect(Math.min(...ps.map((p) => p.y))).toBeCloseTo(applied, 5);
+    expect(Math.max(...ps.map((p) => p.y))).toBeCloseTo(80 - applied, 5);
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    expect((await snapshot(page)).entities).toEqual(before.entities);
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    expect((await snapshot(page)).entities).toEqual(after.entities);
+    if (typed) {
+      await push(page, { x: 50, y: 40, z: 0 }, "20");
+      expect(
+        Object.values((await snapshot(page)).entities).some(
+          (e) => e.kind === "vertex" && Math.abs(e.position.z - 20) < 1e-5,
+        ),
+      ).toBe(true);
+    }
+  });
+}
+test("Offset cuts a vertical cube face, rejects collapsed distances and cancels on Escape", async ({
+  page,
+}) => {
+  await rectangle(page);
+  await push(page, { x: 50, y: 50, z: 0 }, "100");
+  await page.keyboard.press("f");
+  const before = await snapshot(page);
+  await page.keyboard.press("o");
+  await clickWorld(page, { x: 50, y: 0, z: 50 });
+  await type(page, "60");
+  await expect(page.getByRole("status")).toContainText("too large");
+  expect((await snapshot(page)).entities).toEqual(before.entities);
+  await page.keyboard.press("Escape");
+  expect(
+    await page.evaluate(() => window.__gabarito.controller.status().active),
+  ).toBe(false);
+  await clickWorld(page, { x: 50, y: 0, z: 50 });
+  await type(page, "10");
+  const after = await snapshot(page),
+    newPoints = Object.values(after.entities)
+      .filter((e) => !before.entities[e.id])
+      .filter((e) => e.kind === "vertex");
+  expect(newPoints).toHaveLength(4);
+  expect(
+    newPoints.every(
+      (v) =>
+        Math.abs(v.position.y) < 1e-5 &&
+        (Math.abs(v.position.x - 10) < 1e-5 ||
+          Math.abs(v.position.x - 90) < 1e-5) &&
+        (Math.abs(v.position.z - 10) < 1e-5 ||
+          Math.abs(v.position.z - 90) < 1e-5),
+    ),
+  ).toBe(true);
 });

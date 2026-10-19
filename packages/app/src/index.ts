@@ -24,6 +24,7 @@ export async function boot({ root }: { root: HTMLElement }): Promise<void> {
         measurement: "",
         plane: "Ground",
         snapping: true,
+        circleSegments: 24,
       };
     const listeners = new Set<() => void>();
     mountUi(root, {
@@ -63,6 +64,9 @@ export async function boot({ root }: { root: HTMLElement }): Promise<void> {
       selectTool(t) {
         controller.setTool(t as Tool);
         viewport.canvas.focus();
+      },
+      setCircleSegments(count) {
+        controller.setCircleSegments(count);
       },
       setUnit(u) {
         controller.setUnit(u);
