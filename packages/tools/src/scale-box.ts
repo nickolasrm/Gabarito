@@ -12,7 +12,7 @@ import {
   scale,
 } from "@gabarito/geometry";
 import type { Vec3, Segment, Ray } from "@gabarito/geometry";
-import { selectedVertices, position } from "@gabarito/core";
+import { selectionGeometry, selectedVertices, position } from "@gabarito/core";
 import type { Model } from "@gabarito/core";
 export const coordinates = ["x", "y", "z"] as const;
 export interface ScaleGrip {
@@ -30,6 +30,7 @@ export interface ScaleBox {
   lines: Segment[];
 }
 export function scaleBox(m: Model): ScaleBox | null {
+  m = selectionGeometry(m);
   const points = [...selectedVertices(m, m.selection)].map((id) =>
     position(m, id),
   );

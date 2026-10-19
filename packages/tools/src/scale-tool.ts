@@ -1,5 +1,11 @@
 import { V, scale, sub, add, unit, length } from "@gabarito/geometry";
-import { edges, selectedVertices, position, guides } from "@gabarito/core";
+import {
+  selectionGeometry,
+  edges,
+  selectedVertices,
+  position,
+  guides,
+} from "@gabarito/core";
 import type { Vec3, Segment } from "@gabarito/geometry";
 import type { Store } from "@gabarito/core";
 import type { ToolView } from "./types";
@@ -31,7 +37,7 @@ export function createScaleTool(
       : "";
   const draw = () => {
     if (!enabled) return;
-    const m = store.getState(),
+    const m = selectionGeometry(store.getState()),
       preview =
         box && grip && valid() ? transformBox(box, grip.anchor, factors) : box;
     const lines = [...(preview?.lines ?? [])];

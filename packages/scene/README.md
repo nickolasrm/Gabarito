@@ -47,3 +47,15 @@ updates reproject them; forward-depth and surface occlusion hide ineligible grip
 grip remains visible through the original mesh so shrinking previews remain readable. These
 markers never enter document geometry or entity picking. Empty input and viewport disposal remove
 their DOM nodes and listeners. The ordinary `preview` API renders the box and transformed edges.
+
+The viewport renders/picks `Store.getScene()`, a derived flattening of definitions and instance
+transforms. This preserves primitive snap targets and occlusion across context boundaries without
+making them editable topology. Selection ownership is resolved by core, not renderer object IDs.
+While editing, active faces are mint and the surrounding contexts are dimmed. Face/edge markers,
+framing, reference lines and scale handles all use the same world geometry.
+
+`setHighlightComponent(definitionOrNull)` highlights all occurrences of one definition, including
+their nested contents, without changing selection or history. Null clears the highlight.
+`SceneModel.componentDefinitions` records each primitive’s definition ancestry for this filter. `SceneModel.componentEntities` identifies component geometry; `inactive` now
+means outside the active context and all of its descendants, so nested pieces highlight with their
+parent while remaining atomic selections until entered. Other linked instances remain outside.

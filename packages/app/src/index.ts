@@ -1,3 +1,4 @@
+import { attachComponentPlacement } from "./component-placement";
 import { initializeGeometry } from "@gabarito/geometry";
 import { createStore } from "@gabarito/core";
 import { createViewport } from "@gabarito/scene";
@@ -12,7 +13,10 @@ export async function boot({ root }: { root: HTMLElement }): Promise<void> {
     await initializeGeometry();
     root.textContent = "";
     const store = createStore();
-    let viewport: Viewport, controller: Controller;
+    let viewport: Viewport,
+      controller: Controller,
+      draggedComponent: string | null = null,
+      placementMessage = "";
     const status = () =>
       controller?.status() ?? {
         tool: "select" as Tool,
@@ -47,6 +51,17 @@ export async function boot({ root }: { root: HTMLElement }): Promise<void> {
         const detachInput = attachInput(canvas, controller, () =>
           viewport.frame(),
         );
+        const detachPlacement = attachComponentPlacement(
+          canvas,
+          store,
+          viewport,
+          controller,
+          () => draggedComponent,
+          (message) => {
+            placementMessage = message;
+            for (const fn of listeners) fn();
+          },
+        );
         if (import.meta.env.DEV)
           (window as unknown as { __gabarito: unknown }).__gabarito = {
             store,
@@ -57,6 +72,7 @@ export async function boot({ root }: { root: HTMLElement }): Promise<void> {
         return () => {
           unsubscribe();
           detachInput();
+          detachPlacement();
           controller.dispose();
           viewport.dispose();
         };
@@ -91,6 +107,42 @@ export async function boot({ root }: { root: HTMLElement }): Promise<void> {
       },
       frame() {
         viewport.frame();
+      },
+      makeComponent(name) {
+        controller.cancel();
+        store.execute({
+          type: "make-component",
+          ids: store.getState().selection,
+          name,
+        });
+        controller.setTool("select");
+      },
+      renameComponent(definition, name) {
+        store.execute({ type: "rename-component", definition, name });
+      },
+      exitComponent() {
+        controller.cancel();
+        store.exitComponent();
+      },
+      placementError: () => placementMessage,
+      deleteComponent(definition) {
+        controller.cancel();
+        store.execute({ type: "delete-component", definition });
+      },
+      purgeComponents() {
+        controller.cancel();
+        store.execute({ type: "purge-components" });
+      },
+      highlightComponent(definition) {
+        viewport.setHighlightComponent(definition);
+      },
+      dragComponent(id) {
+        draggedComponent = id;
+        placementMessage = "";
+        if (id) {
+          controller.cancel();
+          controller.setTool("select");
+        }
       },
     });
   } catch (error) {

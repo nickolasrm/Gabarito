@@ -120,3 +120,14 @@ and revision stay fixed; changed documents cancel the pending operation. All ins
 without changing the store, and completion sends one core offset command. Collapse/outside/parallel
 input cannot commit stale distances. Both tools support Escape, tool changes, blur and exact history;
 Offset clears its subscription state through the controller lifecycle shared with Scale.
+
+Components use the same tools across contexts. Reference inference reads `Store.getScene()`;
+commands and topology source checks read `getState()`. A single Select click resolves to an atomic
+instance; double-click enters it instead of selecting boundary primitives. Escape cancels a pending
+action first, then exits one context when idle. Move/Rotate previews and Scale bounds expand selected
+instances through `selectionGeometry`, while their commands retain instance IDs. Push/Pull and
+Offset require a face owned by the current scope. Tests in `components.test.ts` cover this boundary.
+
+Select double-clicks outside the active context, including empty space, exit exactly one level.
+Single outside clicks only clear selection; double-clicks on editable primitives retain their
+boundary behavior. Scene-instance Delete and its inverse are covered separately from library deletion.

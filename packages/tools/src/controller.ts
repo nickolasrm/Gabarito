@@ -36,6 +36,7 @@ import {
   edges,
   loops,
   facePlane,
+  selectionGeometry,
   selectedVertices,
 } from "@gabarito/core";
 import type { Store, Unit, Command } from "@gabarito/core";
@@ -224,7 +225,7 @@ export function createController(store: Store, view: ToolView): Controller {
           .concat(inferenceLines),
       );
     } else if (tool === "move" || tool === "rotate") {
-      const m = store.getState(),
+      const m = selectionGeometry(store.getState()),
         selected = selectedVertices(m, m.selection),
         delta = sub(current, start),
         angle = rotatedAngle(current);
@@ -468,10 +469,10 @@ export function createController(store: Store, view: ToolView): Controller {
     );
     if (!start) {
       const aimed =
-        hit?.kind === "face" ? store.getState().entities[hit.id] : null;
+        hit?.kind === "face" ? store.getScene().entities[hit.id] : null;
       drawingPlane =
         aimed?.kind === "face"
-          ? facePlane(store.getState(), aimed)
+          ? facePlane(store.getScene(), aimed)
           : plane(V(), V(0, 0, 1));
       if (axis && tool === "rectangle")
         drawingPlane = plane(V(), axis === "z" ? V(0, -1, 0) : V(0, 0, 1));
@@ -483,7 +484,7 @@ export function createController(store: Store, view: ToolView): Controller {
             label: `Axis ${axis.toUpperCase()}`,
           }
         : inferRectanglePlane(
-            store.getState(),
+            store.getScene(),
             hit,
             start,
             ray,
@@ -504,7 +505,7 @@ export function createController(store: Store, view: ToolView): Controller {
         planeLabel = `Axis ${axis.toUpperCase()}`;
       } else if (!start) {
         const inferred = inferRectanglePlane(
-          store.getState(),
+          store.getScene(),
           hit,
           null,
           ray,
@@ -518,7 +519,7 @@ export function createController(store: Store, view: ToolView): Controller {
       const inferred = axis
         ? { frame: rotationPlane(), label: `Axis ${axis.toUpperCase()}` }
         : inferRectanglePlane(
-            store.getState(),
+            store.getScene(),
             hit,
             start,
             ray,
@@ -574,7 +575,7 @@ export function createController(store: Store, view: ToolView): Controller {
         tool === "circle") &&
       (!hit || hit.kind === "face")
     ) {
-      const m = store.getState(),
+      const m = store.getScene(),
         target = hit ? m.entities[hit.id] : null;
       const support =
         tool === "rotate" && start
@@ -611,11 +612,15 @@ export function createController(store: Store, view: ToolView): Controller {
       (tool === "pushpull" || (tool === "move" && axis))
     ) {
       const target =
-        tool === "move" && hit && store.getState().selection.includes(hit.id)
+        tool === "move" &&
+        hit &&
+        store
+          .getState()
+          .selection.includes(store.selectionTarget(hit.id) ?? hit.id)
           ? null
           : hit;
       const inferred = snapAlongAxis(
-        store.getState(),
+        store.getScene(),
         start,
         end,
         direction(),
@@ -664,13 +669,30 @@ export function createController(store: Store, view: ToolView): Controller {
       message = "";
       if (tool === "select") {
         const old = store.getState().selection;
-        const targets = hit
-          ? selectionAt(store.getState(), hit.id, clicks)
+        const target = hit ? store.selectionTarget(hit.id) : null;
+        if (clicks === 2 && !target && store.getContext().path.length) {
+          cancel();
+          store.exitComponent();
+          emit();
+          return;
+        }
+        if (
+          target &&
+          clicks >= 2 &&
+          store.getState().entities[target]?.kind === "component"
+        ) {
+          cancel();
+          store.enterComponent(target);
+          emit();
+          return;
+        }
+        const targets = target
+          ? selectionAt(store.getState(), target, clicks)
           : [];
         store.select(
-          shift && hit
-            ? clicks === 1 && old.includes(hit.id)
-              ? old.filter((id) => id !== hit.id)
+          shift && target
+            ? clicks === 1 && old.includes(target)
+              ? old.filter((id) => id !== target)
               : [...old, ...targets]
             : targets,
         );
@@ -681,7 +703,7 @@ export function createController(store: Store, view: ToolView): Controller {
             emit();
             return;
           }
-          const m = store.getState(),
+          const m = store.getScene(),
             source = m.entities[midpointEdge(m, hit) ?? hit.id];
           rulerDirection =
             source?.kind === "edge"
@@ -694,8 +716,13 @@ export function createController(store: Store, view: ToolView): Controller {
                   null)
                 : null;
         }
-        if (tool === "pushpull" && hit?.kind !== "face") {
-          message = "Choose a face";
+        if (
+          tool === "pushpull" &&
+          (hit?.kind !== "face" ||
+            store.getState().entities[hit.id]?.kind !== "face")
+        ) {
+          message =
+            "Choose a face in the active context; double-click a component to edit it";
           emit();
           return;
         }
@@ -703,7 +730,7 @@ export function createController(store: Store, view: ToolView): Controller {
           (tool === "move" || tool === "rotate") &&
           !store.getState().selection.length
         ) {
-          if (hit) store.select([hit.id]);
+          if (hit) store.select([store.selectionTarget(hit.id) ?? hit.id]);
           else {
             message = "Select geometry first";
             emit();
@@ -856,6 +883,7 @@ export function createController(store: Store, view: ToolView): Controller {
         )
           cancel();
         else {
+          store.exitComponent();
           tool = "select";
           activateToolViews();
           axis = null;

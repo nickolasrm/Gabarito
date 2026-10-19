@@ -46,6 +46,7 @@ stays searchable forever.
 | [0026](./0026-face-holds-every-hole.md) | A face holds every hole it gets, and there is no limit | accepted | core, geometry, csg, document-model | — |
 
 | [0027](./0027-topology-rewrite.md) | Planar arrangements and general solid sweeps | accepted | geometry, core, topology, csg | 0022, 0025 |
+| [0028](./0028-component-contexts.md) | Shared definitions and scoped component editing | accepted | core, components, transforms | 0038 |
 
 Statuses: `proposed` → `accepted` → (`superseded` | `deprecated` | `rejected`).
 

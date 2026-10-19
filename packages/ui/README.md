@@ -35,3 +35,19 @@ while the cursor names the hovered grip or displays live factors during a resize
 Circle (`C`) labels numeric entry Radius and exposes its creation segment setting (24 by default).
 Offset (`O`) labels numeric entry Offset in document units. Both show the supporting plane and
 named reference hints; offsets display their live perpendicular edge distance beside the cursor.
+
+The Components section creates a definition from the selection, edits names on blur/Enter, and
+shows the current context path with an Exit component action. Its draggable definition grips use
+`application/x-gabarito-component` and UiApi's transient drag callback. The viewport drop is handled
+by app; React never copies geometry. Errors appear inline. Empty/overlong names are rejected in core.
+
+Component entries include memoized isometric SVG thumbnails, nested geometry and face holes, an
+Unused badge, and an explicit definition Delete button. Its tooltip states that deletion removes
+all instances and can be undone. Purge unused reports the document-wide unused count; Clicking a preview toggles highlighting of that component type; clicking another switches types.
+There is no general highlight toggle. Dragging the same preview still places an instance. `component-preview.ts` derives bounded paths from definition
+geometry without extra WebGL contexts; empty definitions have a visible placeholder.
+
+Normal selection drives type highlighting: selecting one component highlights all its instances,
+while selecting loose geometry, empty space or multiple entities clears the type highlight. Only
+the chosen instance is selected; other instances receive the existing view-only highlight. Preview
+clicks can still toggle/switch types until the next selection change. No extra hit query is needed.

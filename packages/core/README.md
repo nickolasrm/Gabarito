@@ -51,3 +51,31 @@ ordinary shared drawing topology. The source material remains: borders and inner
 separate faces, ready for selection or extrusion. Existing erased holes stay erased. Kernel erosion
 handles concave splits and holes; invalid distances, collapse or invalid topology reject the atomic
 transaction without a history entry. Circle tools also use the existing draw/fillLoop command.
+
+Components are scoped geometry, not welded meshes in the parent. `Component` references a named
+`ComponentDefinition` in `Model.definitions` and stores an invertible affine `Transform`. Definitions
+contain geometry and may contain other component instances; recursive references are rejected.
+`make-component`, `rename-component` and `place-component` commands participate in atomic history.
+Extraction includes selected face boundaries and preserves/clones boundaries still needed outside.
+Deleting all instances retains the sidebar definition for later placement.
+
+`Store.getState()` returns the active scope in world coordinates. `enterComponent(id)` and
+`exitComponent()` change the instance path without an undo entry; `getContext()` supplies its names.
+All ordinary topology commands affect only that scope. Edits inverse-transform back into its shared
+definition, so every linked instance updates. Instance move/rotate/scale changes its transform only.
+`getScene()` provides derived world geometry with scoped IDs, selection, `owners` and `inactive`
+metadata. Use it for references/rendering, never as editable document geometry. `selectionTarget(id)`
+resolves a picked primitive to a direct instance or active entity, returning null for other scopes.
+`selectionGeometry(model)` expands an active selection for bounds and transform previews. History
+restores the edit context with the exact document snapshot; IDs stay monotonic across undo.
+
+Component library commands operate on the whole document, regardless of the active edit scope.
+`{type: "delete-component", definition}` removes the definition and every referencing instance,
+including occurrences in other definitions. Ordinary `delete` still removes only selected instances.
+`{type: "purge-components"}` removes definitions unreachable from root scene instances, following
+nested references transitively. `Store.getUnusedComponents()` reports that same document-wide set.
+No-op purge adds no history. Library deletion repairs a removed context path; undo/redo restores the
+appropriate before/after context with its geometry. `component-library.ts` contains these operations.
+
+Derived scene geometry also carries `componentDefinitions`: each primitive maps to its definition
+ancestry, so a preview can highlight one type across direct, linked and nested instances.

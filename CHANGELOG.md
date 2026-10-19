@@ -304,3 +304,38 @@ Keep the entries above the fold. When a change ships:
   - Added / Changed / Deprecated / Removed / Fixed / Security
   - append `- <what changed>. — spec NNNN` with a relative link to the spec file
 -->
+
+## 2026-10-18 — Linked component contexts
+
+- Added named shared component definitions and independently transformed linked instances.
+- Selections become components without cutting or welding surrounding contexts. Double-click opens
+  their geometry; edits propagate to every linked instance. Exit or idle Escape returns outward.
+- Added a Components sidebar with naming and drag-to-place previews for linked instances.
+- Kept snapping across contexts and existing Move/Rotate/Scale behavior for atomic instances.
+- Added headless and browser regressions for isolation, shared boundaries, linked topology, nested
+  contexts, transformed edits, cycle rejection, history, naming and placement.
+- Spec: [0038](docs/specs/0038-linked-components.md); decision: [0028](docs/decisions/0028-component-contexts.md).
+
+## 2026-10-19 — Component library and context feedback
+
+- Added explicit library deletion of definitions and all their linked/nested instances, with Undo.
+  Scene Delete retains its single-instance behavior.
+- Added scene-reachability detection, Unused badges and undoable Purge unused.
+- Added live isometric library thumbnails and a Highlight components view toggle.
+- Double-clicking outside a component exits one edit level; nested geometry now highlights with its parent.
+- Added core, thumbnail and browser regressions for these owner-reported cases.
+- Spec: [0039](docs/specs/0039-component-library-and-context-feedback.md).
+
+## 2026-10-19 — Highlight a component type from its preview
+
+- Replaced the general highlight toggle with per-definition preview clicks. Click again to clear,
+  or another preview to switch. Matching linked/nested instances highlight without changing selection.
+- Kept preview drag placement and active-context highlighting; deletion clears stale highlights.
+- Added ancestry and browser regressions. Spec: [0040](docs/specs/0040-component-type-highlighting.md).
+
+## 2026-10-19 — Selection-driven component highlighting
+
+- Selecting one component instance highlights all occurrences of its type using the existing visual
+  mechanism. Other instances remain unselected. Loose/empty/multiple selections clear the highlight.
+- Kept preview click toggles and added regressions for switching, outside clearing and reactivation.
+- Spec: [0041](docs/specs/0041-clear-component-highlight-outside.md).

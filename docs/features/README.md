@@ -9,7 +9,7 @@ must not learn them from you.
 
 | Feature | Package | File | Status |
 |---|---|---|---|
-| SketchUp-like core modeling | `packages/tools`, `packages/core` | [`sketchup-core.md`](./sketchup-core.md) | planned — the first thing built |
+| SketchUp-like core modeling | `packages/tools`, `packages/core` | [`sketchup-core.md`](./sketchup-core.md) | implemented core; see capability details |
 | Woodworking | `packages/features/woodworking` | [`woodworking.md`](./woodworking.md) | planned |
 | Lighting design | `packages/features/lighting` | [`lighting-design.md`](./lighting-design.md) | planned |
 | House building | `packages/features/house` | [`house-building.md`](./house-building.md) | planned |

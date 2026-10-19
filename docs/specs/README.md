@@ -64,6 +64,10 @@ and by decision records, so a rejected spec keeps its number forever.
 | [0035](./0035-standing-workflow-authorization.md) | Record standing authorization for routine development work | implemented | docs | 0009, 0017 |
 | [0036](./0036-circle-tool.md) | Draw circles from a center and radius | implemented | geometry, tools, app, ui | 0012, 0013, 0018, 0020 |
 | [0037](./0037-offset-tool.md) | Partition faces with exact inward offsets | implemented | geometry, core, tools, ui | 0006, 0012, 0027 |
+| [0038](./0038-linked-components.md) | Named linked components and editing contexts | implemented | core, tools, scene, ui, app | 0028 |
+| [0039](./0039-component-library-and-context-feedback.md) | Component library management and context feedback | implemented | core, scene, tools, ui, app | 0006, 0028 |
+| [0040](./0040-component-type-highlighting.md) | Highlight component types from sidebar previews | implemented | core, scene, ui, app | 0028 |
+| [0041](./0041-clear-component-highlight-outside.md) | Drive component highlights from normal selection | implemented | ui | 0028 |
 
 Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 
