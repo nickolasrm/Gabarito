@@ -332,3 +332,10 @@ Keep the entries above the fold. When a change ships:
   or another preview to switch. Matching linked/nested instances highlight without changing selection.
 - Kept preview drag placement and active-context highlighting; deletion clears stale highlights.
 - Added ancestry and browser regressions. Spec: [0040](docs/specs/0040-component-type-highlighting.md).
+
+## 2026-10-19 — Selection-driven component highlighting
+
+- Selecting one component instance highlights all occurrences of its type using the existing visual
+  mechanism. Other instances remain unselected. Loose/empty/multiple selections clear the highlight.
+- Kept preview click toggles and added regressions for switching, outside clearing and reactivation.
+- Spec: [0041](docs/specs/0041-clear-component-highlight-outside.md).

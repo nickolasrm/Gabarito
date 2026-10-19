@@ -67,6 +67,7 @@ and by decision records, so a rejected spec keeps its number forever.
 | [0038](./0038-linked-components.md) | Named linked components and editing contexts | implemented | core, tools, scene, ui, app | 0028 |
 | [0039](./0039-component-library-and-context-feedback.md) | Component library management and context feedback | implemented | core, scene, tools, ui, app | 0006, 0028 |
 | [0040](./0040-component-type-highlighting.md) | Highlight component types from sidebar previews | implemented | core, scene, ui, app | 0028 |
+| [0041](./0041-clear-component-highlight-outside.md) | Drive component highlights from normal selection | implemented | ui | 0028 |
 
 Numbers are permanent and are never reused, so the gaps left by pruned specs stay gaps.
 

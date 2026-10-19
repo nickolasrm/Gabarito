@@ -127,11 +127,12 @@ export function mountUi(root: HTMLElement, api: UiApi): () => void {
     const context = api.store.getContext(),
       unused = new Set(api.store.getUnusedComponents());
     useEffect(() => {
-      if (highlighted && !m.definitions[highlighted]) {
-        api.highlightComponent(null);
-        setHighlighted(null);
-      }
-    }, [highlighted, m.definitions]);
+      const entity =
+        m.selection.length === 1 ? m.entities[m.selection[0]] : null;
+      const next = entity?.kind === "component" ? entity.definition : null;
+      api.highlightComponent(next);
+      setHighlighted(next);
+    }, [m.selection]);
     const perform = (fn: () => void) => {
       try {
         fn();

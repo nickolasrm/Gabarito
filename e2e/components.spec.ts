@@ -458,3 +458,115 @@ test("preview clicks highlight one component type, switch or clear it, and delet
     "",
   );
 });
+test("outside viewport clicks clear type highlighting while preserving selection and preview reactivation", async ({
+  page,
+}) => {
+  await seedPanel(page);
+  await page.evaluate(() => {
+    const s = window.__gabarito.store,
+      p = [
+        { x: 200, y: 0, z: 0 },
+        { x: 300, y: 0, z: 0 },
+        { x: 300, y: 100, z: 0 },
+        { x: 200, y: 100, z: 0 },
+      ];
+    s.execute({ type: "draw", segments: p.map((a, i) => [a, p[(i + 1) % 4]]) });
+    s.select([]);
+    window.__gabarito.viewport.frame();
+  });
+  const preview = page.getByRole("button", {
+      name: "Component preview: Panel",
+      exact: true,
+    }),
+    canvas = page.locator("canvas");
+  await preview.click();
+  let p = await screen(page, { x: 50, y: 50, z: 0 });
+  await page.mouse.click(p.x, p.y);
+  await expect(preview).toHaveAttribute("aria-pressed", "true");
+  expect((await state(page)).selection).toHaveLength(1);
+  p = await screen(page, { x: 250, y: 50, z: 0 });
+  await page.mouse.click(p.x, p.y);
+  await expect(preview).toHaveAttribute("aria-pressed", "false");
+  await expect(canvas).toHaveAttribute("data-highlight-component", "");
+  const selected = await state(page);
+  expect(selected.selection).toHaveLength(1);
+  expect(selected.entities[selected.selection[0]].kind).toBe("face");
+  await preview.click();
+  await expect(preview).toHaveAttribute("aria-pressed", "true");
+  const before = await state(page);
+  p = await screen(page, { x: 200, y: -100, z: 0 });
+  await page.mouse.click(p.x, p.y);
+  await expect(preview).toHaveAttribute("aria-pressed", "false");
+  await expect(canvas).toHaveAttribute("data-highlight-component", "");
+  const after = await state(page);
+  expect(after.selection).toHaveLength(0);
+  expect(after.entities).toEqual(before.entities);
+  expect(after.definitions).toEqual(before.definitions);
+  await preview.click();
+  await expect(preview).toHaveAttribute("aria-pressed", "true");
+  await preview.click();
+  await expect(preview).toHaveAttribute("aria-pressed", "false");
+});
+test("normal component selection highlights its linked type without selecting every instance", async ({
+  page,
+}) => {
+  await seedPanel(page);
+  const panel = Object.keys((await state(page)).definitions)[0];
+  await page.evaluate(() => {
+    const s = window.__gabarito.store,
+      definition = Object.keys(s.getState().definitions)[0];
+    s.execute({
+      type: "place-component",
+      definition,
+      point: { x: 200, y: 0, z: 0 },
+    });
+    const p = [
+      { x: 400, y: 0, z: 0 },
+      { x: 500, y: 0, z: 0 },
+      { x: 500, y: 100, z: 0 },
+      { x: 400, y: 100, z: 0 },
+    ];
+    s.execute({ type: "draw", segments: p.map((a, i) => [a, p[(i + 1) % 4]]) });
+    s.execute({
+      type: "make-component",
+      ids: Object.values(s.getState().entities)
+        .filter((e) => e.kind !== "component")
+        .map((e) => e.id),
+      name: "Other",
+    });
+    s.select([]);
+    window.__gabarito.viewport.frame();
+  });
+  const other = Object.values((await state(page)).definitions).find(
+      (d) => d.name === "Other",
+    )!.id,
+    before = await state(page),
+    canvas = page.locator("canvas");
+  let p = await screen(page, { x: 50, y: 50, z: 0 });
+  await page.mouse.click(p.x, p.y);
+  await expect(canvas).toHaveAttribute("data-highlight-component", panel);
+  await expect(
+    page.getByRole("button", { name: "Component preview: Panel", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  let current = await state(page);
+  expect(current.selection).toHaveLength(1);
+  expect(current.entities[current.selection[0]].kind).toBe("component");
+  p = await screen(page, { x: 250, y: 50, z: 0 });
+  await page.mouse.click(p.x, p.y);
+  await expect(canvas).toHaveAttribute("data-highlight-component", panel);
+  current = await state(page);
+  expect(current.selection).toHaveLength(1);
+  p = await screen(page, { x: 450, y: 50, z: 0 });
+  await page.mouse.click(p.x, p.y);
+  await expect(canvas).toHaveAttribute("data-highlight-component", other);
+  await expect(
+    page.getByRole("button", { name: "Component preview: Panel", exact: true }),
+  ).toHaveAttribute("aria-pressed", "false");
+  p = await screen(page, { x: 250, y: -100, z: 0 });
+  await page.mouse.click(p.x, p.y);
+  await expect(canvas).toHaveAttribute("data-highlight-component", "");
+  current = await state(page);
+  expect(current.selection).toHaveLength(0);
+  expect(current.entities).toEqual(before.entities);
+  expect(current.definitions).toEqual(before.definitions);
+});
